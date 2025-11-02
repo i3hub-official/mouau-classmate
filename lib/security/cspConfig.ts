@@ -21,7 +21,7 @@ export const cspConfig = {
     "'self'",
     "'report-sample'",
     "blob:",
-    "https://mouauclassmate.vercel.app",
+    "https://mouaucm.vercel.app",
     "https://apinigeria.vercel.app",
     "https://localhost",
     "http://localhost",
@@ -41,7 +41,7 @@ export const cspConfig = {
     "'unsafe-inline'", // Tailwind requires this
     "blob:",
     "https://fonts.googleapis.com",
-    "https://mouauclassmate.vercel.app",
+    "https://mouaucm.vercel.app",
     "https://apinigeria.vercel.app",
     "https://localhost",
     "http://localhost",
@@ -56,7 +56,7 @@ export const cspConfig = {
     "'self'",
     "data:",
     "blob:",
-    "https://mouauclassmate.vercel.app",
+    "https://mouaucm.vercel.app",
     "https://apinigeria.vercel.app",
     "https://ui-avatars.com",
     "https://placehold.co",
@@ -80,7 +80,7 @@ export const cspConfig = {
     "data:",
     "blob:",
     "https://fonts.gstatic.com",
-    "https://mouauclassmate.vercel.app",
+    "https://mouaucm.vercel.app",
     "https://apinigeria.vercel.app",
     "https://localhost",
     "http://localhost",
@@ -94,7 +94,7 @@ export const cspConfig = {
   connectSrc: [
     "'self'",
     "blob:",
-    "https://mouauclassmate.vercel.app",
+    "https://mouaucm.vercel.app",
     "https://apinigeria.vercel.app",
     "https://localhost",
     "http://localhost",
@@ -124,7 +124,7 @@ export const cspConfig = {
     "'self'",
     "blob:",
     "data:",
-    "https://mouauclassmate.vercel.app",
+    "https://mouaucm.vercel.app",
     "https://apinigeria.vercel.app",
     "https://localhost",
     "http://localhost",
@@ -138,7 +138,7 @@ export const cspConfig = {
   frameSrc: [
     "'self'",
     "blob:",
-    "https://mouauclassmate.vercel.app",
+    "https://mouaucm.vercel.app",
     "https://apinigeria.vercel.app",
     "https://localhost",
     "http://localhost",
@@ -157,7 +157,7 @@ export const cspConfig = {
   // Form actions
   formAction: [
     "'self'",
-    "https://mouauclassmate.vercel.app",
+    "https://mouaucm.vercel.app",
     "https://apinigeria.vercel.app",
   ],
 
@@ -185,13 +185,13 @@ export const prodCspConfig = {
     "'unsafe-eval'", // required by Next.js dev/runtime
     "https://vercel.live",
     "https://*.vercel.app",
-    "https://mouauclassmate.vercel.app",
+    "https://mouaucm.vercel.app",
   ],
   connectSrc: [
     ...cspConfig.connectSrc,
     "https://vercel.live",
     "wss://vercel.live",
-    "https://mouauclassmate.vercel.app",
+    "https://mouaucm.vercel.app",
   ],
 };
 

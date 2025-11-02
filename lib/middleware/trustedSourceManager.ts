@@ -60,7 +60,7 @@ export class TrustedSourceManager {
     {
       name: "Host Network",
       type: "domain",
-      value: "https://mouauclassmate.vercel.app",
+      value: "https://mouaucm.vercel.app",
       description: "Host Domain Name",
       isActive: true,
       trustLevel: "ABSOLUTE",
