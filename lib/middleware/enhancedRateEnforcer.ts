@@ -22,12 +22,12 @@ export class EnhancedRateEnforcer {
     string,
     { interval: number; limit: number; namespace: string }
   > = {
-    "/api/auth/signin": {
+    "/auth/signin": {
       interval: 15 * 60 * 1000,
       limit: 5,
       namespace: "signin",
     },
-    "/api/auth/signup": {
+    "/auth/signup": {
       interval: 60 * 60 * 1000,
       limit: 3,
       namespace: "signup",

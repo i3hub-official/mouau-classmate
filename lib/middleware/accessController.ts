@@ -9,7 +9,7 @@ import type { MiddlewareContext } from "@/lib/middleware/types";
 
 export class AccessController {
   private static readonly SESSION_COOKIE = "session-token";
-  private static readonly AGENT_COOKIE = "adminId";
+  private static readonly AGENT_COOKIE = "userId";
   private static readonly SESSION_EXPIRY_HOURS = 6;
 
   static control(
@@ -78,11 +78,11 @@ export class AccessController {
       });
     }
 
-    // Refresh agent cookie if present
-    if (context.adminId) {
+    // Refresh user cookie if present
+    if (context.userId) {
       response.cookies.set({
         name: this.AGENT_COOKIE,
-        value: context.adminId,
+        value: context.userId,
         httpOnly: false,
         secure,
         sameSite: "lax",

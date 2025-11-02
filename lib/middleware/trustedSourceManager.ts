@@ -208,7 +208,7 @@ export class TrustedSourceManager {
         case "user_id":
           const userId =
             request.headers.get("x-user-id") ||
-            request.cookies.get("adminId-token")?.value;
+            request.cookies.get("userId-token")?.value;
           matches = userId === source.value;
           reason = `Trusted user ID ${source.value}`;
           break;
@@ -233,7 +233,9 @@ export class TrustedSourceManager {
   static addTrustedSource(
     sourceData: Omit<TrustedSource, "id" | "createdAt">
   ): string {
-    const id = `trust_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const id = `trust_${Date.now()}_${Math.random()
+      .toString(36)
+      .substring(2, 8)}`;
     const source: TrustedSource = {
       id,
       createdAt: Date.now(),

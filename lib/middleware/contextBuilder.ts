@@ -14,7 +14,7 @@ export class ContextBuilder {
     const pathname = request.nextUrl.pathname;
     const sessionToken = request.cookies.get("session-token")?.value;
     const refreshToken = request.cookies.get("refresh-token")?.value; // Add this
-    const adminId = request.cookies.get("adminId")?.value;
+    const userId = request.cookies.get("userId")?.value;
 
     return {
       isPublicPath: isPublicPath(pathname),
@@ -23,10 +23,12 @@ export class ContextBuilder {
       hasSession: !!sessionToken,
       sessionToken,
       refreshToken, // Add this
-      adminId: adminId,
+      userId: userId ?? null,
       clientIp: getClientIp(request) || "unknown",
       userAgent: request.headers.get("user-agent") || "unknown",
       timestamp: Date.now(),
+      userRole: "guest",
+      sessionData: null,
     };
   }
 }

@@ -5,7 +5,7 @@ import { prisma } from "@/lib/server/prisma";
 import { JWTUtils, JWTClientUtils } from "@/lib/server/jwt";
 import { nanoid } from "nanoid";
 import type { MiddlewareContext } from "./types";
-import { Role } from "@prisma/client"; // Import the Role enum from Prisma
+import { Role } from "@prisma/client";
 
 interface SessionValidationResult {
   isValid: boolean;
@@ -15,8 +15,8 @@ interface SessionValidationResult {
     id: string;
     name: string;
     email: string;
-    role: Role; // Use the Role enum type
-    regNumber?: string; // Changed from matricNumber to match schema
+    role: Role;
+    matricNumber?: string; // Changed back to matricNumber to match schema
     department?: string;
   };
   action: "continue" | "refresh" | "logout" | "redirect_login";
@@ -128,7 +128,7 @@ export class SessionTokenValidator {
               // Student specific fields
               student: {
                 select: {
-                  regNumber: true,
+                  matricNumber: true, // Changed to matricNumber
                   department: true,
                 },
               },
@@ -195,14 +195,14 @@ export class SessionTokenValidator {
       const needsRefresh = timeLeft < refreshThreshold;
 
       // Extract user information based on role
-      let regNumber = undefined;
+      let matricNumber = undefined;
       let department = undefined;
 
       if (session.user.role === Role.STUDENT && session.user.student) {
-        regNumber = session.user.student.regNumber;
+        matricNumber = session.user.student.matricNumber; // Changed to matricNumber
         department = session.user.student.department;
       } else if (session.user.role === Role.TEACHER && session.user.teacher) {
-        regNumber = session.user.teacher.employeeId;
+        matricNumber = session.user.teacher.employeeId;
         department = session.user.teacher.department;
       }
 
@@ -215,7 +215,7 @@ export class SessionTokenValidator {
           name: session.user.name || "",
           email: session.user.email,
           role: session.user.role,
-          regNumber, // Changed from matricNumber
+          matricNumber, // Changed back to matricNumber
           department: department ?? undefined,
         },
         action: needsRefresh ? "refresh" : "continue",
@@ -262,7 +262,7 @@ export class SessionTokenValidator {
           // Student specific fields
           student: {
             select: {
-              regNumber: true,
+              matricNumber: true, // Changed to matricNumber
               department: true,
             },
           },
@@ -286,14 +286,14 @@ export class SessionTokenValidator {
       }
 
       // Extract user information based on role
-      let regNumber = undefined;
+      let matricNumber = undefined;
       let department = undefined;
 
       if (user.role === Role.STUDENT && user.student) {
-        regNumber = user.student.regNumber;
+        matricNumber = user.student.matricNumber; // Changed to matricNumber
         department = user.student.department;
       } else if (user.role === Role.TEACHER && user.teacher) {
-        regNumber = user.teacher.employeeId;
+        matricNumber = user.teacher.employeeId;
         department = user.teacher.department;
       }
 
@@ -306,8 +306,8 @@ export class SessionTokenValidator {
           name: user.name || "",
           email: user.email,
           role: user.role,
-          regNumber, // Changed from matricNumber
-         department: department ?? undefined,
+          matricNumber, // Changed back to matricNumber
+          department: department ?? undefined,
         },
         action: "refresh",
       };
@@ -344,7 +344,7 @@ export class SessionTokenValidator {
 
       // Find user to ensure they're still active
       const user = await prisma.user.findUnique({
-        where: { id: payload.adminId },
+        where: { id: payload.userId },
         select: {
           id: true,
           name: true,
@@ -354,7 +354,7 @@ export class SessionTokenValidator {
           // Student specific fields
           student: {
             select: {
-              regNumber: true,
+              matricNumber: true, // Changed to matricNumber
               department: true,
             },
           },
@@ -378,14 +378,14 @@ export class SessionTokenValidator {
       }
 
       // Extract user information based on role
-      let regNumber = undefined;
+      let matricNumber = undefined;
       let department = undefined;
 
       if (user.role === Role.STUDENT && user.student) {
-        regNumber = user.student.regNumber;
+        matricNumber = user.student.matricNumber; // Changed to matricNumber
         department = user.student.department;
       } else if (user.role === Role.TEACHER && user.teacher) {
-        regNumber = user.teacher.employeeId;
+        matricNumber = user.teacher.employeeId;
         department = user.teacher.department;
       }
 
@@ -398,8 +398,8 @@ export class SessionTokenValidator {
           name: user.name || "",
           email: user.email,
           role: user.role,
-          regNumber, // Changed from matricNumber
-           department: department ?? undefined,
+          matricNumber, // Changed back to matricNumber
+          department: department ?? undefined,
         },
         action: "continue",
       };
@@ -429,11 +429,11 @@ export class SessionTokenValidator {
       const newSessionToken = nanoid();
       const newRefreshToken = await JWTUtils.generateRefreshToken(user.id);
       const newAuthToken = await JWTUtils.generateAuthToken({
-        adminId: user.id,
+        userId: user.id,
         email: user.email,
         schoolId: user.id,
         role: user.role,
-        schoolNumber: user.regNumber || "",
+        schoolNumber: user.matricNumber || "", // Changed back to matricNumber
       });
 
       // Update session in database
@@ -509,7 +509,7 @@ export class SessionTokenValidator {
       // Add user info to response headers for other middleware
       response.headers.set("x-user-id", user.id);
       response.headers.set("x-user-role", user.role);
-      response.headers.set("x-user-reg", user.regNumber || ""); // Changed from x-user-matric
+      response.headers.set("x-user-matric", user.matricNumber || ""); // Changed back to x-user-matric
       response.headers.set("x-session-refreshed", "true");
 
       console.log(
@@ -579,8 +579,8 @@ export class SessionTokenValidator {
       response.headers.set("x-user-id", validationResult.user.id);
       response.headers.set("x-user-role", validationResult.user.role);
       response.headers.set(
-        "x-user-reg", // Changed from x-user-matric
-        validationResult.user.regNumber || ""
+        "x-user-matric", // Changed back to x-user-matric
+        validationResult.user.matricNumber || ""
       );
       response.headers.set(
         "x-user-department",

@@ -4,7 +4,7 @@ import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 export interface TokenPayload extends JWTPayload {
   type?: string;
   userId?: string;
-  adminId?: string;
+  userId?: string;
   schoolId?: string;
   email?: string;
   role?: string;
@@ -20,10 +20,7 @@ export interface TokenOptions {
 }
 
 class JWTError extends Error {
-  constructor(
-    message: string,
-    public code: string
-  ) {
+  constructor(message: string, public code: string) {
     super(message);
     this.name = "JWTError";
   }
@@ -156,12 +153,12 @@ export class JWTUtils {
    * SERVER-SIDE ONLY
    */
   static async generatePasswordResetToken(data: {
-    adminId: string;
+    userId: string;
     email: string;
   }): Promise<string> {
     const payload: TokenPayload = {
       type: "password_reset",
-      adminId: data.adminId,
+      userId: data.userId,
       email: data.email,
     };
 
@@ -176,7 +173,7 @@ export class JWTUtils {
    * SERVER-SIDE ONLY
    */
   static async generateAuthToken(data: {
-    adminId: string;
+    userId: string;
     email: string;
     schoolId: string;
     role: string;
@@ -184,7 +181,7 @@ export class JWTUtils {
   }): Promise<string> {
     const payload: TokenPayload = {
       type: "auth",
-      adminId: data.adminId,
+      userId: data.userId,
       email: data.email,
       schoolId: data.schoolId,
       role: data.role,
@@ -201,10 +198,10 @@ export class JWTUtils {
    * Generate refresh token
    * SERVER-SIDE ONLY
    */
-  static async generateRefreshToken(adminId: string): Promise<string> {
+  static async generateRefreshToken(userId: string): Promise<string> {
     const payload: TokenPayload = {
       type: "refresh",
-      adminId,
+      userId,
     };
 
     return this.generateToken(payload, {
@@ -245,7 +242,7 @@ export class JWTUtils {
    * SERVER-SIDE ONLY
    */
   static async verifyPasswordResetToken(token: string): Promise<{
-    adminId: string;
+    userId: string;
     email: string;
   }> {
     const payload = await this.verifyToken(token);
@@ -258,7 +255,7 @@ export class JWTUtils {
     }
 
     return {
-      adminId: payload.adminId as string,
+      userId: payload.userId as string,
       email: payload.email as string,
     };
   }
@@ -268,7 +265,7 @@ export class JWTUtils {
    * SERVER-SIDE ONLY
    */
   static async verifyAuthToken(token: string): Promise<{
-    adminId: string;
+    userId: string;
     email: string;
     schoolId: string;
     role: string;
@@ -284,7 +281,7 @@ export class JWTUtils {
     }
 
     return {
-      adminId: payload.adminId as string,
+      userId: payload.userId as string,
       email: payload.email as string,
       schoolId: payload.schoolId as string,
       role: payload.role as string,

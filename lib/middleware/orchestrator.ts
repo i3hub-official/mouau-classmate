@@ -58,6 +58,9 @@ export class Orchestrator {
       userId: null,
       userRole: "guest",
       sessionData: null,
+      clientIp: "",
+      userAgent: "",
+      timestamp: Date.now(),
     };
     let response = NextResponse.next();
 

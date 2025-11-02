@@ -3,6 +3,7 @@
 // ========================================
 
 // File: src/lib/middleware/types.ts
+import { Timestamp } from "next/dist/server/lib/cache-handlers/types";
 import { NextRequest, NextResponse } from "next/server";
 
 export interface MiddlewareContext {
@@ -15,7 +16,7 @@ export interface MiddlewareContext {
   userId: string | null;
   clientIp: string;
   userAgent: string;
-  timestamp: number;
+  timestamp: Timestamp;
   userRole: string;
   sessionData: any;
   
