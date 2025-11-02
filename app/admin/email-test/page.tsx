@@ -143,39 +143,6 @@ export default function EmailTestPage() {
     }
   };
 
-  const resetConnection = async () => {
-    setIsTesting(true);
-    try {
-      const response = await fetch("/admin/email-test/reset", {
-        method: "POST",
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        addTestResult(
-          true,
-          "✅ Connection reset successfully",
-          result,
-          result.connectionStatus?.verified
-        );
-        setConnectionStatus(result.connectionStatus);
-      } else {
-        addTestResult(false, "❌ Failed to reset connection", result, false);
-        setConnectionStatus(result.connectionStatus);
-      }
-    } catch (error) {
-      addTestResult(
-        false,
-        "❌ Failed to reset connection - Network error",
-        error,
-        false
-      );
-    } finally {
-      setIsTesting(false);
-    }
-  };
-
   const clearResults = () => {
     setTestResults([]);
   };
@@ -340,15 +307,6 @@ export default function EmailTestPage() {
               >
                 <CheckCircle className="h-4 w-4" />
                 Full Test
-              </button>
-
-              <button
-                onClick={resetConnection}
-                disabled={isTesting}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Reset Connection
               </button>
 
               <button
