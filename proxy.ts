@@ -15,6 +15,6 @@ export const config = {
 };
 
 // Main Middleware Function
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   return await Orchestrator.execute(request);
 }
