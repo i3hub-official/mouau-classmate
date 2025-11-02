@@ -156,7 +156,7 @@ export default function EmailTestPage() {
           true,
           "✅ Connection reset successfully",
           result,
-          result.connectionStatus?.verified``
+          result.connectionStatus?.verified
         );
         setConnectionStatus(result.connectionStatus);
       } else {
