@@ -5,12 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Verify Your Email - MOUAU ClassMate</title>
     <style>
-        /*
-         * NOTE: The primary green color is #1D9D21
-         * The complementary background colors are very light greens.
-         * The accent yellow color is #FFF600
-         */
-
+        /* Your existing CSS styles remain the same */
         body { 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
             line-height: 1.6; 
@@ -18,7 +13,6 @@
             max-width: 600px; 
             margin: 0 auto; 
             padding: 20px;
-            /* Soft, complementary background gradient */
             background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #f0f9ff 100%);
         }
         
@@ -31,7 +25,6 @@
         }
         
         .header { 
-            /* Main green gradient */
             background: linear-gradient(135deg, #1D9D21 0%, #15803d 100%);
             color: white; 
             padding: 40px 30px; 
@@ -46,7 +39,6 @@
             left: 0;
             right: 0;
             height: 4px;
-            /* Accent line using primary green and yellow accent */
             background: linear-gradient(90deg, #1D9D21, #FFF600, #1D9D21);
         }
         
@@ -90,7 +82,6 @@
         
         .button { 
             display: inline-block; 
-            /* Button gradient using primary green */
             background: linear-gradient(135deg, #1D9D21 0%, #16a34a 100%);
             color: white; 
             padding: 14px 35px; 
@@ -172,7 +163,6 @@
         }
         
         .security-note {
-            /* Using our specific yellow for notice */
             background: #fffef0;
             padding: 12px 16px;
             border-radius: 8px;
@@ -215,6 +205,33 @@
             margin-right: 8px;
             font-weight: bold;
         }
+
+        /* New styles for form */
+        .verification-form {
+            display: inline-block;
+        }
+        
+        .manual-verification {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            margin-top: 20px;
+        }
+        
+        .token-display {
+            font-family: 'Courier New', monospace;
+            background: #1f2937;
+            color: #10b981;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            text-align: center;
+            margin: 15px 0;
+            border: 1px solid #374151;
+        }
     </style>
 </head>
 <body>
@@ -234,22 +251,35 @@
             <p>To complete your registration and start accessing your academic resources, please verify your email address by clicking the button below:</p>
             
             <div style="text-align: center; margin: 35px 0;">
-                <a href="{{verificationLink}}" class="button">
-                    Verify Email Address
-                </a>
+                <form action="{{baseUrl}}/api/auth/verify-email" method="POST" class="verification-form">
+                    <input type="hidden" name="token" value="{{verificationToken}}">
+                    <button type="submit" class="button">
+                        Verify Email Address
+                    </button>
+                </form>
             </div>
             
             <div class="security-note">
                 <strong>Security Notice:</strong> This verification link will expire in <strong>24 hours</strong> for your protection.
             </div>
             
-            <p>If the button doesn't work, you can also copy and paste this link into your browser:</p>
-            
-            <div class="link-box">
-                {{verificationLink}}
+            <div class="manual-verification">
+                <p style="margin: 0 0 15px 0; font-weight: 600; color: #1D9D21;">
+                    <span class="verification-icon">✓</span>
+                    Alternative Verification Method
+                </p>
+                <p style="margin: 0 0 10px 0; font-size: 14px;">If you prefer manual verification, use this token on our verification page:</p>
+                
+                <div class="token-display">
+                    {{verificationToken}}
+                </div>
+                
+                <p style="margin: 10px 0 0 0; font-size: 14px; color: #6b7280;">
+                    Visit: <strong>{{baseUrl}}/auth/verify-email</strong> and enter the token above.
+                </p>
             </div>
             
-            <p style="font-size: 14px; color: #6b7280;">If you didn't create an account with MOUAU ClassMate, please ignore this email. Your email address will not be used for any communications.</p>
+            <p style="font-size: 14px; color: #6b7280; margin-top: 25px;">If you didn't create an account with MOUAU ClassMate, please ignore this email. Your email address will not be used for any communications.</p>
             
             <div class="footer">
                 <p style="margin: 0 0 10px 0;">

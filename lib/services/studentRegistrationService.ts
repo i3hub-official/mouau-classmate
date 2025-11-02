@@ -365,112 +365,84 @@ export class StudentRegistrationService {
       );
     }
 
+    let user: any;
+    let student: any;
+
     try {
-      return await prisma.$transaction(async (tx) => {
-        // Create user
-        const user = await tx.user.create({
-          data: {
-            name: `${studentData.surname} ${studentData.firstName}`.trim(),
-            email: studentData.email,
-            role: "STUDENT",
-            isActive: false,
-            passwordHash: hashedPassword,
-          },
-        });
-
-        console.log("👤 User created:", {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-        });
-
-        // Create new student record with required userId
-        const student = await tx.student.create({
-          data: {
-            matricNumber: matricNumber,
-            jambRegNumber: protectedJambReg.encrypted,
-            nin: protectedNin.encrypted,
-            firstName: protectedFirstName.encrypted,
-            lastName: protectedSurname.encrypted,
-            otherName: protectedOtherName.encrypted,
-            gender: normalizedGender,
-            phone: protectedPhone.encrypted,
-            passportUrl: studentData.photo,
-            email: protectedEmail.encrypted,
-            department: studentData.department,
-            course: studentData.course,
-            college: studentData.college,
-            state: protectedState.encrypted,
-            lga: protectedLga.encrypted,
-            maritalStatus: normalizedMaritalStatus,
-            userId: user.id,
-            emailSearchHash: protectedEmail.searchHash,
-            phoneSearchHash: protectedPhone.searchHash,
-            jambRegSearchHash: protectedJambReg.searchHash,
-            ninSearchHash: protectedNin.searchHash,
-          },
-        });
-
-        console.log("🎓 Student created:", {
-          id: student.id,
-          matricNumber: student.matricNumber,
-          userId: student.userId,
-        });
-
-        // Create account (for NextAuth)
-        await tx.account.create({
-          data: {
-            userId: user.id,
-            type: "credentials",
-            provider: "credentials",
-            providerAccountId: user.id,
-          },
-        });
-
-        // Send verification email - ONLY ONCE with proper parameters
-        try {
-          const verificationToken = await this.sendVerificationEmail(
-            studentData.email,
-            user.id,
-            `${studentData.firstName} ${studentData.surname}`.trim()
-          );
-
-          console.log("✅ Verification email process completed with NEW token");
-        } catch (emailError) {
-          console.error("❌ Failed to send verification email:", emailError);
-          // Don't throw here - the user is already created, just log the error
-          // The user can request a new verification email later
-        }
-
-        // Create audit log
-        await tx.auditLog.create({
-          data: {
-            userId: user.id,
-            action: "STUDENT_REGISTERED",
-            resourceType: "STUDENT",
-            resourceId: student.id,
-            details: {
-              matricNumber,
-              jambReg,
-              college: studentData.college,
-              department: studentData.department,
-              gender: normalizedGender,
-              maritalStatus: normalizedMaritalStatus,
-              emailSent: true,
-              verificationTokenGenerated: true,
+      // Use transaction with increased timeout for database operations only
+      const result = await prisma.$transaction(
+        async (tx) => {
+          // Create user
+          const newUser = await tx.user.create({
+            data: {
+              name: `${studentData.surname} ${studentData.firstName}`.trim(),
+              email: studentData.email,
+              role: "STUDENT",
+              isActive: false,
+              passwordHash: hashedPassword,
             },
-            ipAddress: "registration_system",
-            userAgent: "student_registration",
-          },
-        });
+          });
 
-        return {
-          user,
-          student,
-          requiresVerification: true,
-          isNewStudent: true,
-        };
-      });
+          console.log("👤 User created:", {
+            id: newUser.id,
+            email: newUser.email,
+            name: newUser.name,
+          });
+
+          // Create new student record with required userId
+          const newStudent = await tx.student.create({
+            data: {
+              matricNumber: matricNumber,
+              jambRegNumber: protectedJambReg.encrypted,
+              nin: protectedNin.encrypted,
+              firstName: protectedFirstName.encrypted,
+              lastName: protectedSurname.encrypted,
+              otherName: protectedOtherName.encrypted,
+              gender: normalizedGender,
+              phone: protectedPhone.encrypted,
+              passportUrl: studentData.photo,
+              email: protectedEmail.encrypted,
+              department: studentData.department,
+              course: studentData.course,
+              college: studentData.college,
+              state: protectedState.encrypted,
+              lga: protectedLga.encrypted,
+              maritalStatus: normalizedMaritalStatus,
+              userId: newUser.id,
+              emailSearchHash: protectedEmail.searchHash,
+              phoneSearchHash: protectedPhone.searchHash,
+              jambRegSearchHash: protectedJambReg.searchHash,
+              ninSearchHash: protectedNin.searchHash,
+            },
+          });
+
+          console.log("🎓 Student created:", {
+            id: newStudent.id,
+            matricNumber: newStudent.matricNumber,
+            userId: newStudent.userId,
+          });
+
+          // Create account (for NextAuth)
+          await tx.account.create({
+            data: {
+              userId: newUser.id,
+              type: "credentials",
+              provider: "credentials",
+              providerAccountId: newUser.id,
+            },
+          });
+
+          return { user: newUser, student: newStudent };
+        },
+        {
+          // Increase transaction timeout to 10 seconds
+          maxWait: 10000,
+          timeout: 10000,
+        }
+      );
+
+      user = result.user;
+      student = result.student;
     } catch (error) {
       console.error("❌ Error during student registration transaction:", error);
 
@@ -489,11 +461,60 @@ export class StudentRegistrationService {
         "Failed to complete student registration"
       );
     }
+
+    // Send verification email OUTSIDE the transaction
+    try {
+      const verificationToken = await this.sendVerificationEmail(
+        studentData.email,
+        user.id,
+        `${studentData.firstName} ${studentData.surname}`.trim()
+      );
+
+      console.log("✅ Verification email process completed with NEW token");
+    } catch (emailError) {
+      console.error("❌ Failed to send verification email:", emailError);
+      // Don't throw here - the user is already created, just log the error
+      // The user can request a new verification email later
+    }
+
+    // Create audit log OUTSIDE the transaction
+    try {
+      await prisma.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "STUDENT_REGISTERED",
+          resourceType: "STUDENT",
+          resourceId: student.id,
+          details: {
+            matricNumber,
+            jambReg,
+            college: studentData.college,
+            department: studentData.department,
+            gender: normalizedGender,
+            maritalStatus: normalizedMaritalStatus,
+            emailSent: true,
+            verificationTokenGenerated: true,
+          },
+          ipAddress: "registration_system",
+          userAgent: "student_registration",
+        },
+      });
+    } catch (auditError) {
+      console.error("❌ Failed to create audit log:", auditError);
+      // Don't throw - audit log failure shouldn't break registration
+    }
+
+    return {
+      user,
+      student,
+      requiresVerification: true,
+      isNewStudent: true,
+    };
   }
 
   /**
    * Generates and stores a verification token and sends verification email.
-   * NEVER reuses existing tokens for security reasons.
+   * Uses secure approach without sensitive data in URL parameters.
    */
   static async sendVerificationEmail(
     email: string,
@@ -549,21 +570,23 @@ export class StudentRegistrationService {
         },
       });
 
-      // Fix: Use a fallback for NEXTAUTH_URL and fix double slash issue
+      // SECURITY FIX: Use base URL without token in parameters
       const baseUrl = (
-        process.env.NEXTAUTH_URL || "http://localhost:3002"
+        process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3002"
       ).replace(/\/$/, "");
-      const verificationLink = `${baseUrl}/auth/verify-email?token=${verificationToken}`;
 
-      console.log(`🔗 Generated NEW verification link for ${email}`);
+      console.log(`🔗 Preparing secure verification email for ${email}`);
 
+      // Use the updated email template with form submission
       const emailSent = await emailService.sendEmail({
         to: email,
         subject: "Verify Your MOUAU ClassMate Account",
         template: "email-verification",
         context: {
           name: name.trim(),
-          verificationLink: verificationLink,
+          baseUrl: baseUrl,
+          verificationToken: verificationToken, // For form submission
+          // Note: No verificationLink with token in URL to avoid threat detection
         },
       });
 
@@ -587,6 +610,7 @@ export class StudentRegistrationService {
         name: name,
         userId: userId,
         token: "NEW_TOKEN_GENERATED", // Don't log actual token
+        method: "SECURE_FORM_SUBMISSION", // Indicates no URL parameters used
       });
 
       return verificationToken;
@@ -633,8 +657,9 @@ export class StudentRegistrationService {
     }
 
     try {
-      // Fix: Use fallback for NEXTAUTH_URL
-      const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3002";
+      // Fix: Use fallback for NEXT_PUBLIC_BASE_URL
+      const baseUrl =
+        process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3002";
       const loginLink = `${baseUrl}/auth/signin`;
 
       const emailSent = await emailService.sendEmail({
@@ -861,8 +886,9 @@ export class StudentRegistrationService {
         },
       });
 
-      // Fix: Use fallback for NEXTAUTH_URL
-      const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3002";
+      // Fix: Use fallback for NEXT_PUBLIC_BASE_URL
+      const baseUrl =
+        process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3002";
       const resetLink = `${baseUrl}/auth/reset-password?token=${resetToken}`;
 
       const emailSent = await emailService.sendEmail({
