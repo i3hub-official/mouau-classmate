@@ -34,7 +34,7 @@ function VerifyEmailContent() {
     setMessage("Verifying your email...");
 
     try {
-      const response = await fetch("/api/auth/verify-email", {
+      const response = await fetch("/auth/verify/verify-email", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -79,7 +79,7 @@ function VerifyEmailContent() {
     setMessage("Sending new verification email...");
 
     try {
-      const response = await fetch("/api/auth/resend-verification", {
+      const response = await fetch("/auth/resend-verification", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -105,11 +105,11 @@ function VerifyEmailContent() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-blue-50 to-green-100 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-green-50 via-blue-50 to-green-100 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         {/* Header */}
         <div className="text-center">
-          <div className="mx-auto h-16 w-16 bg-gradient-to-r from-green-600 to-green-800 rounded-full flex items-center justify-center mb-4">
+          <div className="mx-auto h-16 w-16 bg-linear-to-r from-green-600 to-green-800 rounded-full flex items-center justify-center mb-4">
             <svg
               className="h-8 w-8 text-white"
               fill="none"
@@ -136,7 +136,7 @@ function VerifyEmailContent() {
         {status === "loading" && (
           <div className="rounded-md bg-blue-50 p-4">
             <div className="flex">
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
               </div>
               <div className="ml-3">
@@ -149,7 +149,7 @@ function VerifyEmailContent() {
         {status === "success" && (
           <div className="rounded-md bg-green-50 p-4">
             <div className="flex">
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 <svg
                   className="h-5 w-5 text-green-400"
                   fill="currentColor"
@@ -175,7 +175,7 @@ function VerifyEmailContent() {
         {status === "error" && (
           <div className="rounded-md bg-red-50 p-4">
             <div className="flex">
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 <svg
                   className="h-5 w-5 text-red-400"
                   fill="currentColor"
@@ -310,7 +310,7 @@ function VerifyEmailContent() {
 // Loading component for Suspense
 function VerifyEmailLoading() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-blue-50 to-green-100">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-green-50 via-blue-50 to-green-100">
       <div className="text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
         <p className="mt-4 text-gray-600">Loading verification...</p>

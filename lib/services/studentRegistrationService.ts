@@ -639,7 +639,7 @@ export class StudentRegistrationService {
     }
   }
 
-  /**
+    /**
    * Sends welcome email after successful verification
    */
   static async sendWelcomeEmail(email: string, name: string): Promise<boolean> {
