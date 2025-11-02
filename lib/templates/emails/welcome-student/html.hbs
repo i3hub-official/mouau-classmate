@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welcome to MOUAU ClassMate</title>
+  <style>
+    body { font-family: 'Arial', sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { text-align: center; background: #059669; color: white; padding: 30px; border-radius: 10px 10px 0 0; }
+    .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+    .button { display: inline-block; background: #059669; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; }
+    .footer { text-align: center; margin-top: 30px; font-size: 12px; color: #6b7280; }
+    .logo { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+    .feature { background: white; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #059669; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">MOUAU ClassMate</div>
+    <h1>Welcome Aboard!</h1>
+  </div>
+  
+  <div class="content">
+    <p>Hello <strong>{{name}}</strong>,</p>
+    
+    <p>Congratulations! Your MOUAU ClassMate account has been successfully verified and is now active.</p>
+    
+    <p>Here's what you can do with your account:</p>
+    
+    <div class="feature">
+      <strong>📚 Access Course Materials</strong><br>
+      View lectures, assignments, and resources for your enrolled courses.
+    </div>
+    
+    <div class="feature">
+      <strong>📝 Submit Assignments</strong><br>
+      Upload and submit your coursework directly through the platform.
+    </div>
+    
+    <div class="feature">
+      <strong>📊 Track Progress</strong><br>
+      Monitor your academic progress and grades in real-time.
+    </div>
+    
+    <div class="feature">
+      <strong>💼 Build Portfolio</strong><br>
+      Showcase your projects and academic work.
+    </div>
+    
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="{{loginLink}}" class="button">Get Started</a>
+    </div>
+    
+    <p>If you have any questions or need assistance, please contact our support team.</p>
+    
+    <div class="footer">
+      <p>MOUAU ClassMate Team<br>
+      Michael Okpara University of Agriculture, Umudike</p>
+      <p>This is an automated message. Please do not reply to this email.</p>
+    </div>
+  </div>
+</body>
+</html>
