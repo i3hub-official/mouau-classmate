@@ -639,7 +639,7 @@ export class StudentRegistrationService {
     }
   }
 
-    /**
+  /**
    * Sends welcome email after successful verification
    */
   static async sendWelcomeEmail(email: string, name: string): Promise<boolean> {
@@ -934,24 +934,64 @@ export class StudentRegistrationService {
   }
 
   /**
-   * Resends verification email for existing users
+   * Resends verification email for existing users with enhanced security
    */
   static async resendVerificationEmail(email: string): Promise<string> {
+    console.log("🔄 Resending verification email for:", email);
+
     if (!email) {
       throw new ValidationError("Email is required");
+    }
+
+    // Validate email format
+    if (!ValidationUtils.validateEmail(email)) {
+      throw new ValidationError("Invalid email format");
     }
 
     // Find user by email
     const user = await prisma.user.findFirst({
       where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        isActive: true,
+        emailVerified: true,
+        // Check for recent verification attempts
+        auditLogs: {
+          where: {
+            action: "RESEND_VERIFICATION_REQUESTED",
+            createdAt: {
+              gte: new Date(Date.now() - 15 * 60 * 1000), // Last 15 minutes
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 5,
+        },
+      },
     });
 
     if (!user) {
-      throw new ValidationError("User not found");
+      // Don't throw error for security - just log and return
+      console.log(
+        "⚠️ Resend verification requested for non-existent email:",
+        email
+      );
+      // Still return a "success" to prevent email enumeration
+      return "email_sent";
     }
 
     if (user.isActive && user.emailVerified) {
       throw new ValidationError("Email is already verified");
+    }
+
+    // Check for too many recent resend attempts
+    const recentAttempts = user.auditLogs.length;
+    if (recentAttempts >= 3) {
+      throw new StudentRegistrationError(
+        "Too many verification requests. Please wait 15 minutes before trying again.",
+        "RATE_LIMITED"
+      );
     }
 
     // Use the same secure method to send verification email

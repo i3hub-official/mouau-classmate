@@ -49,6 +49,7 @@ enum NotificationType {
   SUCCESS
   WARNING
   ERROR
+  SECURITY
 }
 
 enum AuditAction {
@@ -68,8 +69,16 @@ enum AuditAction {
   PASSWORD_RESET
   SESSION_REFRESHED
   SESSION_CLEANED_UP
+  SESSION_CREATED
+  SESSION_INVALIDATED
+  ALL_SESSIONS_INVALIDATED
   NOTIFICATION_SENT
   SYSTEM_CONFIG_UPDATED
+  SUSPICIOUS_ACTIVITY_DETECTED
+  RATE_LIMIT_EXCEEDED
+  DEVICE_FINGERPRINT_MISMATCH
+  RESEND_VERIFICATION_REQUESTED
+  USER_LOGIN_FAILED
 }
 
 enum ResourceType {
@@ -81,6 +90,14 @@ enum ResourceType {
   ASSIGNMENT
   ENROLLMENT
   PORTFOLIO
+  SESSION
+  NOTIFICATION
+}
+
+enum SessionSecurityLevel {
+  LOW
+  MEDIUM
+  HIGH
 }
 
 // ===========================================================
@@ -88,17 +105,22 @@ enum ResourceType {
 // ===========================================================
 
 model User {
-  id            String    @id @default(uuid())
-  name          String?
-  email         String    @unique(map: "users_email_key")
-  emailVerified DateTime?
-  image         String?
-  role          Role      @default(STUDENT)
-  isActive      Boolean   @default(false)
-  lastLoginAt   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  passwordHash  String?
+  id                  String    @id @default(uuid())
+  name                String?
+  email               String    @unique(map: "users_email_key")
+  emailVerified       DateTime?
+  image               String?
+  role                Role      @default(STUDENT)
+  isActive            Boolean   @default(false)
+  lastLoginAt         DateTime?
+  loginCount          Int       @default(0)
+  failedLoginAttempts Int       @default(0)
+  lastFailedLoginAt   DateTime?
+  accountLocked       Boolean   @default(false)
+  lockedUntil         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  passwordHash        String?
 
   // Authentication (NextAuth)
   accounts Account[]
@@ -109,13 +131,18 @@ model User {
   teacher Teacher?
 
   // Related data
-  auditLogs     AuditLog[]
-  notifications Notification[]
-  resetTokens   PasswordResetToken[]
+  auditLogs      AuditLog[]
+  notifications  Notification[]
+  resetTokens    PasswordResetToken[]
+  metrics        Metric[]
+  userActivities UserActivity[]
+  securityEvents SecurityEvent[]
 
   @@index([email])
   @@index([role])
   @@index([createdAt])
+  @@index([isActive])
+  @@index([accountLocked])
   @@map("users")
 }
 
@@ -143,17 +170,27 @@ model Account {
 }
 
 model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique(map: "sessions_sessionToken_key")
-  userId       String
-  expires      DateTime
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                String               @id @default(cuid())
+  sessionToken      String               @unique(map: "sessions_sessionToken_key")
+  userId            String
+  expires           DateTime
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  deviceFingerprint String?
+  userAgent         String?
+  ipAddress         String?
+  securityLevel     SessionSecurityLevel @default(MEDIUM)
+  lastAccessedAt    DateTime             @default(now())
+  refreshCount      Int                  @default(0)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([sessionToken])
+  @@index([expires])
+  @@index([deviceFingerprint])
+  @@index([securityLevel])
+  @@index([createdAt])
   @@map("sessions")
 }
 
@@ -162,10 +199,13 @@ model VerificationToken {
   token      String   @unique(map: "verification_tokens_token_key")
   expires    DateTime
   createdAt  DateTime @default(now())
+  tokenId    String?  @unique(map: "verification_tokens_token_id_key") // For secure token reference
 
   @@unique([identifier, token], map: "verification_tokens_identifier_token_key")
   @@index([token])
+  @@index([tokenId])
   @@index([expires])
+  @@index([createdAt])
   @@map("verification_tokens")
 }
 
@@ -176,12 +216,15 @@ model PasswordResetToken {
   expires   DateTime
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
+  ipAddress String?
+  userAgent String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([token])
   @@index([userId])
   @@index([expires])
+  @@index([used])
   @@map("password_reset_tokens")
 }
 
@@ -221,6 +264,9 @@ model Student {
   jambRegSearchHash String? @unique(map: "students_jamb_reg_search_hash_key")
   ninSearchHash     String? @unique(map: "students_nin_search_hash_key")
 
+  // Security fields
+  lastActivityAt DateTime?
+
   // Relationships
   userId                String
   user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -239,6 +285,7 @@ model Student {
   @@index([department])
   @@index([college])
   @@index([dateEnrolled])
+  @@index([lastActivityAt])
   @@map("students")
 }
 
@@ -257,6 +304,9 @@ model Teacher {
   dateJoined     DateTime @default(now())
   isActive       Boolean  @default(true)
 
+  // Security fields
+  lastActivityAt DateTime?
+
   // Relationships
   userId            String
   user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -270,6 +320,7 @@ model Teacher {
   @@index([email])
   @@index([phone])
   @@index([department])
+  @@index([lastActivityAt])
   @@map("teachers")
 }
 
@@ -471,21 +522,23 @@ model Portfolio {
 // ===========================================================
 
 model AuditLog {
-  id           String        @id @default(uuid())
-  userId       String?
-  user         User?         @relation(fields: [userId], references: [id])
-  action       AuditAction
-  resourceType ResourceType?
-  resourceId   String?
-  details      Json?
-  ipAddress    String?
-  userAgent    String?
-  createdAt    DateTime      @default(now())
+  id            String                @id @default(uuid())
+  userId        String?
+  user          User?                 @relation(fields: [userId], references: [id])
+  action        AuditAction
+  resourceType  ResourceType?
+  resourceId    String?
+  details       Json?
+  ipAddress     String?
+  userAgent     String?
+  securityLevel SessionSecurityLevel?
+  createdAt     DateTime              @default(now())
 
   @@index([userId])
   @@index([action])
   @@index([resourceType, resourceId])
   @@index([createdAt])
+  @@index([securityLevel])
   @@map("audit_logs")
 }
 
@@ -500,16 +553,18 @@ model Notification {
   actionUrl String?
   createdAt DateTime         @default(now())
   readAt    DateTime?
+  priority  Int              @default(1) // 1=low, 2=medium, 3=high
 
   @@index([userId])
   @@index([isRead])
   @@index([createdAt])
   @@index([type])
+  @@index([priority])
   @@map("notifications")
 }
 
 // ===========================================================
-// 8. SYSTEM CONFIGURATION
+// 8. SYSTEM CONFIGURATION & METRICS
 // ===========================================================
 
 model SystemConfig {
@@ -526,3 +581,613 @@ model SystemConfig {
   @@index([category])
   @@map("system_configs")
 }
+
+model Metric {
+  id        String   @id @default(uuid())
+  name      String
+  value     Float
+  tags      Json? // Additional metadata as JSON
+  timestamp DateTime @default(now())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@index([name])
+  @@index([timestamp])
+  @@index([userId])
+  @@map("metrics")
+}
+
+// ===========================================================
+// 9. RATE LIMITING & SECURITY
+// ===========================================================
+
+model RateLimit {
+  id          String   @id @default(uuid())
+  key         String // Combination of user_id:action or ip:action
+  count       Int      @default(1)
+  windowStart DateTime
+  windowEnd   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([key, windowStart], map: "rate_limits_key_window_start_key")
+  @@index([key])
+  @@index([windowStart])
+  @@index([windowEnd])
+  @@map("rate_limits")
+}
+
+model SecurityEvent {
+  id          String    @id @default(uuid())
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id])
+  eventType   String // e.g., "suspicious_login", "multiple_failed_attempts"
+  severity    String    @default("medium") // low, medium, high, critical
+  description String
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?
+  resolved    Boolean   @default(false)
+  resolvedAt  DateTime?
+  resolvedBy  String?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([severity])
+  @@index([createdAt])
+  @@index([resolved])
+  @@map("security_events")
+}
+
+// ===========================================================
+// 10. ACTIVITY TRACKING
+// ===========================================================
+
+model UserActivity {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action       String
+  resourceType String?
+  resourceId   String?
+  details      Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([resourceType, resourceId])
+  @@index([createdAt])
+  @@map("user_activities")
+}
+
+// // ===========================================================
+// // MOUAU CLASSMATE - PRISMA SCHEMA
+// // Identity • E-Learning • Progress • Portfolio
+// // ===========================================================
+
+// generator client {
+//   provider = "prisma-client-js"
+// }
+
+// datasource db {
+//   provider = "postgresql"
+//   url      = env("DATABASE_URL")
+// }
+
+// // ===========================================================
+// // ENUMS for Type Safety
+// // ===========================================================
+
+// enum Role {
+//   STUDENT
+//   TEACHER
+//   ADMIN
+// }
+
+// enum Gender {
+//   MALE
+//   FEMALE
+//   OTHER
+// }
+
+// enum MaritalStatus {
+//   SINGLE
+//   MARRIED
+//   DIVORCED
+//   WIDOWED
+// }
+
+// enum Grade {
+//   A
+//   B
+//   C
+//   D
+//   E
+//   F
+// }
+
+// enum NotificationType {
+//   INFO
+//   SUCCESS
+//   WARNING
+//   ERROR
+// }
+
+// enum AuditAction {
+//   USER_REGISTERED
+//   USER_LOGGED_IN
+//   USER_LOGGED_OUT
+//   EMAIL_VERIFIED
+//   PROFILE_UPDATED
+//   STUDENT_REGISTERED
+//   ENROLLMENT_CREATED
+//   ASSIGNMENT_SUBMITTED
+//   PORTFOLIO_CREATED
+//   COURSE_CREATED
+//   ASSIGNMENT_CREATED
+//   GRADE_ASSIGNED
+//   PASSWORD_RESET_REQUESTED
+//   PASSWORD_RESET
+//   SESSION_REFRESHED
+//   SESSION_CLEANED_UP
+//   NOTIFICATION_SENT
+//   SYSTEM_CONFIG_UPDATED
+// }
+
+// enum ResourceType {
+//   USER
+//   STUDENT
+//   TEACHER
+//   COURSE
+//   LECTURE
+//   ASSIGNMENT
+//   ENROLLMENT
+//   PORTFOLIO
+// }
+
+// // ===========================================================
+// // 1. USER & AUTHENTICATION (NextAuth compatible)
+// // ===========================================================
+
+// model User {
+//   id            String    @id @default(uuid())
+//   name          String?
+//   email         String    @unique(map: "users_email_key")
+//   emailVerified DateTime?
+//   image         String?
+//   role          Role      @default(STUDENT)
+//   isActive      Boolean   @default(false)
+//   lastLoginAt   DateTime?
+//   createdAt     DateTime  @default(now())
+//   updatedAt     DateTime  @updatedAt
+//   passwordHash  String?
+
+//   // Authentication (NextAuth)
+//   accounts Account[]
+//   sessions Session[]
+
+//   // Role-specific profiles
+//   student Student?
+//   teacher Teacher?
+
+//   // Related data
+//   auditLogs     AuditLog[]
+//   notifications Notification[]
+//   resetTokens   PasswordResetToken[]
+
+//   @@index([email])
+//   @@index([role])
+//   @@index([createdAt])
+//   @@map("users")
+// }
+
+// model Account {
+//   id                String   @id @default(cuid())
+//   userId            String
+//   type              String
+//   provider          String
+//   providerAccountId String
+//   refresh_token     String?  @db.Text
+//   access_token      String?  @db.Text
+//   expires_at        Int?
+//   token_type        String?
+//   scope             String?
+//   id_token          String?  @db.Text
+//   session_state     String?
+//   createdAt         DateTime @default(now())
+//   updatedAt         DateTime @updatedAt
+
+//   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+//   @@unique([provider, providerAccountId], map: "accounts_provider_providerAccountId_key")
+//   @@index([userId])
+//   @@map("accounts")
+// }
+
+// model Session {
+//   id           String   @id @default(cuid())
+//   sessionToken String   @unique(map: "sessions_sessionToken_key")
+//   userId       String
+//   expires      DateTime
+//   createdAt    DateTime @default(now())
+//   updatedAt    DateTime @updatedAt
+
+//   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+//   @@index([userId])
+//   @@index([sessionToken])
+//   @@map("sessions")
+// }
+
+// model VerificationToken {
+//   identifier String
+//   token      String   @unique(map: "verification_tokens_token_key")
+//   expires    DateTime
+//   createdAt  DateTime @default(now())
+
+//   @@unique([identifier, token], map: "verification_tokens_identifier_token_key")
+//   @@index([token])
+//   @@index([expires])
+//   @@map("verification_tokens")
+// }
+
+// model PasswordResetToken {
+//   id        String   @id @default(cuid())
+//   token     String   @unique(map: "password_reset_tokens_token_key")
+//   userId    String
+//   expires   DateTime
+//   used      Boolean  @default(false)
+//   createdAt DateTime @default(now())
+
+//   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+//   @@index([token])
+//   @@index([userId])
+//   @@index([expires])
+//   @@map("password_reset_tokens")
+// }
+
+// // ===========================================================
+// // 2. STUDENT & TEACHER PROFILES
+// // ===========================================================
+
+// model Student {
+//   id            String  @id @default(uuid())
+//   // Unique identifiers - all treated separately
+//   matricNumber  String  @unique(map: "students_matric_number_key")
+//   jambRegNumber String  @unique(map: "students_jamb_reg_number_key")
+//   nin           String? @unique(map: "students_nin_key")
+
+//   // Personal information
+//   firstName   String
+//   lastName    String
+//   otherName   String?
+//   gender      Gender?
+//   phone       String  @unique(map: "students_phone_key")
+//   passportUrl String?
+//   email       String  @unique(map: "students_email_key")
+
+//   // Academic information
+//   department    String
+//   course        String
+//   college       String
+//   state         String
+//   lga           String
+//   maritalStatus MaritalStatus? @default(SINGLE)
+//   dateEnrolled  DateTime       @default(now())
+//   isActive      Boolean        @default(true)
+
+//   // Search hashes for encrypted field queries
+//   emailSearchHash   String? @unique(map: "students_email_search_hash_key")
+//   phoneSearchHash   String? @unique(map: "students_phone_search_hash_key")
+//   jambRegSearchHash String? @unique(map: "students_jamb_reg_search_hash_key")
+//   ninSearchHash     String? @unique(map: "students_nin_search_hash_key")
+
+//   // Relationships
+//   userId                String
+//   user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+//   enrollments           Enrollment[]
+//   portfolios            Portfolio[]
+//   submissions           Submission[]
+//   assignmentSubmissions AssignmentSubmission[]
+
+//   @@unique([userId], map: "students_user_id_key")
+//   @@unique([matricNumber], map: "students_matric_number_alt_key")
+//   @@unique([jambRegNumber], map: "students_jamb_reg_number_alt_key")
+//   @@index([matricNumber])
+//   @@index([jambRegNumber])
+//   @@index([email])
+//   @@index([phone])
+//   @@index([department])
+//   @@index([college])
+//   @@index([dateEnrolled])
+//   @@map("students")
+// }
+
+// model Teacher {
+//   id             String   @id @default(uuid())
+//   employeeId     String   @unique(map: "teachers_employee_id_key")
+//   firstName      String
+//   lastName       String
+//   otherName      String?
+//   gender         Gender?
+//   phone          String   @unique(map: "teachers_phone_key")
+//   email          String   @unique(map: "teachers_email_key")
+//   department     String
+//   qualification  String?
+//   specialization String?
+//   dateJoined     DateTime @default(now())
+//   isActive       Boolean  @default(true)
+
+//   // Relationships
+//   userId            String
+//   user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+//   instructedCourses Course[]     @relation("CourseInstructor")
+//   createdCourses    Course[]     @relation("CourseCreator")
+//   assignments       Assignment[]
+
+//   @@unique([userId], map: "teachers_user_id_key")
+//   @@unique([employeeId], map: "teachers_employee_id_alt_key")
+//   @@index([employeeId])
+//   @@index([email])
+//   @@index([phone])
+//   @@index([department])
+//   @@map("teachers")
+// }
+
+// // ===========================================================
+// // 3. ACADEMIC STRUCTURE
+// // ===========================================================
+
+// model Course {
+//   id            String   @id @default(uuid())
+//   code          String   @unique(map: "courses_code_key")
+//   title         String
+//   description   String?
+//   credits       Int      @default(3)
+//   level         Int      @default(100)
+//   semester      Int      @default(1)
+//   courseOutline String?
+//   isActive      Boolean  @default(true)
+//   createdAt     DateTime @default(now())
+//   updatedAt     DateTime @updatedAt
+
+//   // Instructor relationships
+//   instructorId String?
+//   instructor   Teacher? @relation("CourseInstructor", fields: [instructorId], references: [id])
+
+//   creatorId String?
+//   creator   Teacher? @relation("CourseCreator", fields: [creatorId], references: [id])
+
+//   // Course content
+//   lectures    Lecture[]
+//   enrollments Enrollment[]
+//   portfolios  Portfolio[]
+//   assignments Assignment[]
+
+//   @@index([code])
+//   @@index([level])
+//   @@index([semester])
+//   @@index([instructorId])
+//   @@index([createdAt])
+//   @@map("courses")
+// }
+
+// model Lecture {
+//   id          String    @id @default(uuid())
+//   title       String
+//   description String?
+//   content     Json?
+//   duration    Int?
+//   orderIndex  Int       @default(0)
+//   isPublished Boolean   @default(false)
+//   publishedAt DateTime?
+//   createdAt   DateTime  @default(now())
+//   updatedAt   DateTime  @updatedAt
+
+//   // Relations
+//   courseId    String
+//   course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+//   submissions Submission[]
+
+//   @@index([courseId])
+//   @@index([orderIndex])
+//   @@index([isPublished])
+//   @@map("lectures")
+// }
+
+// // ===========================================================
+// // 4. ENROLLMENTS & PROGRESS TRACKING
+// // ===========================================================
+
+// model Enrollment {
+//   id             String    @id @default(uuid())
+//   studentId      String
+//   courseId       String
+//   dateEnrolled   DateTime  @default(now())
+//   isCompleted    Boolean   @default(false)
+//   completionDate DateTime?
+//   grade          Grade?
+//   score          Float?
+//   progress       Float     @default(0)
+//   lastAccessedAt DateTime?
+
+//   // Relations
+//   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+//   course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+//   @@unique([studentId, courseId], map: "enrollments_student_id_course_id_key")
+//   @@index([studentId])
+//   @@index([courseId])
+//   @@index([isCompleted])
+//   @@index([dateEnrolled])
+//   @@map("enrollments")
+// }
+
+// // ===========================================================
+// // 5. ASSESSMENTS & SUBMISSIONS
+// // ===========================================================
+
+// model Assignment {
+//   id                  String   @id @default(uuid())
+//   title               String
+//   description         String?
+//   instructions        String?
+//   dueDate             DateTime
+//   maxScore            Int      @default(100)
+//   allowedAttempts     Int      @default(1)
+//   assignmentUrl       String?
+//   isPublished         Boolean  @default(false)
+//   allowLateSubmission Boolean  @default(false)
+//   createdAt           DateTime @default(now())
+//   updatedAt           DateTime @updatedAt
+
+//   // Relations
+//   courseId    String
+//   course      Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+//   teacherId   String?
+//   teacher     Teacher?               @relation(fields: [teacherId], references: [id])
+//   submissions AssignmentSubmission[]
+
+//   @@index([courseId])
+//   @@index([dueDate])
+//   @@index([isPublished])
+//   @@map("assignments")
+// }
+
+// model AssignmentSubmission {
+//   id            String   @id @default(uuid())
+//   submissionUrl String?
+//   content       String?
+//   submittedAt   DateTime @default(now())
+//   score         Float?
+//   feedback      String?
+//   isGraded      Boolean  @default(false)
+//   isLate        Boolean  @default(false)
+//   attemptNumber Int      @default(1)
+
+//   // Relations
+//   studentId    String
+//   student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+//   assignmentId String
+//   assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+//   @@unique([studentId, assignmentId, attemptNumber], map: "assignment_submissions_student_assignment_attempt_key")
+//   @@index([studentId])
+//   @@index([assignmentId])
+//   @@index([submittedAt])
+//   @@index([isGraded])
+//   @@map("assignment_submissions")
+// }
+
+// model Submission {
+//   id          String   @id @default(uuid())
+//   content     Json?
+//   submittedAt DateTime @default(now())
+//   isGraded    Boolean  @default(false)
+//   score       Float?
+//   feedback    String?
+
+//   // Relations
+//   studentId String
+//   student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+//   lectureId String
+//   lecture   Lecture @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+
+//   @@unique([studentId, lectureId], map: "submissions_student_id_lecture_id_key")
+//   @@index([studentId])
+//   @@index([lectureId])
+//   @@map("submissions")
+// }
+
+// // ===========================================================
+// // 6. PORTFOLIO & PROJECTS
+// // ===========================================================
+
+// model Portfolio {
+//   id           String   @id @default(uuid())
+//   title        String
+//   description  String?
+//   projectUrl   String?
+//   imageUrl     String?
+//   technologies String[]
+//   isPublished  Boolean  @default(false)
+//   submittedAt  DateTime @default(now())
+//   updatedAt    DateTime @updatedAt
+
+//   // Relations
+//   courseId  String
+//   course    Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+//   studentId String
+//   student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+//   @@index([studentId])
+//   @@index([courseId])
+//   @@index([submittedAt])
+//   @@index([isPublished])
+//   @@map("portfolios")
+// }
+
+// // ===========================================================
+// // 7. AUDIT LOGGING & NOTIFICATIONS
+// // ===========================================================
+
+// model AuditLog {
+//   id           String        @id @default(uuid())
+//   userId       String?
+//   user         User?         @relation(fields: [userId], references: [id])
+//   action       AuditAction
+//   resourceType ResourceType?
+//   resourceId   String?
+//   details      Json?
+//   ipAddress    String?
+//   userAgent    String?
+//   createdAt    DateTime      @default(now())
+
+//   @@index([userId])
+//   @@index([action])
+//   @@index([resourceType, resourceId])
+//   @@index([createdAt])
+//   @@map("audit_logs")
+// }
+
+// model Notification {
+//   id        String           @id @default(uuid())
+//   userId    String
+//   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+//   title     String
+//   message   String
+//   type      NotificationType @default(INFO)
+//   isRead    Boolean          @default(false)
+//   actionUrl String?
+//   createdAt DateTime         @default(now())
+//   readAt    DateTime?
+
+//   @@index([userId])
+//   @@index([isRead])
+//   @@index([createdAt])
+//   @@index([type])
+//   @@map("notifications")
+// }
+
+// // ===========================================================
+// // 8. SYSTEM CONFIGURATION
+// // ===========================================================
+
+// model SystemConfig {
+//   id          String   @id @default(uuid())
+//   key         String   @unique(map: "system_configs_key_key")
+//   value       String
+//   description String?
+//   category    String   @default("general")
+//   isPublic    Boolean  @default(false)
+//   updatedAt   DateTime @updatedAt
+//   updatedBy   String?
+
+//   @@index([key])
+//   @@index([category])
+//   @@map("system_configs")
+// }

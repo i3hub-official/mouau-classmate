@@ -4,15 +4,15 @@ export const PUBLIC_PATHS = [
   "/sitemap",
   "/signin",
   "/signup",
-   "/about",
+  "/about",
 ] as const;
 
 export const PRIVATE_PATHS = [
-  "/settings",
-  "/settings/*",
+  "/dashboard",
   "/profile",
-  "/profile/*",
-  "/dashboard/*"
+  "/courses",
+  "/grades",
+  "/admin",
 ] as const;
 
 export const AUTH_PATHS = [
@@ -48,10 +48,10 @@ export const CACHEABLE_PATHS = [
 
   // Authentication pages (read-only data)
   "/signin",
-    "/forgot-password",
+  "/forgot-password",
   "/reset-password",
 
-   // File uploads/downloads (static content)
+  // File uploads/downloads (static content)
   "/uploads/*",
   "/downloads/*",
   "/documents/public/*", // Only public documents
@@ -70,7 +70,6 @@ export const CACHEABLE_PATHS = [
   "/robots.txt",
   "/sitemap.xml",
   "/sitemap/*",
- 
 ] as const;
 
 // Type exports
