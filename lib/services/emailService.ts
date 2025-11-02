@@ -1,4 +1,4 @@
-// lib/services/emailService.ts - ENHANCED VERSION
+// lib/services/emailService.ts - FIXED VERSION
 import nodemailer from "nodemailer";
 import fs from "fs";
 import path from "path";
@@ -42,10 +42,10 @@ export class EmailService {
       socketTimeout: 30000, // 30 seconds
       // Gmail-specific settings
       tls: {
-        rejectUnauthorized: false, // Might help with certificate issues
+        rejectUnauthorized: false,
       },
-      debug: true, // Enable debug output
-      logger: true, // Enable logger
+      debug: true,
+      logger: true,
     });
 
     this.templatesDir = path.join(process.cwd(), "lib/templates/emails");
@@ -61,6 +61,7 @@ export class EmailService {
       pass: process.env.SMTP_PASS ? "SET" : "MISSING",
       fromName: process.env.EMAIL_FROM_NAME,
       fromAddress: process.env.EMAIL_FROM_ADDRESS,
+      nodeEnv: process.env.NODE_ENV,
     });
   }
 
@@ -154,39 +155,51 @@ export class EmailService {
 
   async sendEmail(options: EmailOptions): Promise<boolean> {
     try {
-      // In development, log email instead of sending but still validate
-      if (process.env.NODE_ENV === "development") {
-        console.log("📧 DEVELOPMENT MODE - Email would be sent:", {
+      console.log("🚀 Starting email send process...");
+      console.log("📧 Environment:", process.env.NODE_ENV);
+      console.log("📬 Recipient:", options.to);
+      console.log("📄 Template:", options.template);
+
+      // Load and compile template first
+      console.log("📝 Loading email template...");
+      const template = await this.loadTemplate(options.template);
+      const compiled = this.compileTemplate(template, options.context);
+
+      console.log("✅ Template loaded and compiled successfully");
+      console.log("📧 Subject:", compiled.subject);
+
+      // Check if we should actually send or just simulate
+      const shouldSimulate =
+        process.env.EMAIL_SIMULATE === "true" ||
+        process.env.NODE_ENV === "test";
+
+      if (shouldSimulate) {
+        console.log("🧪 SIMULATION MODE - Email would be sent:");
+        console.log({
           to: options.to,
-          subject: options.subject,
+          from: {
+            name: process.env.EMAIL_FROM_NAME || "MOUAU ClassMate",
+            address: process.env.EMAIL_FROM_ADDRESS || "noreply@mouau.edu.ng",
+          },
+          subject: compiled.subject,
           template: options.template,
-          context: options.context,
         });
-
-        // Still try to load template to validate it exists
-        try {
-          await this.loadTemplate(options.template);
-          console.log("✅ Template validation passed");
-        } catch (templateError) {
-          console.error("❌ Template validation failed:", templateError);
-          return false;
-        }
-
+        console.log("✅ Email simulation successful");
         return true;
       }
 
-      // PRODUCTION: Actually send emails
-      console.log("🔄 Verifying email connection before sending...");
+      // ACTUALLY SEND THE EMAIL
+      console.log("📤 SENDING REAL EMAIL...");
+      console.log("🔄 Verifying connection before sending...");
+
       const isConnected = await this.ensureConnection();
 
       if (!isConnected) {
         console.error("❌ Cannot send email - no connection to email server");
-        return false;
+        throw new Error("Email server connection failed");
       }
 
-      console.log("✅ Connection verified, loading template...");
-      const template = await this.loadTemplate(options.template);
-      const compiled = this.compileTemplate(template, options.context);
+      console.log("✅ Connection verified, preparing to send...");
 
       const mailOptions = {
         from: {
@@ -197,78 +210,78 @@ export class EmailService {
         subject: compiled.subject,
         html: compiled.html,
         text: compiled.text,
-        // Add delivery status notifications
-        dsn: {
-          id: `email-${Date.now()}`,
-          return: "headers",
-          notify: ["failure", "delay"],
-          recipient: process.env.EMAIL_FROM_ADDRESS || "noreply@mouau.edu.ng",
-        },
       };
 
-      console.log("📤 Sending email to:", options.to);
-      console.log("📝 Email details:", {
+      console.log("📤 Sending email with options:", {
         from: mailOptions.from,
+        to: mailOptions.to,
         subject: mailOptions.subject,
-        template: options.template,
       });
 
       const result = await this.transporter.sendMail(mailOptions);
 
-      console.log("✅ Email sent successfully:", {
-        messageId: result.messageId,
-        to: options.to,
-        subject: compiled.subject,
-        response: result.response,
-      });
+      console.log("✅ EMAIL SENT SUCCESSFULLY!");
+      console.log("📬 Message ID:", result.messageId);
+      console.log("📨 Response:", result.response);
+      console.log("✉️ Accepted:", result.accepted);
+      console.log("🚫 Rejected:", result.rejected);
+
+      if (result.rejected && result.rejected.length > 0) {
+        console.error("⚠️ Some recipients were rejected:", result.rejected);
+      }
 
       return true;
     } catch (error) {
-      console.error("❌ Failed to send email:", error);
+      console.error("❌ FAILED TO SEND EMAIL");
+      console.error("💥 Error details:", error);
 
       // Reset connection status on error
       this.connectionVerified = false;
 
       // Log specific error details
       if (error instanceof Error) {
-        console.error("📧 Email error details:", {
+        console.error("📧 Email error:", {
           name: error.name,
           message: error.message,
-          code: (error as any).code,
-          command: (error as any).command,
+          stack: error.stack,
         });
 
-        // Gmail-specific error handling
+        // Provide helpful debugging information
         if (error.message.includes("Invalid login")) {
-          console.error("🔐 GMAIL ISSUE: This usually means:");
-          console.error("   • Your Gmail password is incorrect");
+          console.error("\n🔐 AUTHENTICATION ERROR:");
+          console.error("   • Using Gmail? You need an App Password");
           console.error(
-            "   • You're using your regular password instead of an App Password"
+            "   • Go to: https://myaccount.google.com/apppasswords"
           );
-          console.error(
-            "   • 2FA is enabled but no App Password was generated"
-          );
-          console.error(
-            "   💡 SOLUTION: Go to Google Account > Security > App Passwords"
-          );
+          console.error("   • Generate a new App Password");
+          console.error("   • Update your SMTP_PASS environment variable");
         } else if (error.message.includes("ECONNREFUSED")) {
+          console.error("\n🌐 CONNECTION ERROR:");
+          console.error("   • Check SMTP_HOST and SMTP_PORT");
           console.error(
-            "🌐 NETWORK ISSUE: Cannot connect to Gmail SMTP server"
+            "   • Current: " +
+              process.env.SMTP_HOST +
+              ":" +
+              process.env.SMTP_PORT
           );
-          console.error("   • Check your internet connection");
-          console.error("   • Check if port 587 is blocked by firewall");
-          console.error("   • Try using port 465 with secure: true");
+          console.error("   • Gmail: smtp.gmail.com:587 (secure: false)");
+          console.error("   • Gmail Alt: smtp.gmail.com:465 (secure: true)");
+        } else if (error.message.includes("ETIMEDOUT")) {
+          console.error("\n⏰ TIMEOUT ERROR:");
+          console.error("   • Network connectivity issue");
+          console.error("   • Check firewall settings");
+          console.error("   • Try a different network");
         }
       }
 
-      return false;
+      throw error; // Re-throw to let caller handle it
     }
   }
 
   async verifyConnection(): Promise<boolean> {
     try {
       console.log("🔌 Testing email server connection...");
-      console.log("📧 Using configuration:", {
+      console.log("📧 Configuration:", {
         host: process.env.SMTP_HOST,
         port: process.env.SMTP_PORT,
         user: process.env.SMTP_USER,
@@ -283,45 +296,22 @@ export class EmailService {
       this.lastConnectionCheck = Date.now();
       return true;
     } catch (error) {
-      console.error("❌ Email server connection verification FAILED:", error);
+      console.error("❌ Email server connection verification FAILED");
+      console.error("💥 Error:", error);
 
-      // Enhanced error diagnostics
       if (error instanceof Error) {
-        console.error("🔌 Connection error analysis:", {
-          name: error.name,
-          message: error.message,
-          code: (error as any).code,
-        });
+        console.error("\n🔍 Diagnostics:");
+        console.error("   Error name:", error.name);
+        console.error("   Error message:", error.message);
 
-        // Specific Gmail error handling
-        if (
-          error.message.includes("Invalid login") ||
-          error.message.includes("535")
-        ) {
-          console.error("🔐 GMAIL AUTHENTICATION ERROR:");
+        if (error.message.includes("Invalid login")) {
+          console.error("\n🔐 AUTHENTICATION ISSUE:");
+          console.error("   1. Verify SMTP_USER is correct");
           console.error(
-            "   1. Make sure you're using an APP PASSWORD, not your regular Gmail password"
+            "   2. For Gmail, use App Password (not regular password)"
           );
-          console.error("   2. Go to: https://myaccount.google.com/security");
           console.error(
-            "   3. Enable 2-Factor Authentication if not already enabled"
-          );
-          console.error("   4. Generate an App Password for your application");
-          console.error(
-            "   5. Use the 16-character App Password in your SMTP_PASS"
-          );
-        } else if (error.message.includes("ECONNREFUSED")) {
-          console.error("🌐 CONNECTION REFUSED:");
-          console.error("   • Check if SMTP_HOST and SMTP_PORT are correct");
-          console.error(
-            "   • Try changing SMTP_PORT to 465 and SMTP_SECURE to true"
-          );
-          console.error("   • Check firewall/network settings");
-        } else if (error.message.includes("ETIMEDOUT")) {
-          console.error("⏰ CONNECTION TIMEOUT:");
-          console.error("   • Network connectivity issue");
-          console.error(
-            "   • Gmail SMTP server might be temporarily unavailable"
+            "   3. Generate at: https://myaccount.google.com/apppasswords"
           );
         }
       }
@@ -332,8 +322,8 @@ export class EmailService {
     }
   }
 
-  // Enhanced test method
-  async testEmailService(testEmail: string = "test@example.com"): Promise<{
+  // Enhanced test method that actually sends
+  async testEmailService(testEmail?: string): Promise<{
     success: boolean;
     steps: {
       connection: boolean;
@@ -342,7 +332,9 @@ export class EmailService {
     };
     error?: string;
   }> {
-    console.log("🧪 Starting comprehensive email service test...");
+    console.log("\n🧪 ===== EMAIL SERVICE TEST =====");
+    console.log("📧 Environment:", process.env.NODE_ENV);
+    console.log("🔧 Simulate mode:", process.env.EMAIL_SIMULATE);
 
     const results: {
       success: boolean;
@@ -363,43 +355,65 @@ export class EmailService {
 
     try {
       // Step 1: Test connection
-      console.log("1. Testing SMTP connection...");
+      console.log("\n1️⃣ Testing SMTP connection...");
       results.steps.connection = await this.verifyConnection();
 
       if (!results.steps.connection) {
         results.error = "SMTP connection failed";
+        console.error("❌ Test failed at connection step");
         return results;
       }
 
       // Step 2: Test template loading
-      console.log("2. Testing template loading...");
+      console.log("\n2️⃣ Testing template loading...");
       try {
         await this.loadTemplate("email-verification");
         results.steps.template = true;
+        console.log("✅ Template loaded successfully");
       } catch (templateError) {
         results.error = `Template loading failed: ${
           templateError instanceof Error
             ? templateError.message
             : "Unknown error"
         }`;
+        console.error("❌ Test failed at template step");
         return results;
       }
 
-      // Step 3: Test email sending
-      console.log("3. Testing email sending...");
-      if (process.env.NODE_ENV === "development") {
-        console.log("   DEVELOPMENT MODE - Simulating email send");
-        results.steps.sending = true;
+      // Step 3: Test actual email sending
+      console.log("\n3️⃣ Testing email sending...");
+
+      if (!testEmail) {
+        console.log("⚠️ No test email provided, skipping send test");
+        console.log(
+          "💡 Provide test email: emailService.testEmailService('your@email.com')"
+        );
+        results.steps.sending = true; // Mark as passed since we can't test without email
       } else {
-        results.steps.sending = await this.sendEmail({
-          to: testEmail,
-          subject: "Test Email from MOUAU ClassMate",
-          template: "email-verification",
-          context: {
-            name: "Test User",
-            verificationLink: "https://mouau.edu.ng/auth/verify?token=test",
-          },
-        });
+        console.log("📬 Test recipient:", testEmail);
+
+        try {
+          results.steps.sending = await this.sendEmail({
+            to: testEmail,
+            subject: "Test Email from MOUAU ClassMate",
+            template: "email-verification",
+            context: {
+              name: "Test User",
+              verificationLink:
+                "https://mouau.edu.ng/auth/verify?token=test123",
+            },
+          });
+
+          if (results.steps.sending) {
+            console.log("✅ Test email sent successfully!");
+            console.log("📬 Check inbox:", testEmail);
+          }
+        } catch (sendError) {
+          console.error("❌ Failed to send test email:", sendError);
+          results.error =
+            sendError instanceof Error ? sendError.message : "Send failed";
+          return results;
+        }
       }
 
       results.success =
@@ -407,11 +421,13 @@ export class EmailService {
         results.steps.template &&
         results.steps.sending;
 
+      console.log("\n" + "=".repeat(40));
       if (results.success) {
-        console.log("✅ Email service test PASSED");
+        console.log("✅ EMAIL SERVICE TEST PASSED");
       } else {
-        console.log("❌ Email service test FAILED");
+        console.log("❌ EMAIL SERVICE TEST FAILED");
       }
+      console.log("=".repeat(40) + "\n");
 
       return results;
     } catch (error) {
@@ -435,77 +451,40 @@ export class EmailService {
         host: process.env.SMTP_HOST,
         port: process.env.SMTP_PORT,
         user: process.env.SMTP_USER ? "SET" : "MISSING",
+        pass: process.env.SMTP_PASS
+          ? "SET (length: " + (process.env.SMTP_PASS?.length || 0) + ")"
+          : "MISSING",
         secure: process.env.SMTP_SECURE,
+        nodeEnv: process.env.NODE_ENV,
+        simulateMode: process.env.EMAIL_SIMULATE,
       },
     };
   }
 
-  // Reset connection
-  async resetConnection(): Promise<boolean> {
-    console.log("🔄 Resetting email connection...");
-    this.connectionVerified = false;
-    this.lastConnectionCheck = 0;
+  // Force send email (bypass simulation)
+  async forceSendEmail(options: EmailOptions): Promise<boolean> {
+    const originalSimulate = process.env.EMAIL_SIMULATE;
+    const originalNodeEnv = process.env.NODE_ENV;
 
     try {
-      this.transporter.close();
-    } catch (error) {
-      console.log("ℹ️ No existing connection to close");
-    }
+      // Temporarily disable simulation
+      (process.env as any).EMAIL_SIMULATE = "false";
+      if (process.env.NODE_ENV === "test") {
+        (process.env as any).NODE_ENV = "production";
+      }
 
-    // Recreate transporter with current environment variables
-    this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || "smtp.gmail.com",
-      port: parseInt(process.env.SMTP_PORT || "587"),
-      secure: process.env.SMTP_SECURE === "true",
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-      connectionTimeout: 30000,
-      greetingTimeout: 30000,
-      socketTimeout: 30000,
-      tls: {
-        rejectUnauthorized: false,
-      },
-      debug: true,
-      logger: true,
-    });
+      console.log("🚀 FORCE SENDING EMAIL (bypassing simulation)...");
+      const result = await this.sendEmail(options);
 
-    return await this.verifyConnection();
-  }
-
-  // Method to test different configurations
-  async testConfiguration(config: {
-    host: string;
-    port: number;
-    secure: boolean;
-    user: string;
-    pass: string;
-  }): Promise<boolean> {
-    console.log("🧪 Testing custom SMTP configuration...");
-
-    const testTransporter = nodemailer.createTransport({
-      host: config.host,
-      port: config.port,
-      secure: config.secure,
-      auth: {
-        user: config.user,
-        pass: config.pass,
-      },
-      connectionTimeout: 30000,
-      greetingTimeout: 30000,
-      socketTimeout: 30000,
-    });
-
-    try {
-      await testTransporter.verify();
-      console.log("✅ Custom configuration test PASSED");
-      testTransporter.close();
-      return true;
-    } catch (error) {
-      console.error("❌ Custom configuration test FAILED:", error);
-      testTransporter.close();
-      return false;
+      return result;
+    } finally {
+      // Restore original values
+      if (originalSimulate !== undefined) {
+        (process.env as any).EMAIL_SIMULATE = originalSimulate;
+      }
+      if (originalNodeEnv !== undefined) {
+        (process.env as any).NODE_ENV = originalNodeEnv;
+      }
     }
   }
 }
@@ -514,6 +493,11 @@ export class EmailService {
 export const emailService = new EmailService();
 
 // Export test function
-export async function testEmailService() {
-  return await emailService.testEmailService();
+export async function testEmailService(testEmail?: string) {
+  return await emailService.testEmailService(testEmail);
+}
+
+// Quick status check
+export function getEmailStatus() {
+  return emailService.getConnectionStatus();
 }

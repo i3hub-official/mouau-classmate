@@ -5,58 +5,274 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Welcome to MOUAU ClassMate</title>
   <style>
-    body { font-family: 'Arial', sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { text-align: center; background: #059669; color: white; padding: 30px; border-radius: 10px 10px 0 0; }
-    .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
-    .button { display: inline-block; background: #059669; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; }
-    .footer { text-align: center; margin-top: 30px; font-size: 12px; color: #6b7280; }
-    .logo { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
-    .feature { background: white; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #059669; }
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      line-height: 1.6; 
+      color: #374151; 
+      max-width: 600px; 
+      margin: 0 auto; 
+      padding: 20px;
+      background: linear-gradient(135deg, #f0fdf4 0%, #f0fdf4 50%, #f8fafc 100%);
+    }
+    
+    .container {
+      background: white;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+      border: 1px solid #e5e7eb;
+    }
+    
+    .header { 
+      background: linear-gradient(135deg, #15803d 0%, #16a34a 100%);
+      color: white; 
+      padding: 40px 30px; 
+      text-align: center;
+      position: relative;
+    }
+    
+    .header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #15803d, #FFF600, #15803d);
+    }
+    
+    .logo { 
+      font-size: 28px; 
+      font-weight: bold; 
+      margin-bottom: 15px;
+      letter-spacing: -0.5px;
+    }
+    
+    .logo-subtitle {
+      font-size: 14px;
+      opacity: 0.9;
+      font-weight: normal;
+      margin-top: 5px;
+    }
+    
+    .content { 
+      padding: 40px 30px; 
+    }
+    
+    .welcome-section {
+      background: #f0fdf4;
+      padding: 20px;
+      border-radius: 12px;
+      border-left: 4px solid #16a34a;
+      margin-bottom: 25px;
+      position: relative;
+    }
+    
+    .welcome-section::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 4px;
+      height: 100%;
+      background: #FFF600;
+      border-radius: 0 12px 12px 0;
+    }
+    
+    .button { 
+      display: inline-block; 
+      background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+      color: white; 
+      padding: 14px 35px; 
+      text-decoration: none; 
+      border-radius: 8px; 
+      font-weight: 600;
+      font-size: 16px;
+      box-shadow: 0 4px 15px rgba(34, 197, 94, 0.25);
+      transition: all 0.3s ease;
+      border: none;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .button::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 3px;
+      background: #FFF600;
+      transition: left 0.3s ease;
+    }
+    
+    .button:hover::before {
+      left: 0;
+    }
+    
+    .button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(34, 197, 94, 0.35);
+      background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    }
+    
+    .footer { 
+      text-align: center; 
+      margin-top: 40px; 
+      padding-top: 30px;
+      border-top: 1px solid #e5e7eb;
+      font-size: 13px; 
+      color: #6b7280; 
+    }
+    
+    .user-name {
+      color: #15803d;
+      font-weight: 600;
+    }
+    
+    .feature {
+      background: #f8fafc;
+      padding: 20px;
+      margin: 15px 0;
+      border-radius: 12px;
+      border-left: 4px solid #16a34a;
+      border: 1px solid #e5e7eb;
+      position: relative;
+    }
+    
+    .feature::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 4px;
+      height: 100%;
+      background: #FFF600;
+      border-radius: 0 12px 12px 0;
+    }
+    
+    .feature strong {
+      color: #15803d;
+      font-size: 16px;
+    }
+    
+    .features-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 15px;
+      margin: 25px 0;
+    }
+    
+    @media (min-width: 480px) {
+      .features-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+    
+    .celebration-badge {
+      background: linear-gradient(135deg, #15803d 0%, #16a34a 100%);
+      color: white;
+      padding: 15px;
+      border-radius: 8px;
+      margin: 20px 0;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 500;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .celebration-badge::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: #FFF600;
+    }
+    
+    .highlight {
+      color: #15803d;
+      font-weight: 600;
+      position: relative;
+      display: inline-block;
+    }
+    
+    .highlight::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: #FFF600;
+    }
   </style>
 </head>
 <body>
-  <div class="header">
-    <div class="logo">MOUAU ClassMate</div>
-    <h1>Welcome Aboard!</h1>
-  </div>
-  
-  <div class="content">
-    <p>Hello <strong>{{name}}</strong>,</p>
-    
-    <p>Congratulations! Your MOUAU ClassMate account has been successfully verified and is now active.</p>
-    
-    <p>Here's what you can do with your account:</p>
-    
-    <div class="feature">
-      <strong>📚 Access Course Materials</strong><br>
-      View lectures, assignments, and resources for your enrolled courses.
+  <div class="container">
+    <div class="header">
+      <div class="logo">MOUAU ClassMate</div>
+      <div class="logo-subtitle">Your Academic Partner</div>
+      <h1 style="margin: 20px 0 0 0; font-size: 24px; font-weight: 600;">Welcome Aboard!</h1>
     </div>
     
-    <div class="feature">
-      <strong>📝 Submit Assignments</strong><br>
-      Upload and submit your coursework directly through the platform.
-    </div>
-    
-    <div class="feature">
-      <strong>📊 Track Progress</strong><br>
-      Monitor your academic progress and grades in real-time.
-    </div>
-    
-    <div class="feature">
-      <strong>💼 Build Portfolio</strong><br>
-      Showcase your projects and academic work.
-    </div>
-    
-    <div style="text-align: center; margin: 30px 0;">
-      <a href="{{loginLink}}" class="button">Get Started</a>
-    </div>
-    
-    <p>If you have any questions or need assistance, please contact our support team.</p>
-    
-    <div class="footer">
-      <p>MOUAU ClassMate Team<br>
-      Michael Okpara University of Agriculture, Umudike</p>
-      <p>This is an automated message. Please do not reply to this email.</p>
+    <div class="content">
+      <div class="welcome-section">
+        <p style="margin: 0; font-size: 16px;">Hello <span class="user-name">{{name}}</span>,</p>
+        <p style="margin: 10px 0 0 0; font-size: 14px; color: #6b7280;">Congratulations! Your account has been <span class="highlight">successfully verified</span> and is now ready to use.</p>
+      </div>
+      
+      <div class="celebration-badge">
+        🎉 Your Academic Journey Starts Now!
+      </div>
+      
+      <p>You now have full access to MOUAU ClassMate's comprehensive academic platform. Here's what you can do:</p>
+      
+      <div class="features-grid">
+        <div class="feature">
+          <strong>📚 Course Materials</strong><br>
+          Access lectures, assignments, and learning resources for all your enrolled courses.
+        </div>
+        
+        <div class="feature">
+          <strong>📝 Assignment Management</strong><br>
+          Submit coursework and track deadlines with our organized submission system.
+        </div>
+        
+        <div class="feature">
+          <strong>📊 Progress Tracking</strong><br>
+          Monitor your academic performance and grades in real-time dashboard.
+        </div>
+        
+        <div class="feature">
+          <strong>💼 Academic Portfolio</strong><br>
+          Showcase your projects, research, and academic achievements.
+        </div>
+      </div>
+      
+      <div style="text-align: center; margin: 35px 0;">
+        <a href="{{loginLink}}" class="button">
+          Access Your Dashboard
+        </a>
+      </div>
+      
+      <p style="font-size: 14px; color: #6b7280; text-align: center;">
+        Ready to excel in your <span class="highlight">academic journey</span>? Start exploring your dashboard now!
+      </p>
+      
+      <div class="footer">
+        <p style="margin: 0 0 10px 0;">
+          <strong>MOUAU ClassMate Team</strong><br>
+          Student Management System
+        </p>
+        <p style="margin: 0; font-size: 12px; opacity: 0.8;">
+          This is an automated message. Please do not reply to this email.<br>
+          For assistance, contact our support team through the ClassMate portal.
+        </p>
+      </div>
     </div>
   </div>
 </body>
