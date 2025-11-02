@@ -1,27 +1,12 @@
 import type { NextConfig } from "next";
 
-const isDev = process.env.NODE_ENV === "development";
-
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   compress: true,
   productionBrowserSourceMaps: false,
 
-  allowedDevOrigins: [
-    "10.68.64.*",
-    "192.168.0.*", // Your specific IP
-    "localhost", // Localhost
-    "127.0.0.1", // Local IP
-  ],
-  // Enable Turbopack in dev
-  turbopack: isDev
-    ? {
-        resolveAlias: {
-          underscore: "lodash",
-        },
-        resolveExtensions: [".mdx", ".tsx", ".ts", ".jsx", ".js", ".json"],
-      }
-    : undefined,
+  // Simple Turbopack fix - either use this or remove entirely
+  turbopack: {},
 
   experimental: {
     serverActions: {
@@ -78,8 +63,8 @@ const nextConfig: NextConfig = {
     minimumCacheTTL: 60,
   },
 
-  webpack: (config) => {
-    if (!isDev) {
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
       config.resolve.fallback = {
         fs: false,
         net: false,
@@ -91,7 +76,6 @@ const nextConfig: NextConfig = {
 
   output: process.env.DOCKER_BUILD ? "standalone" : undefined,
 
-  // Optional: Improve performance
   compiler: {
     removeConsole: process.env.NODE_ENV === "production",
   },
