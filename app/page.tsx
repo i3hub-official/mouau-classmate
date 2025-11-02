@@ -1,118 +1,251 @@
 // app/page.tsx
 import Link from "next/link";
-import { BookOpen, Users, Calendar, FileText } from "lucide-react";
+import {
+  BookOpen,
+  Users,
+  Calendar,
+  FileText,
+  TrendingUp,
+  MessageSquare,
+  Shield,
+  Zap,
+  Mail,
+  Facebook,
+  Twitter,
+  Instagram,
+  Linkedin,
+} from "lucide-react";
 import { ThemeToggle } from "@/app/components/theme-toggle";
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-linear-to-br from-background via-accent/5 to-primary/5 flex flex-col">
       {/* Header */}
-      <header className="border-b border-border bg-card/80 backdrop-blur-lg">
-        <div className="w-full px-6 lg:px-12 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="p-2 border-2 rounded-lg">
+      <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur-xl shadow-sm">
+        <div className="w-full px-4 sm:px-6 lg:px-12 py-4 flex justify-between items-center">
+          <Link
+            href="/"
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+          >
+            <div className="p-2 border-2 border-primary/20 rounded-xl bg-primary/5">
               <img
                 src="/mouau_logo.webp"
                 alt="MOUAU Logo"
-                className="h-6 w-6 object-contain"
+                className="h-6 w-6 sm:h-7 sm:w-7 object-contain"
               />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">
+              <h1 className="text-lg sm:text-xl font-bold text-foreground">
                 MOUAU ClassMate
               </h1>
-              <p className="text-xs text-muted-foreground">
-                Michael Okpara University of Agriculture, Umudike
+              <p className="text-xs text-muted-foreground sm:block">
+                Your Academic Partner
               </p>
             </div>
-          </div>
+          </Link>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <Link
               href="/auth/signin"
               className="hidden md:block px-4 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
             >
               Sign In
             </Link>
+            <Link
+              href="/auth/signup"
+              className="hidden md:block px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              Get Started
+            </Link>
             <ThemeToggle />
           </div>
         </div>
       </header>
 
-      {/* Hero Section - Full Width */}
-      <section className="flex-1 w-full px-6 lg:px-12 py-16 text-center flex flex-col justify-center">
-        <div className="max-w-7xl mx-auto w-full">
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-foreground mb-6">
-            Your Smarter
-            <span className="text-primary"> Campus</span>
-            <br />
-            Companion
-          </h1>
+      {/* Hero Section */}
+      <section className="flex-1 w-full px-4 sm:px-6 lg:px-12 py-12 sm:py-16 lg:py-24">
+        <div className="max-w-7xl mx-auto">
+          {/* Hero Content */}
+          <div className="text-center mb-12 sm:mb-16 lg:mb-20">
+            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-foreground mb-6">
+              Your Smarter
+              <span className="text-primary"> Campus</span>
+              <br />
+              Companion
+            </h1>
 
-          <p className="text-xl lg:text-2xl text-muted-foreground mb-8 max-w-4xl mx-auto">
-            Access course materials, submit assignments, track your grades, and
-            connect with classmates - all in one modern platform.
-          </p>
+            <p className="text-lg sm:text-xl lg:text-2xl text-muted-foreground mb-8 max-w-3xl mx-auto">
+              All-in-one campus hub: course materials, collaboration, and smart
+              study tools.
+            </p>
 
-          <div className="flex gap-4 justify-center mb-16">
-            <Link
-              href="/auth/signup"
-              className="px-8 py-3 bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-colors"
-            >
-              Join Now
-            </Link>
-            <Link
-              href="/auth/signin"
-              className="px-8 py-3 border border-primary text-primary font-semibold rounded-lg hover:bg-primary hover:text-white transition-colors"
-            >
-              Sign In
-            </Link>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+              <Link
+                href="/auth/signup"
+                className="px-8 py-3.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30"
+              >
+                Get Started Free
+              </Link>
+              <Link
+                href="/auth/signin"
+                className="px-8 py-3.5 border-2 border-border text-foreground font-semibold rounded-xl hover:bg-accent/10 hover:border-primary/50 transition-all"
+              >
+                Sign In
+              </Link>
+            </div>
+
+            {/* Stats */}
+            <div className="flex flex-wrap justify-center gap-6 sm:gap-8 lg:gap-12 mb-16">
+              <div className="text-center">
+                <div className="text-2xl sm:text-3xl font-bold text-primary mb-1">
+                  500+
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Active Students
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl sm:text-3xl font-bold text-primary mb-1">
+                  50+
+                </div>
+                <div className="text-sm text-muted-foreground">Courses</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl sm:text-3xl font-bold text-primary mb-1">
+                  1000+
+                </div>
+                <div className="text-sm text-muted-foreground">Resources</div>
+              </div>
+            </div>
           </div>
 
-          {/* Features Grid - Full Width */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
-            <div className="p-6 bg-card rounded-lg border border-border hover:border-primary transition-colors">
-              <FileText className="h-8 w-8 text-primary mx-auto mb-3" />
-              <h3 className="font-semibold text-foreground mb-2">
-                Course Materials
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Access all your lecture notes and resources
+          {/* Features Grid */}
+          <div className="mb-16">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
+                Everything You Need to Succeed
+              </h2>
+              <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+                Powerful features designed to make your academic life easier
               </p>
             </div>
 
-            <div className="p-6 bg-card rounded-lg border border-border hover:border-primary transition-colors">
-              <Calendar className="h-8 w-8 text-primary mx-auto mb-3" />
-              <h3 className="font-semibold text-foreground mb-2">
-                Assignments
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Submit and track your assignments
-              </p>
-            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="group p-6 bg-card rounded-2xl border border-border hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-all">
+                <div className="p-3 bg-primary/10 rounded-xl w-fit mb-4 group-hover:bg-primary/20 transition-colors">
+                  <FileText className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="font-semibold text-foreground mb-2 text-lg">
+                  Course Materials
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Access lecture notes, slides, and study resources anytime,
+                  anywhere
+                </p>
+              </div>
 
-            <div className="p-6 bg-card rounded-lg border border-border hover:border-primary transition-colors">
-              <Users className="h-8 w-8 text-primary mx-auto mb-3" />
-              <h3 className="font-semibold text-foreground mb-2">
-                Class Forum
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Discuss with classmates and lecturers
-              </p>
-            </div>
+              <div className="group p-6 bg-card rounded-2xl border border-border hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-all">
+                <div className="p-3 bg-primary/10 rounded-xl w-fit mb-4 group-hover:bg-primary/20 transition-colors">
+                  <MessageSquare className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="font-semibold text-foreground mb-2 text-lg">
+                  Class Discussions
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Collaborate with classmates and get instant help from peers
+                </p>
+              </div>
 
-            <div className="p-6 bg-card rounded-lg border border-border hover:border-primary transition-colors">
-              <BookOpen className="h-8 w-8 text-primary mx-auto mb-3" />
-              <h3 className="font-semibold text-foreground mb-2">
-                Grade Tracking
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Monitor your academic progress
-              </p>
+              <div className="group p-6 bg-card rounded-2xl border border-border hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-all">
+                <div className="p-3 bg-primary/10 rounded-xl w-fit mb-4 group-hover:bg-primary/20 transition-colors">
+                  <Users className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="font-semibold text-foreground mb-2 text-lg">
+                  Study Groups
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Form study groups and collaborate on projects seamlessly
+                </p>
+              </div>
+
+              <div className="group p-6 bg-card rounded-2xl border border-border hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-all">
+                <div className="p-3 bg-primary/10 rounded-xl w-fit mb-4 group-hover:bg-primary/20 transition-colors">
+                  <Calendar className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="font-semibold text-foreground mb-2 text-lg">
+                  Assignments
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Submit and track your assignments
+                </p>
+              </div>
             </div>
+          </div>
+
+          {/* CTA Section */}
+          <div className="bg-linear-to-r from-primary/10 via-accent/10 to-primary/10 rounded-3xl p-8 sm:p-12 text-center border border-primary/20">
+            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
+              Ready to Transform Your Learning?
+            </h2>
+            <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
+              Join hundreds of MOUAU students already using ClassMate to achieve
+              academic excellence
+            </p>
+            <Link
+              href="/auth/signup"
+              className="inline-block px-8 py-3.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
+            >
+              Get Started Today
+            </Link>
           </div>
         </div>
       </section>
+
+      {/* Footer */}
+      <footer className="border-t border-border bg-card/50 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-8">
+          {/* Social Media */}
+          <div className="flex justify-center gap-4 mb-6">
+            <a
+              href="https://facebook.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-3 bg-primary/10 rounded-xl hover:bg-primary/20 transition-colors group"
+            >
+              <Facebook className="h-5 w-5 text-primary" />
+            </a>
+            <a
+              href="https://twitter.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-3 bg-primary/10 rounded-xl hover:bg-primary/20 transition-colors group"
+            >
+              <Twitter className="h-5 w-5 text-primary" />
+            </a>
+            <a
+              href="https://instagram.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-3 bg-primary/10 rounded-xl hover:bg-primary/20 transition-colors group"
+            >
+              <Instagram className="h-5 w-5 text-primary" />
+            </a>
+            <a
+              href="https://linkedin.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-3 bg-primary/10 rounded-xl hover:bg-primary/20 transition-colors group"
+            >
+              <Linkedin className="h-5 w-5 text-primary" />
+            </a>
+          </div>
+
+          {/* Copyright */}
+          <p className="text-sm text-muted-foreground text-center">
+            © 2025 MOUAU ClassMate. All rights reserved.
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }
