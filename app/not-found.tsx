@@ -42,7 +42,7 @@ export default function NotFound() {
                   MOUAU ClassMate
                 </h1>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Student Portal
+                  Michael Okpara University of Agriculture, Umudike
                 </p>
               </div>
             </div>
