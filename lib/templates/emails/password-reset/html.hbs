@@ -1,354 +1,545 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Verify Your Email - MOUAU ClassMate</title>
-    <style>
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            line-height: 1.6; 
-            color: #374151; 
-            max-width: 600px; 
-            margin: 0 auto; 
-            padding: 20px;
-            background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #f0f9ff 100%);
-        }
-        
-        .container {
-            background: white;
-            border-radius: 16px;
-            overflow: hidden;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
-            border: 1px solid #e5e7eb;
-        }
-        
-        .header { 
-            background: linear-gradient(135deg, #1D9D21 0%, #15803d 100%);
-            color: white; 
-            padding: 40px 30px; 
-            text-align: center;
-            position: relative;
-        }
-        
-        .header::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, #1D9D21, #FFF600, #1D9D21);
-        }
-        
-        .logo { 
-            font-size: 28px; 
-            font-weight: bold; 
-            margin-bottom: 15px;
-            letter-spacing: -0.5px;
-        }
-        
-        .logo-subtitle {
-            font-size: 14px;
-            opacity: 0.9;
-            font-weight: normal;
-            margin-top: 5px;
-        }
-        
-        .content { 
-            padding: 40px 30px; 
-        }
-        
-        .welcome-section {
-            background: #f8fafc;
-            padding: 20px;
-            border-radius: 12px;
-            border-left: 4px solid #1D9D21;
-            margin-bottom: 25px;
-            position: relative;
-        }
-        
-        .welcome-section::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 4px;
-            height: 100%;
-            background: #FFF600;
-            border-radius: 0 12px 12px 0;
-        }
-        
-        .button { 
-            display: inline-block; 
-            background: linear-gradient(135deg, #1D9D21 0%, #16a34a 100%);
-            color: white; 
-            padding: 14px 35px; 
-            text-decoration: none; 
-            border-radius: 8px; 
-            font-weight: 600;
-            font-size: 16px;
-            box-shadow: 0 4px 15px rgba(29, 157, 33, 0.25);
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .button::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 3px;
-            background: #FFF600;
-            transition: left 0.3s ease;
-        }
-        
-        .button:hover::before {
-            left: 0;
-        }
-        
-        .button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(29, 157, 33, 0.35);
-            background: linear-gradient(135deg, #16a34a 0%, #1D9D21 100%);
-        }
-        
-        .link-box {
-            background: #f8fafc; 
-            padding: 15px; 
-            border-radius: 8px; 
-            font-size: 14px;
-            border: 1px solid #e5e7eb;
-            word-break: break-all;
-            margin: 20px 0;
-            position: relative;
-        }
-        
-        .link-box::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 3px;
-            background: #FFF600;
-            border-radius: 8px 8px 0 0;
-        }
-        
-        .footer { 
-            text-align: center; 
-            margin-top: 40px; 
-            padding-top: 30px;
-            border-top: 1px solid #e5e7eb;
-            font-size: 13px; 
-            color: #6b7280;
-            position: relative;
-        }
-        
-        .footer::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 60px;
-            height: 3px;
-            background: #FFF600;
-            border-radius: 3px;
-        }
-        
-        .security-note {
-            background: #fffef0;
-            padding: 12px 16px;
-            border-radius: 8px;
-            border-left: 4px solid #FFF600;
-            margin: 25px 0;
-            font-size: 14px;
-        }
-        
-        .user-name {
-            color: #1D9D21;
-            font-weight: 600;
-        }
-        
-        .highlight {
-            color: #1D9D21;
-            font-weight: 600;
-            position: relative;
-            display: inline-block;
-        }
-        
-        .highlight::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 2px;
-            background: #FFF600;
-        }
-        
-        .verification-icon {
-            display: inline-block;
-            width: 24px;
-            height: 24px;
-            background: #FFF600;
-            color: #1D9D21;
-            border-radius: 50%;
-            text-align: center;
-            line-height: 24px;
-            margin-right: 8px;
-            font-weight: bold;
-        }
-
-        .manual-verification {
-            background: #f8fafc;
-            padding: 20px;
-            border-radius: 12px;
-            border: 1px solid #e5e7eb;
-            margin-top: 20px;
-            position: relative;
-        }
-        
-        .manual-verification::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 4px;
-            height: 100%;
-            background: #FFF600;
-            border-radius: 0 12px 12px 0;
-        }
-        
-        .token-display {
-            font-family: 'Courier New', monospace;
-            background: #1f2937;
-            color: #10b981;
-            padding: 15px;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: bold;
-            letter-spacing: 1px;
-            text-align: center;
-            margin: 15px 0;
-            border: 1px solid #374151;
-            position: relative;
-        }
-        
-        .token-display::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 3px;
-            background: #FFF600;
-            border-radius: 8px 8px 0 0;
-        }
-        
-        .action-badge {
-            background: linear-gradient(135deg, #1D9D21 0%, #15803d 100%);
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            margin: 20px 0;
-            text-align: center;
-            font-size: 14px;
-            font-weight: 500;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .action-badge::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 3px;
-            background: #FFF600;
-        }
-        
-        .action-badge::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 3px;
-            background: #FFF600;
-        }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reset Your Password - MOUAU ClassMate</title>
+  <style>
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      line-height: 1.6; 
+      color: #374151; 
+      max-width: 600px; 
+      margin: 0 auto; 
+      padding: 20px;
+      background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #f0f9ff 100%);
+    }
+    
+    .container {
+      background: white;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 15px 35px rgba(29, 157, 33, 0.15);
+      border: 1px solid #e5e7eb;
+      transform: translateY(0);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .container:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 20px 45px rgba(29, 157, 33, 0.2);
+    }
+    
+    .header { 
+      background: linear-gradient(135deg, #1D9D21 0%, #15803d 100%);
+      color: white; 
+      padding: 50px 30px; 
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #1D9D21, #FFF600, #1D9D21);
+      animation: shimmer 3s ease-in-out infinite;
+    }
+    
+    @keyframes shimmer {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.8; }
+    }
+    
+    .header::after {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%);
+      animation: float 6s ease-in-out infinite;
+    }
+    
+    @keyframes float {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      50% { transform: translateY(-10px) rotate(180deg); }
+    }
+    
+    .logo { 
+      font-size: 32px; 
+      font-weight: 800; 
+      margin-bottom: 10px;
+      letter-spacing: -0.5px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      position: relative;
+      z-index: 2;
+    }
+    
+    .logo-subtitle {
+      font-size: 14px;
+      opacity: 0.95;
+      font-weight: 400;
+      margin-top: 5px;
+      letter-spacing: 1px;
+      position: relative;
+      z-index: 2;
+    }
+    
+    .content { 
+      padding: 45px 35px; 
+    }
+    
+    .alert-card {
+      background: linear-gradient(135deg, #f8fafc 0%, #f0fdf4 100%);
+      padding: 25px;
+      border-radius: 16px;
+      border: 1px solid #e5e7eb;
+      margin-bottom: 25px;
+      position: relative;
+      box-shadow: 0 4px 12px rgba(29, 157, 33, 0.08);
+    }
+    
+    .alert-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: linear-gradient(180deg, #1D9D21, #FFF600);
+      border-radius: 4px 0 0 4px;
+    }
+    
+    .user-name {
+      color: #1D9D21;
+      font-weight: 700;
+      font-size: 18px;
+      background: linear-gradient(135deg, #1D9D21, #15803d);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .security-badge {
+      background: linear-gradient(135deg, #1D9D21 0%, #15803d 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 12px;
+      margin: 25px 0;
+      text-align: center;
+      font-size: 16px;
+      font-weight: 600;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 8px 25px rgba(29, 157, 33, 0.25);
+    }
+    
+    .security-badge::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: #FFF600;
+      animation: slideIn 1s ease-out;
+    }
+    
+    @keyframes slideIn {
+      from { width: 0; }
+      to { width: 100%; }
+    }
+    
+    .security-badge::after {
+      content: '🔒';
+      position: absolute;
+      top: 10px;
+      right: 20px;
+      font-size: 20px;
+      animation: lockPulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes lockPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+    
+    .button { 
+      display: inline-block; 
+      background: linear-gradient(135deg, #1D9D21 0%, #16a34a 100%);
+      color: white; 
+      padding: 16px 40px; 
+      text-decoration: none; 
+      border-radius: 12px; 
+      font-weight: 700;
+      font-size: 16px;
+      box-shadow: 0 6px 20px rgba(29, 157, 33, 0.3);
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      border: none;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      letter-spacing: 0.5px;
+    }
+    
+    .button::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      transition: left 0.6s;
+    }
+    
+    .button:hover::before {
+      left: 100%;
+    }
+    
+    .button:hover {
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 12px 30px rgba(29, 157, 33, 0.4);
+      background: linear-gradient(135deg, #16a34a 0%, #1D9D21 100%);
+    }
+    
+    .button:active {
+      transform: translateY(-1px) scale(1.01);
+    }
+    
+    .security-note {
+      background: #fffef0;
+      padding: 18px 20px;
+      border-radius: 12px;
+      border-left: 4px solid #FFF600;
+      margin: 25px 0;
+      font-size: 14px;
+      position: relative;
+      box-shadow: 0 4px 12px rgba(255, 246, 0, 0.1);
+    }
+    
+    .security-note::before {
+      content: '⏰';
+      position: absolute;
+      top: 15px;
+      right: 20px;
+      font-size: 16px;
+      opacity: 0.7;
+    }
+    
+    .link-container {
+      background: #f8fafc;
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid #e5e7eb;
+      margin: 20px 0;
+      position: relative;
+    }
+    
+    .link-container::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: linear-gradient(90deg, #1D9D21, #FFF600);
+      border-radius: 12px 12px 0 0;
+    }
+    
+    .reset-link {
+      background: #1f2937;
+      color: #10b981;
+      padding: 15px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      border: 1px solid #374151;
+      margin: 15px 0;
+      position: relative;
+      word-break: break-all;
+      line-height: 1.5;
+    }
+    
+    .reset-link::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: #FFF600;
+      border-radius: 8px 8px 0 0;
+    }
+    
+    .steps-section {
+      background: linear-gradient(135deg, #f8fafc 0%, #f0fdf4 100%);
+      padding: 25px;
+      border-radius: 16px;
+      border: 1px solid #e5e7eb;
+      margin: 25px 0;
+      position: relative;
+    }
+    
+    .steps-section::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: linear-gradient(180deg, #1D9D21, #FFF600);
+      border-radius: 4px 0 0 4px;
+    }
+    
+    .step-container {
+      margin: 20px 0;
+      padding-left: 10px;
+    }
+    
+    .step-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      background: #1D9D21;
+      color: white;
+      border-radius: 50%;
+      font-weight: 700;
+      font-size: 14px;
+      margin-right: 12px;
+      box-shadow: 0 2px 8px rgba(29, 157, 33, 0.3);
+      position: relative;
+    }
+    
+    .step-number::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      width: 6px;
+      height: 6px;
+      background: #FFF600;
+      border-radius: 50%;
+    }
+    
+    .step-title {
+      font-weight: 600;
+      color: #1f2937;
+      font-size: 15px;
+    }
+    
+    .step-desc {
+      color: #6b7280;
+      font-size: 13px;
+      margin-left: 40px;
+      margin-top: 4px;
+    }
+    
+    .footer { 
+      text-align: center; 
+      margin-top: 45px; 
+      padding-top: 35px;
+      border-top: 1px solid #e5e7eb;
+      font-size: 13px; 
+      color: #6b7280;
+      position: relative;
+    }
+    
+    .footer::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80px;
+      height: 3px;
+      background: linear-gradient(90deg, #1D9D21, #FFF600);
+      border-radius: 3px;
+    }
+    
+    .highlight {
+      color: #1D9D21;
+      font-weight: 700;
+      position: relative;
+      display: inline-block;
+    }
+    
+    .highlight::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: #FFF600;
+      transform: scaleX(0.8);
+      transition: transform 0.3s ease;
+    }
+    
+    .highlight:hover::after {
+      transform: scaleX(1);
+    }
+    
+    .cta-section {
+      text-align: center;
+      margin: 30px 0;
+    }
+    
+    .instruction-text {
+      font-size: 15px;
+      color: #4b5563;
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+    
+    .warning-note {
+      background: #fff7ed;
+      padding: 18px 20px;
+      border-radius: 12px;
+      border-left: 4px solid #f59e0b;
+      margin: 25px 0;
+      font-size: 14px;
+      position: relative;
+      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.1);
+    }
+    
+    .warning-note::before {
+      content: '⚠️';
+      position: absolute;
+      top: 15px;
+      right: 20px;
+      font-size: 16px;
+      opacity: 0.7;
+    }
+    
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1D9D21;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    
+    .section-title::before {
+      content: '🔄';
+      font-size: 20px;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <div class="logo">MOUAU ClassMate</div>
-            <div class="logo-subtitle">Your Academic Partner</div>
-            <h1 style="margin: 20px 0 0 0; font-size: 24px; font-weight: 600;">Verify Your Email Address</h1>
+  <div class="container">
+    <div class="header">
+      <div class="logo">MOUAU ClassMate</div>
+      <div class="logo-subtitle">YOUR ACADEMIC COMPANION</div>
+      <h1 style="margin: 25px 0 0 0; font-size: 26px; font-weight: 700; position: relative; z-index: 2;">Reset Your Password</h1>
+    </div>
+    
+    <div class="content">
+      <div class="alert-card">
+        <p style="margin: 0; font-size: 17px; font-weight: 600;">Hello <span class="user-name">{{name}}</span>,</p>
+        <p style="margin: 12px 0 0 0; font-size: 15px; color: #6b7280; line-height: 1.6;">
+          We received a request to reset your <span class="highlight">MOUAU ClassMate</span> account password.
+        </p>
+      </div>
+      
+      <div class="security-badge">
+        🔒 Password Reset Request
+      </div>
+      
+      <p class="instruction-text">
+        To reset your password and regain access to your academic resources, click the button below. You'll be taken to a secure page to create a new password.
+      </p>
+      
+      <div class="cta-section">
+        <a href="{{resetLink}}" class="button">
+          🔑 Reset My Password
+        </a>
+      </div>
+      
+      <div class="security-note">
+        <strong>Security Notice:</strong> This password reset link will expire in <strong>1 hour</strong> to protect your account security.
+      </div>
+      
+      <div class="link-container">
+        <p style="margin: 0 0 15px 0; font-weight: 600; color: #1f2937;">
+          🔗 Alternative: Copy & Paste Method
+        </p>
+        <p style="margin: 0 0 12px 0; font-size: 14px; color: #6b7280;">
+          If the button doesn't work, copy this full link and paste it in your browser:
+        </p>
+        <div class="reset-link">
+          {{resetLink}}
+        </div>
+      </div>
+      
+      <div class="steps-section">
+        <div class="section-title">
+          Password Reset Process
         </div>
         
-        <div class="content">
-            <div class="welcome-section">
-                <p style="margin: 0; font-size: 16px;">Hello <span class="user-name">{{name}}</span>,</p>
-                <p style="margin: 10px 0 0 0; font-size: 14px; color: #6b7280;">Welcome to the <span class="highlight">MOUAU ClassMate</span> community! We're excited to have you onboard.</p>
-            </div>
-            
-            <div class="action-badge">
-                ✉️ Email Verification Required
-            </div>
-            
-            <p>To complete your registration and start accessing your academic resources, please verify your email address by clicking the button below:</p>
-            
-            <div style="text-align: center; margin: 35px 0;">
-                <a href="{{verificationLink}}" class="button">
-                    <span class="verification-icon">✓</span>
-                    Verify Email Address
-                </a>
-            </div>
-            
-            <div class="security-note">
-                <strong>Security Notice:</strong> This verification link will expire in <strong>24 hours</strong> for your protection.
-            </div>
-            
-            <p>If the button doesn't work, you can also copy and paste this link into your browser:</p>
-            
-            <div class="link-box">
-                {{verificationLink}}
-            </div>
-            
-            <div class="manual-verification">
-                <p style="margin: 0 0 15px 0; font-weight: 600; color: #1D9D21;">
-                    <span class="verification-icon">✓</span>
-                    Alternative Verification Method
-                </p>
-                <p style="margin: 0 0 10px 0; font-size: 14px;">If you encounter issues with the link above, you can manually verify your email by visiting:</p>
-                
-                <div class="link-box" style="text-align: center; font-weight: 600;">
-                    {{baseUrl}}/auth/verify
-                </div>
-                
-                <p style="margin: 10px 0 0 0; font-size: 14px; color: #6b7280;">
-                    You'll need to enter your email address to receive a new verification code.
-                </p>
-            </div>
-            
-            <p style="font-size: 14px; color: #6b7280; margin-top: 25px;">If you didn't create an account with MOUAU ClassMate, please ignore this email. Your email address will not be used for any communications.</p>
-            
-            <div class="footer">
-                <p style="margin: 0 0 10px 0;">
-                    <strong>MOUAU ClassMate Team</strong><br>
-                    Student Management System
-                </p>
-                <p style="margin: 0; font-size: 12px; opacity: 0.8;">
-                    This is an automated message. Please do not reply to this email.<br>
-                    For assistance, contact our support team through the ClassMate portal.
-                </p>
-            </div>
+        <div class="step-container">
+          <div class="step-header">
+            <span class="step-number">1</span>
+            <span class="step-title">Click the reset link above</span>
+          </div>
+          <div class="step-desc">Use the button or copy-paste the link (expires in 1 hour)</div>
         </div>
+        
+        <div class="step-container">
+          <div class="step-header">
+            <span class="step-number">2</span>
+            <span class="step-title">Create a strong new password</span>
+          </div>
+          <div class="step-desc">Choose a unique password with letters, numbers, and symbols</div>
+        </div>
+        
+        <div class="step-container">
+          <div class="step-header">
+            <span class="step-number">3</span>
+            <span class="step-title">Sign in with your new password</span>
+          </div>
+          <div class="step-desc">Access your account immediately with the updated credentials</div>
+        </div>
+      </div>
+      
+      <div class="warning-note">
+        <strong>Important:</strong> If you didn't request this password reset, please ignore this email. 
+        Your account remains secure, but we recommend reviewing your account security settings.
+      </div>
+          
+      <p style="font-size: 14px; color: #6b7280; text-align: center; margin-top: 25px;">
+        For optimal security, choose a <span class="highlight">strong, unique password</span> that you haven't used on other platforms.
+      </p>
+      
+      <div class="footer">
+        <p style="margin: 0 0 12px 0; font-weight: 600;">
+          MOUAU ClassMate Security Team
+        </p>
+        <p style="margin: 0 0 8px 0; font-size: 12px; opacity: 0.9;">
+          Student Management System
+        </p>
+        <p style="margin: 0; font-size: 11px; opacity: 0.7;">
+          This is an automated security message. For assistance, contact support through the ClassMate portal.
+        </p>
+      </div>
     </div>
+  </div>
 </body>
 </html>

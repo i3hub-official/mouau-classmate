@@ -203,16 +203,16 @@
             font-weight: bold;
         }
 
-        .manual-verification {
+        .copy-paste-section {
             background: #f8fafc;
-            padding: 20px;
+            padding: 25px;
             border-radius: 12px;
             border: 1px solid #e5e7eb;
-            margin-top: 20px;
+            margin-top: 25px;
             position: relative;
         }
         
-        .manual-verification::after {
+        .copy-paste-section::after {
             content: '';
             position: absolute;
             top: 0;
@@ -223,30 +223,26 @@
             border-radius: 0 12px 12px 0;
         }
         
-        .token-display {
-            font-family: 'Courier New', monospace;
-            background: #1f2937;
-            color: #10b981;
-            padding: 15px;
+        .copy-instructions {
+            background: #f0fdf4;
+            padding: 20px;
             border-radius: 8px;
-            font-size: 16px;
-            font-weight: bold;
-            letter-spacing: 1px;
-            text-align: center;
+            border: 1px solid #bbf7d0;
             margin: 15px 0;
-            border: 1px solid #374151;
-            position: relative;
         }
         
-        .token-display::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 3px;
-            background: #FFF600;
-            border-radius: 8px 8px 0 0;
+        .step-number {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            background: #1D9D21;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 24px;
+            margin-right: 10px;
+            font-weight: bold;
+            font-size: 12px;
         }
         
         .action-badge {
@@ -280,6 +276,40 @@
             width: 100%;
             height: 3px;
             background: #FFF600;
+        }
+        
+        .full-link-box {
+            background: #1f2937;
+            color: #10b981;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            border: 1px solid #374151;
+            margin: 15px 0;
+            position: relative;
+            word-break: break-all;
+        }
+        
+        .full-link-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: #FFF600;
+            border-radius: 8px 8px 0 0;
+        }
+        
+        .step-container {
+            margin: 15px 0;
+        }
+        
+        .step-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #1f2937;
         }
     </style>
 </head>
@@ -320,19 +350,52 @@
                 {{verificationLink}}
             </div>
             
-            <div class="manual-verification">
-                <p style="margin: 0 0 15px 0; font-weight: 600; color: #1D9D21;">
-                    <span class="verification-icon">✓</span>
-                    Alternative Verification Method
+            <div class="copy-paste-section">
+                <p style="margin: 0 0 20px 0; font-weight: 600; color: #1D9D21; font-size: 18px;">
+                    <span class="verification-icon">📋</span>
+                    Copy & Paste Verification
                 </p>
-                <p style="margin: 0 0 10px 0; font-size: 14px;">If you encounter issues with the link above, you can manually verify your email by visiting:</p>
                 
-                <div class="link-box" style="text-align: center; font-weight: 600;">
-                    {{baseUrl}}/auth/verify-email
+                <div class="copy-instructions">
+                    <p style="margin: 0 0 15px 0; font-weight: 600; color: #15803d;">Follow these simple steps if the button above doesn't work:</p>
+                    
+                    <div class="step-container">
+                        <div class="step-title">
+                            <span class="step-number">1</span>
+                            Copy the full verification link:
+                        </div>
+                        <div class="full-link-box">
+                            {{verificationLink}}
+                        </div>
+                    </div>
+                    
+                    <div class="step-container">
+                        <div class="step-title">
+                            <span class="step-number">2</span>
+                            Open your web browser
+                        </div>
+                        <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 14px;">
+                            (Chrome, Firefox, Safari, Edge, etc.)
+                        </p>
+                    </div>
+                    
+                    <div class="step-container">
+                        <div class="step-title">
+                            <span class="step-number">3</span>
+                            Paste the link into your browser's address bar
+                        </div>
+                    </div>
+                    
+                    <div class="step-container">
+                        <div class="step-title">
+                            <span class="step-number">4</span>
+                            Press Enter to complete your verification
+                        </div>
+                    </div>
                 </div>
                 
-                <p style="margin: 10px 0 0 0; font-size: 14px; color: #6b7280;">
-                    You'll need to enter your email address and the verification code that was sent to you.
+                <p style="margin: 15px 0 0 0; font-size: 14px; color: #6b7280; text-align: center;">
+                    <strong>That's it!</strong> The link contains everything needed to verify your email automatically.
                 </p>
             </div>
             

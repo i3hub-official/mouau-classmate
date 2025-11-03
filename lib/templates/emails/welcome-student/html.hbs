@@ -12,23 +12,31 @@
       max-width: 600px; 
       margin: 0 auto; 
       padding: 20px;
-      background: linear-gradient(135deg, #f0fdf4 0%, #f0fdf4 50%, #f8fafc 100%);
+      background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #f0f9ff 100%);
     }
     
     .container {
       background: white;
-      border-radius: 16px;
+      border-radius: 20px;
       overflow: hidden;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+      box-shadow: 0 15px 35px rgba(29, 157, 33, 0.15);
       border: 1px solid #e5e7eb;
+      transform: translateY(0);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .container:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 20px 45px rgba(29, 157, 33, 0.2);
     }
     
     .header { 
-      background: linear-gradient(135deg, #15803d 0%, #16a34a 100%);
+      background: linear-gradient(135deg, #1D9D21 0%, #15803d 100%);
       color: white; 
-      padding: 40px 30px; 
+      padding: 50px 30px; 
       text-align: center;
       position: relative;
+      overflow: hidden;
     }
     
     .header::before {
@@ -38,62 +46,146 @@
       left: 0;
       right: 0;
       height: 4px;
-      background: linear-gradient(90deg, #15803d, #FFF600, #15803d);
+      background: linear-gradient(90deg, #1D9D21, #FFF600, #1D9D21);
+      animation: shimmer 3s ease-in-out infinite;
+    }
+    
+    @keyframes shimmer {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.8; }
+    }
+    
+    .header::after {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%);
+      animation: float 6s ease-in-out infinite;
+    }
+    
+    @keyframes float {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      50% { transform: translateY(-10px) rotate(180deg); }
     }
     
     .logo { 
-      font-size: 28px; 
-      font-weight: bold; 
-      margin-bottom: 15px;
+      font-size: 32px; 
+      font-weight: 800; 
+      margin-bottom: 10px;
       letter-spacing: -0.5px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      position: relative;
+      z-index: 2;
     }
     
     .logo-subtitle {
       font-size: 14px;
-      opacity: 0.9;
-      font-weight: normal;
+      opacity: 0.95;
+      font-weight: 400;
       margin-top: 5px;
+      letter-spacing: 1px;
+      position: relative;
+      z-index: 2;
     }
     
     .content { 
-      padding: 40px 30px; 
+      padding: 45px 35px; 
     }
     
-    .welcome-section {
-      background: #f0fdf4;
-      padding: 20px;
-      border-radius: 12px;
-      border-left: 4px solid #16a34a;
-      margin-bottom: 25px;
+    .welcome-card {
+      background: linear-gradient(135deg, #f8fafc 0%, #f0fdf4 100%);
+      padding: 25px;
+      border-radius: 16px;
+      border: 1px solid #e5e7eb;
+      margin-bottom: 30px;
       position: relative;
+      box-shadow: 0 4px 12px rgba(29, 157, 33, 0.08);
     }
     
-    .welcome-section::after {
+    .welcome-card::before {
       content: '';
       position: absolute;
       top: 0;
-      right: 0;
+      left: 0;
       width: 4px;
       height: 100%;
+      background: linear-gradient(180deg, #1D9D21, #FFF600);
+      border-radius: 4px 0 0 4px;
+    }
+    
+    .user-name {
+      color: #1D9D21;
+      font-weight: 700;
+      font-size: 18px;
+      background: linear-gradient(135deg, #1D9D21, #15803d);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .success-badge {
+      background: linear-gradient(135deg, #1D9D21 0%, #15803d 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 12px;
+      margin: 25px 0;
+      text-align: center;
+      font-size: 16px;
+      font-weight: 600;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 8px 25px rgba(29, 157, 33, 0.25);
+    }
+    
+    .success-badge::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
       background: #FFF600;
-      border-radius: 0 12px 12px 0;
+      animation: slideIn 1s ease-out;
+    }
+    
+    @keyframes slideIn {
+      from { width: 0; }
+      to { width: 100%; }
+    }
+    
+    .success-badge::after {
+      content: '✨';
+      position: absolute;
+      top: 10px;
+      right: 20px;
+      font-size: 20px;
+      animation: sparkle 2s ease-in-out infinite;
+    }
+    
+    @keyframes sparkle {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.1); }
     }
     
     .button { 
       display: inline-block; 
-      background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+      background: linear-gradient(135deg, #1D9D21 0%, #16a34a 100%);
       color: white; 
-      padding: 14px 35px; 
+      padding: 16px 40px; 
       text-decoration: none; 
-      border-radius: 8px; 
-      font-weight: 600;
+      border-radius: 12px; 
+      font-weight: 700;
       font-size: 16px;
-      box-shadow: 0 4px 15px rgba(34, 197, 94, 0.25);
-      transition: all 0.3s ease;
+      box-shadow: 0 6px 20px rgba(29, 157, 33, 0.3);
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
       border: none;
       cursor: pointer;
       position: relative;
       overflow: hidden;
+      letter-spacing: 0.5px;
     }
     
     .button::before {
@@ -102,66 +194,30 @@
       top: 0;
       left: -100%;
       width: 100%;
-      height: 3px;
-      background: #FFF600;
-      transition: left 0.3s ease;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      transition: left 0.6s;
     }
     
     .button:hover::before {
-      left: 0;
+      left: 100%;
     }
     
     .button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(34, 197, 94, 0.35);
-      background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 12px 30px rgba(29, 157, 33, 0.4);
+      background: linear-gradient(135deg, #16a34a 0%, #1D9D21 100%);
     }
     
-    .footer { 
-      text-align: center; 
-      margin-top: 40px; 
-      padding-top: 30px;
-      border-top: 1px solid #e5e7eb;
-      font-size: 13px; 
-      color: #6b7280; 
-    }
-    
-    .user-name {
-      color: #15803d;
-      font-weight: 600;
-    }
-    
-    .feature {
-      background: #f8fafc;
-      padding: 20px;
-      margin: 15px 0;
-      border-radius: 12px;
-      border-left: 4px solid #16a34a;
-      border: 1px solid #e5e7eb;
-      position: relative;
-    }
-    
-    .feature::after {
-      content: '';
-      position: absolute;
-      top: 0;
-      right: 0;
-      width: 4px;
-      height: 100%;
-      background: #FFF600;
-      border-radius: 0 12px 12px 0;
-    }
-    
-    .feature strong {
-      color: #15803d;
-      font-size: 16px;
+    .button:active {
+      transform: translateY(-1px) scale(1.01);
     }
     
     .features-grid {
       display: grid;
       grid-template-columns: 1fr;
-      gap: 15px;
-      margin: 25px 0;
+      gap: 18px;
+      margin: 30px 0;
     }
     
     @media (min-width: 480px) {
@@ -170,32 +226,87 @@
       }
     }
     
-    .celebration-badge {
-      background: linear-gradient(135deg, #15803d 0%, #16a34a 100%);
-      color: white;
-      padding: 15px;
-      border-radius: 8px;
-      margin: 20px 0;
-      text-align: center;
-      font-size: 14px;
-      font-weight: 500;
+    .feature-card {
+      background: white;
+      padding: 22px;
+      border-radius: 14px;
+      border: 1px solid #e5e7eb;
+      transition: all 0.3s ease;
       position: relative;
       overflow: hidden;
     }
     
-    .celebration-badge::before {
+    .feature-card::before {
       content: '';
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 3px;
-      background: #FFF600;
+      background: linear-gradient(90deg, #1D9D21, #FFF600);
+      transform: scaleX(0);
+      transition: transform 0.3s ease;
+    }
+    
+    .feature-card:hover::before {
+      transform: scaleX(1);
+    }
+    
+    .feature-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 25px rgba(29, 157, 33, 0.15);
+      border-color: #1D9D21;
+    }
+    
+    .feature-icon {
+      font-size: 20px;
+      margin-bottom: 12px;
+      display: inline-block;
+      padding: 8px;
+      background: linear-gradient(135deg, #f0fdf4, #ecfdf5);
+      border-radius: 10px;
+      border: 1px solid #dcfce7;
+    }
+    
+    .feature-title {
+      color: #1D9D21;
+      font-weight: 700;
+      font-size: 15px;
+      margin-bottom: 8px;
+      display: block;
+    }
+    
+    .feature-desc {
+      color: #6b7280;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    
+    .footer { 
+      text-align: center; 
+      margin-top: 45px; 
+      padding-top: 35px;
+      border-top: 1px solid #e5e7eb;
+      font-size: 13px; 
+      color: #6b7280;
+      position: relative;
+    }
+    
+    .footer::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80px;
+      height: 3px;
+      background: linear-gradient(90deg, #1D9D21, #FFF600);
+      border-radius: 3px;
     }
     
     .highlight {
-      color: #15803d;
-      font-weight: 600;
+      color: #1D9D21;
+      font-weight: 700;
       position: relative;
       display: inline-block;
     }
@@ -208,6 +319,28 @@
       width: 100%;
       height: 2px;
       background: #FFF600;
+      transform: scaleX(0.8);
+      transition: transform 0.3s ease;
+    }
+    
+    .highlight:hover::after {
+      transform: scaleX(1);
+    }
+    
+    .cta-section {
+      text-align: center;
+      margin: 35px 0;
+      padding: 25px;
+      background: linear-gradient(135deg, #f8fafc 0%, #f0fdf4 100%);
+      border-radius: 16px;
+      border: 1px solid #e5e7eb;
+    }
+    
+    .welcome-message {
+      font-size: 16px;
+      color: #4b5563;
+      margin-bottom: 25px;
+      line-height: 1.7;
     }
   </style>
 </head>
@@ -215,62 +348,74 @@
   <div class="container">
     <div class="header">
       <div class="logo">MOUAU ClassMate</div>
-      <div class="logo-subtitle">Your Academic Partner</div>
-      <h1 style="margin: 20px 0 0 0; font-size: 24px; font-weight: 600;">Welcome Aboard!</h1>
+      <div class="logo-subtitle">YOUR ACADEMIC COMPANION</div>
+      <h1 style="margin: 25px 0 0 0; font-size: 26px; font-weight: 700; position: relative; z-index: 2;">Welcome to Your Academic Hub!</h1>
     </div>
     
     <div class="content">
-      <div class="welcome-section">
-        <p style="margin: 0; font-size: 16px;">Hello <span class="user-name">{{name}}</span>,</p>
-        <p style="margin: 10px 0 0 0; font-size: 14px; color: #6b7280;">Congratulations! Your account has been <span class="highlight">successfully verified</span> and is now ready to use.</p>
+      <div class="welcome-card">
+        <p style="margin: 0; font-size: 17px; font-weight: 600;">Hello <span class="user-name">{{name}}</span>,</p>
+        <p style="margin: 12px 0 0 0; font-size: 15px; color: #6b7280; line-height: 1.6;">
+          Fantastic news! Your account has been <span class="highlight">successfully verified</span> and you're now part of our academic community.
+        </p>
       </div>
       
-      <div class="celebration-badge">
-        🎉 Your Academic Journey Starts Now!
+      <div class="success-badge">
+        🎓 Your Academic Journey Begins Now!
       </div>
       
-      <p>You now have full access to MOUAU ClassMate's comprehensive academic platform. Here's what you can do:</p>
+      <p class="welcome-message">
+        Get ready to experience seamless academic management with powerful tools designed to help you excel in your studies.
+      </p>
       
       <div class="features-grid">
-        <div class="feature">
-          <strong>📚 Course Materials</strong><br>
-          Access lectures, assignments, and learning resources for all your enrolled courses.
+        <div class="feature-card">
+          <span class="feature-icon">📚</span>
+          <span class="feature-title">Course Materials</span>
+          <p class="feature-desc">Access lectures, notes, and resources for all your enrolled courses in one place.</p>
         </div>
         
-        <div class="feature">
-          <strong>📝 Assignment Management</strong><br>
-          Submit coursework and track deadlines with our organized submission system.
+        <div class="feature-card">
+          <span class="feature-icon">📝</span>
+          <span class="feature-title">Assignment Hub</span>
+          <p class="feature-desc">Submit coursework and track deadlines with our organized submission system.</p>
         </div>
         
-        <div class="feature">
-          <strong>📊 Progress Tracking</strong><br>
-          Monitor your academic performance and grades in real-time dashboard.
+        <div class="feature-card">
+          <span class="feature-icon">📊</span>
+          <span class="feature-title">Progress Tracking</span>
+          <p class="feature-desc">Monitor your academic performance with real-time analytics and grade tracking.</p>
         </div>
         
-        <div class="feature">
-          <strong>💼 Academic Portfolio</strong><br>
-          Showcase your projects, research, and academic achievements.
+        <div class="feature-card">
+          <span class="feature-icon">💼</span>
+          <span class="feature-title">Academic Portfolio</span>
+          <p class="feature-desc">Showcase your projects, research, and academic achievements professionally.</p>
         </div>
       </div>
       
-      <div style="text-align: center; margin: 35px 0;">
+      <div class="cta-section">
+        <p style="margin: 0 0 20px 0; font-size: 15px; color: #6b7280; font-weight: 600;">
+          Ready to transform your academic experience?
+        </p>
         <a href="{{loginLink}}" class="button">
-          Access Your Dashboard
+          Launch Your Dashboard
         </a>
       </div>
       
-      <p style="font-size: 14px; color: #6b7280; text-align: center;">
-        Ready to excel in your <span class="highlight">academic journey</span>? Start exploring your dashboard now!
+      <p style="font-size: 14px; color: #6b7280; text-align: center; margin-top: 25px;">
+        Your success is our priority. Start exploring and make the most of your <span class="highlight">academic potential</span>!
       </p>
       
       <div class="footer">
-        <p style="margin: 0 0 10px 0;">
-          <strong>MOUAU ClassMate Team</strong><br>
+        <p style="margin: 0 0 12px 0; font-weight: 600;">
+          MOUAU ClassMate Team
+        </p>
+        <p style="margin: 0 0 8px 0; font-size: 12px; opacity: 0.9;">
           Student Management System
         </p>
-        <p style="margin: 0; font-size: 12px; opacity: 0.8;">
-          This is an automated message. Please do not reply to this email.<br>
-          For assistance, contact our support team through the ClassMate portal.
+        <p style="margin: 0; font-size: 11px; opacity: 0.7;">
+          This is an automated message. For assistance, contact support through the ClassMate portal.
         </p>
       </div>
     </div>
