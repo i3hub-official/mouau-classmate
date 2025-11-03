@@ -2,12 +2,8 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/lib/server/prisma";
-import { 
-  hashData, 
-  verifyHash,
-  protectData,
-  unprotectData 
-} from "@/lib/security/dataProtection";
+import { StudentRegistrationService } from "@/lib/services/studentRegistrationService";
+import { verifyPassword } from "@/lib/security/dataProtection";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -24,12 +20,14 @@ export const authOptions: NextAuthOptions = {
 
         try {
           // Normalize matric number
-          const normalizedMatric = credentials.matricNumber.trim().toUpperCase();
+          const normalizedMatric = credentials.matricNumber
+            .trim()
+            .toUpperCase();
 
           // Find student by matric number
           const student = await prisma.student.findFirst({
-            where: { 
-              matricNumber: normalizedMatric 
+            where: {
+              matricNumber: normalizedMatric,
             },
             include: {
               user: {
@@ -65,7 +63,7 @@ export const authOptions: NextAuthOptions = {
                 userAgent: "unknown",
               },
             });
-            throw new Error("Invalid matric number or password");
+            throw new Error("StudentNotFound");
           }
 
           const user = student.user;
@@ -90,16 +88,15 @@ export const authOptions: NextAuthOptions = {
                 userAgent: "unknown",
               },
             });
-            throw new Error(
-              "Account is temporarily locked. Please try again later."
-            );
+            throw new Error("AccountLocked");
           }
 
-          // Verify password using dataProtection's verifyHash
-          const isValidPassword = await verifyHash(
-            credentials.password,
-            user.passwordHash!
-          );
+          // Verify password using StudentRegistrationService
+          const isValidPassword =
+            await StudentRegistrationService.verifyPasswordForAuth(
+              credentials.password,
+              user.passwordHash!
+            );
 
           if (!isValidPassword) {
             // Increment failed login attempts
@@ -135,16 +132,16 @@ export const authOptions: NextAuthOptions = {
               },
             });
 
-            throw new Error("Invalid matric number or password");
+            throw new Error("CredentialsSignin");
           }
 
           // Check if email is verified and account is active
           if (!user.isActive) {
-            throw new Error("Your account has been deactivated. Please contact support.");
+            throw new Error("AccountInactive");
           }
 
           if (!user.emailVerified) {
-            throw new Error("Please verify your email before signing in");
+            throw new Error("AccountNotVerified");
           }
 
           // Reset failed login attempts on successful login
@@ -160,8 +157,9 @@ export const authOptions: NextAuthOptions = {
           });
 
           // Decrypt student data for session
-          const decryptedEmail = await unprotectData(student.email, "email");
-          const decryptedDepartment = await unprotectData(student.department, "general");
+          const studentData = await StudentRegistrationService.getStudentData(
+            normalizedMatric
+          );
 
           // Log successful login
           await prisma.auditLog.create({
@@ -171,7 +169,7 @@ export const authOptions: NextAuthOptions = {
               resourceType: "USER",
               details: {
                 matricNumber: normalizedMatric,
-                department: student.department,
+                department: student?.department,
               },
               ipAddress: "unknown",
               userAgent: "unknown",
@@ -180,17 +178,17 @@ export const authOptions: NextAuthOptions = {
 
           return {
             id: user.id,
-            email: decryptedEmail,
+            email: user.email,
             name: user.name,
             role: user.role,
             matricNumber: student.matricNumber,
-            department: decryptedDepartment,
-            college: student.college,
-            course: student.course,
+            department: studentData?.department || student.department,
+            college: studentData?.college || student.college,
+            course: studentData?.course || student.course,
           };
         } catch (error) {
           console.error("Auth error:", error);
-          
+
           // Log unexpected errors
           await prisma.auditLog.create({
             data: {
@@ -204,7 +202,7 @@ export const authOptions: NextAuthOptions = {
               userAgent: "unknown",
             },
           });
-          
+
           throw error;
         }
       },
@@ -231,7 +229,8 @@ export const authOptions: NextAuthOptions = {
         const user = session.user ?? (session.user = {} as any);
         if (token.sub) user.id = token.sub;
         if (token.role) user.role = token.role as string;
-        if (token.matricNumber) user.matricNumber = token.matricNumber as string;
+        if (token.matricNumber)
+          user.matricNumber = token.matricNumber as string;
         if (token.department) user.department = token.department as string;
         if (token.college) user.college = token.college as string;
         if (token.course) user.course = token.course as string;
