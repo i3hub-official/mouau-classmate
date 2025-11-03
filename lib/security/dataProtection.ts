@@ -62,6 +62,43 @@ export class PasswordSecurity {
   }
 
   /**
+   * Generates a random secure password
+   */
+  static generateSecurePassword(length: number = 16): string {
+    const charset =
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?";
+    let password = "";
+
+    // Ensure at least one of each required character type
+    password += this.getRandomChar("abcdefghijklmnopqrstuvwxyz"); // lowercase
+    password += this.getRandomChar("ABCDEFGHIJKLMNOPQRSTUVWXYZ"); // uppercase
+    password += this.getRandomChar("0123456789"); // number
+    password += this.getRandomChar("!@#$%^&*()_+-=[]{}|;:,.<>?"); // special
+
+    // Fill the rest randomly
+    for (let i = password.length; i < length; i++) {
+      password += this.getRandomChar(charset);
+    }
+
+    // Shuffle the password
+    return this.shuffleString(password);
+  }
+
+  private static getRandomChar(charset: string): string {
+    const randomIndex = crypto.randomInt(0, charset.length);
+    return charset[randomIndex];
+  }
+
+  private static shuffleString(str: string): string {
+    const array = str.split("");
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = crypto.randomInt(0, i + 1);
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array.join("");
+  }
+
+  /**
    * Verifies a password against a hash
    */
   static async verifyPassword(

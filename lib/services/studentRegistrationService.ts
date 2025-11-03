@@ -3,6 +3,9 @@ import {
   protectData,
   unprotectData,
   hashData,
+  verifyPassword,
+  validatePasswordStrength,
+  PasswordSecurity,
 } from "@/lib/security/dataProtection";
 import * as crypto from "crypto";
 import { emailService } from "@/lib/services/emailService";
@@ -89,35 +92,12 @@ class ValidationUtils {
     isValid: boolean;
     error?: string;
   } {
-    if (password.length < 8) {
-      return {
-        isValid: false,
-        error: "Password must be at least 8 characters",
-      };
-    }
-
-    if (!/(?=.*[a-z])/.test(password)) {
-      return {
-        isValid: false,
-        error: "Password must contain at least one lowercase letter",
-      };
-    }
-
-    if (!/(?=.*[A-Z])/.test(password)) {
-      return {
-        isValid: false,
-        error: "Password must contain at least one uppercase letter",
-      };
-    }
-
-    if (!/(?=.*\d)/.test(password)) {
-      return {
-        isValid: false,
-        error: "Password must contain at least one number",
-      };
-    }
-
-    return { isValid: true };
+    // Use the enhanced password strength validation from dataProtection
+    const result = validatePasswordStrength(password);
+    return {
+      isValid: result.isValid,
+      error: result.errors.length > 0 ? result.errors[0] : undefined,
+    };
   }
 
   static validateRequiredFields(
@@ -319,7 +299,7 @@ export class StudentRegistrationService {
         return null;
       }
 
-      // Decrypt protected fields
+      // Decrypt protected fields using the new dataProtection system
       const [
         decryptedEmail,
         decryptedPhone,
@@ -386,7 +366,7 @@ export class StudentRegistrationService {
       );
     }
 
-    // Validate password
+    // Validate password using enhanced validation
     const passwordValidation = ValidationUtils.validatePassword(password);
     if (!passwordValidation.isValid) {
       throw new ValidationError(passwordValidation.error!);
@@ -405,7 +385,7 @@ export class StudentRegistrationService {
       studentData.maritalStatus
     );
 
-    // Protect sensitive data
+    // Protect sensitive data using the new dataProtection system
     const [
       protectedEmail,
       protectedPhone,
@@ -427,7 +407,7 @@ export class StudentRegistrationService {
       protectData(studentData.otherName?.toUpperCase() || "", "name"),
       protectData(studentData.state, "location"),
       protectData(studentData.lga, "location"),
-      hashData(password),
+      protectData(password, "password"), // Use the new password protection tier
     ]);
 
     // Check if student already exists
@@ -477,7 +457,10 @@ export class StudentRegistrationService {
               email: studentData.email,
               role: "STUDENT",
               isActive: false,
-              passwordHash: hashedPassword,
+              passwordHash: hashedPassword.encrypted, // Use the encrypted password from dataProtection
+              failedLoginAttempts: 0,
+              accountLocked: false,
+              loginCount: 0,
             },
           });
 
@@ -1044,6 +1027,30 @@ export class StudentRegistrationService {
       user.id,
       user.name || "Student"
     );
+  }
+
+  /**
+   * Verify password for authentication (used by auth system)
+   */
+  static async verifyPasswordForAuth(
+    password: string,
+    hashedPassword: string
+  ): Promise<boolean> {
+    return verifyPassword(password, hashedPassword);
+  }
+
+  /**
+   * Check if password needs rehashing
+   */
+  static async needsPasswordRehash(hashedPassword: string): Promise<boolean> {
+    return PasswordSecurity.needsRehash(hashedPassword);
+  }
+
+  /**
+   * Generate a secure password
+   */
+  static generateSecurePassword(length: number = 16): string {
+    return PasswordSecurity.generateSecurePassword(length);
   }
 
   /**
