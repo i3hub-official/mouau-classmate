@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Verify Your Email - MOUAU ClassMate</title>
     <style>
-        /* Your existing CSS styles remain the same */
         body { 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
             line-height: 1.6; 
@@ -91,8 +90,6 @@
             font-size: 16px;
             box-shadow: 0 4px 15px rgba(29, 157, 33, 0.25);
             transition: all 0.3s ease;
-            border: none;
-            cursor: pointer;
             position: relative;
             overflow: hidden;
         }
@@ -206,11 +203,6 @@
             font-weight: bold;
         }
 
-        /* New styles for form */
-        .verification-form {
-            display: inline-block;
-        }
-        
         .manual-verification {
             background: #f8fafc;
             padding: 20px;
@@ -257,31 +249,37 @@
             border-radius: 8px 8px 0 0;
         }
         
-        .parameter-list {
-            background: #f0fdf4;
-            padding: 15px;
+        .action-badge {
+            background: linear-gradient(135deg, #1D9D21 0%, #15803d 100%);
+            color: white;
+            padding: 12px 20px;
             border-radius: 8px;
-            margin: 15px 0;
+            margin: 20px 0;
+            text-align: center;
             font-size: 14px;
-            border-left: 4px solid #1D9D21;
+            font-weight: 500;
+            position: relative;
+            overflow: hidden;
         }
         
-        .parameter-item {
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
+        .action-badge::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: #FFF600;
         }
         
-        .parameter-label {
-            font-weight: 600;
-            color: #1D9D21;
-            margin-right: 8px;
-            min-width: 80px;
-        }
-        
-        .parameter-value {
-            color: #374151;
-            word-break: break-all;
+        .action-badge::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: #FFF600;
         }
     </style>
 </head>
@@ -299,10 +297,14 @@
                 <p style="margin: 10px 0 0 0; font-size: 14px; color: #6b7280;">Welcome to the <span class="highlight">MOUAU ClassMate</span> community! We're excited to have you onboard.</p>
             </div>
             
+            <div class="action-badge">
+                ✉️ Email Verification Required
+            </div>
+            
             <p>To complete your registration and start accessing your academic resources, please verify your email address by clicking the button below:</p>
             
             <div style="text-align: center; margin: 35px 0;">
-                <a href="{{baseUrl}}/auth/verify-email?token={{verificationToken}}&email={{email}}&userId={{userId}}" class="button">
+                <a href="{{verificationLink}}" class="button">
                     <span class="verification-icon">✓</span>
                     Verify Email Address
                 </a>
@@ -312,30 +314,25 @@
                 <strong>Security Notice:</strong> This verification link will expire in <strong>24 hours</strong> for your protection.
             </div>
             
+            <p>If the button doesn't work, you can also copy and paste this link into your browser:</p>
+            
+            <div class="link-box">
+                {{verificationLink}}
+            </div>
+            
             <div class="manual-verification">
                 <p style="margin: 0 0 15px 0; font-weight: 600; color: #1D9D21;">
                     <span class="verification-icon">✓</span>
                     Alternative Verification Method
                 </p>
-                <p style="margin: 0 0 10px 0; font-size: 14px;">If you prefer manual verification, use this token on our verification page:</p>
+                <p style="margin: 0 0 10px 0; font-size: 14px;">If you encounter issues with the link above, you can manually verify your email by visiting:</p>
                 
-                <div class="token-display">
-                    {{verificationToken}}
-                </div>
-                
-                <div class="parameter-list">
-                    <div class="parameter-item">
-                        <span class="parameter-label">Email:</span>
-                        <span class="parameter-value">{{email}}</span>
-                    </div>
-                    <div class="parameter-item">
-                        <span class="parameter-label">User ID:</span>
-                        <span class="parameter-value">{{userId}}</span>
-                    </div>
+                <div class="link-box" style="text-align: center; font-weight: 600;">
+                    {{baseUrl}}/auth/verify-email
                 </div>
                 
                 <p style="margin: 10px 0 0 0; font-size: 14px; color: #6b7280;">
-                    Visit: <strong>{{baseUrl}}/auth/verify-email</strong> and enter the token above along with your email.
+                    You'll need to enter your email address and the verification code that was sent to you.
                 </p>
             </div>
             
