@@ -10,7 +10,7 @@ import type { MiddlewareContext } from "./types";
 export class EncryptionEnforcer {
   private static readonly REQUIRED_TLS_VERSION = "1.2";
   private static readonly SENSITIVE_PATHS = [
-       "/api/auth",
+    "/auth",
     "/dashboard",
     "/dashboard/*",
   ];

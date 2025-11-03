@@ -1,4 +1,4 @@
-// app/api/auth/signup/verify/route.ts
+// app/auth/signup/verify/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { StudentRegistrationService } from "@/lib/services/studentRegistrationService";
 

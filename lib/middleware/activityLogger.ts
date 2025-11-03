@@ -9,9 +9,9 @@ import type { MiddlewareContext } from "./types";
 
 export class ActivityLogger {
   private static readonly SENSITIVE_PATHS = [
-    "/api/auth/login",
-    "/api/auth/signup",
-    "/api/auth/reset-password",
+    "/auth/login",
+    "/auth/signup",
+    "/auth/reset-password",
   ];
 
   static async log(

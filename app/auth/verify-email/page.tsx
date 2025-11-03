@@ -102,7 +102,7 @@ function VerifyEmailContent() {
     setMessage("Sending new verification email...");
 
     try {
-      const response = await fetch("/api/auth/resend-verification", {
+      const response = await fetch("/auth/resend-verification", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

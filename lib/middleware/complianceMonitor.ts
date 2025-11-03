@@ -130,7 +130,7 @@ export class ComplianceMonitor {
       "/api/v1/audit",
       "/api/v1/auth",
       "/api/v2",
-      "/api/auth",
+      "/auth",
       "/admin",
     ];
 

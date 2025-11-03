@@ -3,7 +3,6 @@ import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/lib/server/prisma";
 import { StudentRegistrationService } from "@/lib/services/studentRegistrationService";
-import { verifyPassword } from "@/lib/security/dataProtection";
 
 export const authOptions: NextAuthOptions = {
   providers: [
