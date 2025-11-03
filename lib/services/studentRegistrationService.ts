@@ -6,6 +6,7 @@ import {
 } from "@/lib/security/dataProtection";
 import * as crypto from "crypto";
 import { emailService } from "@/lib/services/emailService";
+import { nanoid } from "nanoid";
 
 // ===========================================================
 // CUSTOM ERRORS
@@ -95,7 +96,6 @@ class ValidationUtils {
       };
     }
 
-    // Add more password strength checks as needed
     if (!/(?=.*[a-z])/.test(password)) {
       return {
         isValid: false,
@@ -162,6 +162,102 @@ class ValidationUtils {
 }
 
 // ===========================================================
+// SECURITY UTILITIES
+// ===========================================================
+
+class SecurityUtils {
+  /**
+   * Generate a secure verification code using nanoid
+   */
+  static generateVerificationCode(length: number = 48): string {
+    return nanoid(length);
+  }
+
+  /**
+   * Encode email for URL (Base64 URL-safe encoding)
+   */
+  static encodeEmail(email: string): string {
+    return Buffer.from(email)
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=/g, "");
+  }
+
+  /**
+   * Decode email from URL
+   */
+  static decodeEmail(encodedEmail: string): string {
+    // Add back padding if needed
+    const padding = "=".repeat((4 - (encodedEmail.length % 4)) % 4);
+    const base64 = encodedEmail.replace(/-/g, "+").replace(/_/g, "/") + padding;
+    return Buffer.from(base64, "base64").toString("utf-8");
+  }
+
+  /**
+   * Generate timestamp hash for additional security
+   */
+  static generateTimestampHash(): string {
+    const timestamp = Date.now().toString();
+    return crypto
+      .createHash("sha256")
+      .update(timestamp + process.env.ENCRYPTION_KEY)
+      .digest("hex")
+      .substring(0, 16);
+  }
+
+  /**
+   * Create verification URL parameters
+   */
+  static createVerificationParams(email: string, code: string): string {
+    const e = this.encodeEmail(email);
+    const t = code;
+    const h = this.generateTimestampHash();
+    return `e=${e}&t=${t}&h=${h}`;
+  }
+
+  /**
+   * Parse verification URL parameters
+   */
+  static parseVerificationParams(params: URLSearchParams): {
+    email: string | null;
+    code: string | null;
+    hash: string | null;
+  } {
+    try {
+      const encodedEmail = params.get("e");
+      const code = params.get("t");
+      const hash = params.get("h");
+
+      if (!encodedEmail || !code || !hash) {
+        return { email: null, code: null, hash: null };
+      }
+
+      const email = this.decodeEmail(encodedEmail);
+      return { email, code, hash };
+    } catch (error) {
+      console.error("Error parsing verification params:", error);
+      return { email: null, code: null, hash: null };
+    }
+  }
+}
+
+// ===========================================================
+// BASE URL UTILITY
+// ===========================================================
+
+class UrlUtils {
+  static getBaseUrl(): string {
+    // In development, use the private LAN URL
+    if (process.env.NODE_ENV === "development") {
+      return process.env.NEXT_BASE_URL || "https://192.168.0.105:3002";
+    }
+    // In production, use the public URL
+    return process.env.NEXT_PUBLIC_APP_URL || "https://mouaucm.vercel.app";
+  }
+}
+
+// ===========================================================
 // STUDENT REGISTRATION SERVICE CLASS
 // ===========================================================
 
@@ -223,7 +319,7 @@ export class StudentRegistrationService {
         return null;
       }
 
-      // Decrypt protected fields (excluding gender and maritalStatus)
+      // Decrypt protected fields
       const [
         decryptedEmail,
         decryptedPhone,
@@ -250,7 +346,7 @@ export class StudentRegistrationService {
         surname: decryptedSurname,
         firstName: decryptedFirstName,
         otherName: decryptedOtherName || undefined,
-        gender: studentRecord.gender || "", // Not encrypted
+        gender: studentRecord.gender || "",
         jambReg: decryptedJambReg,
         photo: studentRecord.passportUrl || undefined,
         college: studentRecord.college,
@@ -258,7 +354,7 @@ export class StudentRegistrationService {
         course: studentRecord.course,
         state: decryptedState,
         lga: decryptedLga,
-        maritalStatus: studentRecord.maritalStatus || "", // Not encrypted
+        maritalStatus: studentRecord.maritalStatus || "",
         email: decryptedEmail,
         phone: decryptedPhone,
         userId: studentRecord.userId,
@@ -301,7 +397,7 @@ export class StudentRegistrationService {
       throw new ValidationError("Please provide a valid email address");
     }
 
-    // Normalize gender and marital status to uppercase
+    // Normalize gender and marital status
     const normalizedGender = ValidationUtils.normalizeGender(
       studentData.gender
     );
@@ -309,7 +405,7 @@ export class StudentRegistrationService {
       studentData.maritalStatus
     );
 
-    // Protect sensitive data (excluding gender and maritalStatus)
+    // Protect sensitive data
     const [
       protectedEmail,
       protectedPhone,
@@ -334,7 +430,7 @@ export class StudentRegistrationService {
       hashData(password),
     ]);
 
-    // Check if student already exists with any unique identifier
+    // Check if student already exists
     const existingStudent = await prisma.student.findFirst({
       where: {
         OR: [
@@ -352,7 +448,7 @@ export class StudentRegistrationService {
       );
     }
 
-    // Check if user already exists with this email
+    // Check if user already exists
     const existingUser = await prisma.user.findFirst({
       where: {
         email: studentData.email,
@@ -369,13 +465,15 @@ export class StudentRegistrationService {
     let student: any;
 
     try {
-      // Use transaction with increased timeout for database operations only
+      // Database transaction
       const result = await prisma.$transaction(
         async (tx) => {
           // Create user
           const newUser = await tx.user.create({
             data: {
-              name: `${studentData.surname} ${studentData.firstName}`.trim(),
+              name: `${studentData.surname.toUpperCase()} ${studentData.firstName.toUpperCase()} ${
+                studentData.otherName?.toUpperCase() || ""
+              }`.trim(),
               email: studentData.email,
               role: "STUDENT",
               isActive: false,
@@ -389,14 +487,14 @@ export class StudentRegistrationService {
             name: newUser.name,
           });
 
-          // Create new student record with required userId
+          // Create student record
           const newStudent = await tx.student.create({
             data: {
               matricNumber: matricNumber,
               jambRegNumber: protectedJambReg.encrypted,
               nin: protectedNin.encrypted,
-              firstName: protectedFirstName.encrypted,
               lastName: protectedSurname.encrypted,
+              firstName: protectedFirstName.encrypted,
               otherName: protectedOtherName.encrypted,
               gender: normalizedGender,
               phone: protectedPhone.encrypted,
@@ -422,7 +520,7 @@ export class StudentRegistrationService {
             userId: newStudent.userId,
           });
 
-          // Create account (for NextAuth)
+          // Create account for NextAuth
           await tx.account.create({
             data: {
               userId: newUser.id,
@@ -435,7 +533,6 @@ export class StudentRegistrationService {
           return { user: newUser, student: newStudent };
         },
         {
-          // Increase transaction timeout to 10 seconds
           maxWait: 10000,
           timeout: 10000,
         }
@@ -450,7 +547,6 @@ export class StudentRegistrationService {
         throw error;
       }
 
-      // Handle Prisma unique constraint errors
       if (error instanceof Error && "code" in error && error.code === "P2002") {
         throw new StudentAlreadyExistsError(
           "Student record already exists with this matric number, JAMB registration, email, or phone"
@@ -462,22 +558,20 @@ export class StudentRegistrationService {
       );
     }
 
-    // Send verification email OUTSIDE the transaction
+    // Send verification email OUTSIDE transaction
     try {
       const verificationToken = await this.sendVerificationEmail(
         studentData.email,
         user.id,
-        `${studentData.firstName} ${studentData.surname}`.trim()
+        `${studentData.surname.toUpperCase()}`.trim()
       );
 
       console.log("✅ Verification email process completed with NEW token");
     } catch (emailError) {
       console.error("❌ Failed to send verification email:", emailError);
-      // Don't throw here - the user is already created, just log the error
-      // The user can request a new verification email later
     }
 
-    // Create audit log OUTSIDE the transaction
+    // Create audit log OUTSIDE transaction
     try {
       await prisma.auditLog.create({
         data: {
@@ -501,7 +595,6 @@ export class StudentRegistrationService {
       });
     } catch (auditError) {
       console.error("❌ Failed to create audit log:", auditError);
-      // Don't throw - audit log failure shouldn't break registration
     }
 
     return {
@@ -514,14 +607,12 @@ export class StudentRegistrationService {
 
   /**
    * Generates and stores a verification token and sends verification email.
-   * Uses secure approach without sensitive data in URL parameters.
    */
   static async sendVerificationEmail(
     email: string,
     userId: string,
     name: string
   ): Promise<string> {
-    // Enhanced validation with detailed logging
     console.log("📧 sendVerificationEmail called with:", {
       email: email || "UNDEFINED",
       userId: userId || "UNDEFINED",
@@ -529,74 +620,70 @@ export class StudentRegistrationService {
     });
 
     if (!email || !userId || !name) {
-      console.error("❌ Missing required parameters for verification email:", {
-        email: email ? "PRESENT" : "MISSING",
-        userId: userId ? "PRESENT" : "MISSING",
-        name: name ? "PRESENT" : "MISSING",
-      });
+      console.error("❌ Missing required parameters for verification email");
       throw new ValidationError("Email, userId, and name are required");
     }
 
-    // Validate email format
     if (!ValidationUtils.validateEmail(email)) {
       throw new ValidationError("Invalid email format");
     }
 
-    // Validate name is not just whitespace
     if (name.trim().length === 0) {
       throw new ValidationError("Name cannot be empty");
     }
 
-    // SECURITY FIX: Always delete any existing tokens for this email first
-    // This prevents token reuse and ensures only one valid token exists at a time
+    // Delete existing tokens for security
     await prisma.verificationToken.deleteMany({
       where: { identifier: email },
     });
 
     console.log("🔒 Deleted any existing verification tokens for:", email);
 
-    // Generate NEW verification token (never reuse)
-    const verificationToken = crypto.randomBytes(32).toString("hex");
+    // Generate NEW verification code using nanoid (48 chars for high security)
+    const verificationCode = SecurityUtils.generateVerificationCode(48);
 
-    console.log("🔐 Generated new verification token for security");
+    console.log("🔐 Generated new verification code using nanoid");
 
     try {
-      // Store NEW verification token in database
+      // Store NEW verification token
       await prisma.verificationToken.create({
         data: {
           identifier: email,
-          token: verificationToken,
+          token: verificationCode,
           expires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
         },
       });
 
-      // SECURITY FIX: Use base URL without token in parameters
-      const baseUrl = (
-        process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3002"
-      ).replace(/\/$/, "");
+      // Use the new base URL utility
+      const baseUrl = UrlUtils.getBaseUrl();
+
+      // Create secure verification URL with encoded parameters
+      const verificationParams = SecurityUtils.createVerificationParams(
+        email,
+        verificationCode
+      );
+      const verificationLink = `${baseUrl}/auth/verify?${verificationParams}`;
 
       console.log(`🔗 Preparing secure verification email for ${email}`);
+      console.log(`🌐 Using base URL: ${baseUrl}`);
+      console.log(
+        `🔐 Verification link structure: /auth/verify?e=[encoded]&t=[code]&h=[hash]`
+      );
 
-      // Use the updated email template with form submission
       const emailSent = await emailService.sendEmail({
         to: email,
         subject: "Verify Your MOUAU ClassMate Account",
         template: "email-verification",
         context: {
           name: name.trim(),
+          verificationLink: verificationLink,
           baseUrl: baseUrl,
-          verificationToken: verificationToken, // For form submission
-          // Note: No verificationLink with token in URL to avoid threat detection
         },
       });
 
       if (!emailSent) {
-        console.error(
-          "❌ Email service failed to send verification email to:",
-          email
-        );
+        console.error("❌ Email service failed to send verification email");
 
-        // Clean up the token if email sending fails
         await prisma.verificationToken.deleteMany({
           where: { identifier: email },
         });
@@ -605,19 +692,14 @@ export class StudentRegistrationService {
       }
 
       console.log(`✅ Verification email successfully sent to: ${email}`);
-      console.log(`📝 Email details:`, {
-        recipient: email,
-        name: name,
-        userId: userId,
-        token: "NEW_TOKEN_GENERATED", // Don't log actual token
-        method: "SECURE_FORM_SUBMISSION", // Indicates no URL parameters used
-      });
+      console.log(
+        `🔒 Security: Using nanoid code + encoded email + timestamp hash`
+      );
 
-      return verificationToken;
+      return verificationCode;
     } catch (error) {
       console.error("❌ Error in sendVerificationEmail:", error);
 
-      // Ensure cleanup on any error
       try {
         await prisma.verificationToken.deleteMany({
           where: { identifier: email },
@@ -630,7 +712,6 @@ export class StudentRegistrationService {
         );
       }
 
-      // Re-throw the original error
       if (error instanceof StudentRegistrationError) {
         throw error;
       }
@@ -649,17 +730,12 @@ export class StudentRegistrationService {
     });
 
     if (!email || !name) {
-      console.error("❌ Missing required parameters for welcome email:", {
-        email: email ? "PRESENT" : "MISSING",
-        name: name ? "PRESENT" : "MISSING",
-      });
+      console.error("❌ Missing required parameters for welcome email");
       return false;
     }
 
     try {
-      // Fix: Use fallback for NEXT_PUBLIC_BASE_URL
-      const baseUrl =
-        process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3002";
+      const baseUrl = UrlUtils.getBaseUrl();
       const loginLink = `${baseUrl}/auth/signin`;
 
       const emailSent = await emailService.sendEmail({
@@ -674,10 +750,6 @@ export class StudentRegistrationService {
 
       if (emailSent) {
         console.log(`✅ Welcome email sent to: ${email}`);
-        console.log(`📝 Welcome email details:`, {
-          recipient: email,
-          name: name,
-        });
       } else {
         console.error(`❌ Failed to send welcome email to: ${email}`);
       }
@@ -690,19 +762,33 @@ export class StudentRegistrationService {
   }
 
   /**
-   * Verifies an email using the provided token, activates the user, and sends welcome email.
+   * Verifies an email using the provided code and encoded email
    */
   static async verifyEmail(
-    token: string
+    code: string,
+    encodedEmail?: string
   ): Promise<{ success: boolean; user: any }> {
-    if (!token) {
-      throw new ValidationError("Verification token is required");
+    if (!code) {
+      throw new ValidationError("Verification code is required");
     }
 
     try {
+      // If encoded email is provided, decode it for additional validation
+      let emailFromParam: string | null = null;
+      if (encodedEmail) {
+        try {
+          emailFromParam = SecurityUtils.decodeEmail(encodedEmail);
+          console.log("📧 Decoded email from parameter");
+        } catch (decodeError) {
+          console.error("❌ Failed to decode email parameter:", decodeError);
+          throw new ValidationError("Invalid verification link");
+        }
+      }
+
+      // Find the verification token
       const verificationToken = await prisma.verificationToken.findFirst({
         where: {
-          token,
+          token: code,
           expires: {
             gt: new Date(),
           },
@@ -710,10 +796,16 @@ export class StudentRegistrationService {
       });
 
       if (!verificationToken) {
-        throw new ValidationError("Invalid or expired verification token");
+        throw new ValidationError("Invalid or expired verification code");
       }
 
-      // Find user by email
+      // If email was provided in the URL, validate it matches the token
+      if (emailFromParam && emailFromParam !== verificationToken.identifier) {
+        console.error("❌ Email mismatch: URL email doesn't match token");
+        throw new ValidationError("Invalid verification link");
+      }
+
+      // Find user by email from token
       const user = await prisma.user.findFirst({
         where: {
           email: verificationToken.identifier,
@@ -735,21 +827,19 @@ export class StudentRegistrationService {
 
       // Delete used token
       await prisma.verificationToken.delete({
-        where: { token },
+        where: { token: code },
       });
 
-      // Send welcome email (don't throw error if this fails)
+      console.log("✅ Email verified successfully for:", user.email);
+
+      // Send welcome email
       try {
         await this.sendWelcomeEmail(user.email, user.name || "");
       } catch (welcomeError) {
-        console.error(
-          "⚠️ Failed to send welcome email, but user is verified:",
-          welcomeError
-        );
-        // Don't throw - user is already verified
+        console.error("⚠️ Failed to send welcome email:", welcomeError);
       }
 
-      // Create audit log for email verification
+      // Create audit log
       await prisma.auditLog.create({
         data: {
           userId: user.id,
@@ -774,8 +864,157 @@ export class StudentRegistrationService {
   }
 
   /**
-   * Helper method to check if a student can be registered.
-   * @param identifier - The matric number or JAMB registration number.
+   * Sends password reset email
+   */
+  static async sendPasswordResetEmail(
+    email: string,
+    name: string
+  ): Promise<string> {
+    if (!email || !name) {
+      throw new ValidationError("Email and name are required");
+    }
+
+    // Generate reset code using nanoid (48 chars)
+    const resetCode = SecurityUtils.generateVerificationCode(48);
+
+    try {
+      const user = await prisma.user.findFirst({ where: { email } });
+      if (!user) {
+        throw new ValidationError("User not found");
+      }
+
+      await prisma.passwordResetToken.deleteMany({
+        where: { userId: user.id },
+      });
+
+      await prisma.passwordResetToken.create({
+        data: {
+          token: resetCode,
+          userId: user.id,
+          expires: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
+        },
+      });
+
+      const baseUrl = UrlUtils.getBaseUrl();
+
+      // Create secure reset URL with encoded parameters
+      const resetParams = SecurityUtils.createVerificationParams(
+        email,
+        resetCode
+      );
+      const resetLink = `${baseUrl}/auth/reset-password?${resetParams}`;
+
+      console.log(
+        "🔐 Password reset link structure: /auth/reset-password?e=[encoded]&t=[code]&h=[hash]"
+      );
+
+      const emailSent = await emailService.sendEmail({
+        to: email,
+        subject: "Reset Your MOUAU ClassMate Password",
+        template: "password-reset",
+        context: {
+          name: name,
+          resetLink: resetLink,
+        },
+      });
+
+      if (!emailSent) {
+        await prisma.passwordResetToken.deleteMany({
+          where: { userId: user.id },
+        });
+        throw new StudentRegistrationError(
+          "Failed to send password reset email"
+        );
+      }
+
+      console.log(`✅ Password reset email sent to: ${email}`);
+      console.log(
+        `🔒 Security: Using nanoid code + encoded email + timestamp hash`
+      );
+
+      return resetCode;
+    } catch (error) {
+      console.error("Error sending password reset email:", error);
+
+      try {
+        const user = await prisma.user.findFirst({ where: { email } });
+        if (user) {
+          await prisma.passwordResetToken.deleteMany({
+            where: { userId: user.id },
+          });
+        }
+      } catch (cleanupError) {
+        console.error("Failed to clean up reset token:", cleanupError);
+      }
+
+      throw new StudentRegistrationError("Failed to send password reset email");
+    }
+  }
+
+  /**
+   * Resends verification email
+   */
+  static async resendVerificationEmail(email: string): Promise<string> {
+    console.log("🔄 Resending verification email for:", email);
+
+    if (!email) {
+      throw new ValidationError("Email is required");
+    }
+
+    if (!ValidationUtils.validateEmail(email)) {
+      throw new ValidationError("Invalid email format");
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        isActive: true,
+        emailVerified: true,
+        auditLogs: {
+          where: {
+            action: "RESEND_VERIFICATION_REQUESTED",
+            createdAt: {
+              gte: new Date(Date.now() - 15 * 60 * 1000),
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 5,
+        },
+      },
+    });
+
+    if (!user) {
+      console.log(
+        "⚠️ Resend verification requested for non-existent email:",
+        email
+      );
+      return "email_sent";
+    }
+
+    if (user.isActive && user.emailVerified) {
+      throw new ValidationError("Email is already verified");
+    }
+
+    const recentAttempts = user.auditLogs.length;
+    if (recentAttempts >= 3) {
+      throw new StudentRegistrationError(
+        "Too many verification requests. Please wait 15 minutes before trying again.",
+        "RATE_LIMITED"
+      );
+    }
+
+    return await this.sendVerificationEmail(
+      user.email,
+      user.id,
+      user.name || "Student"
+    );
+  }
+
+  /**
+   * Helper methods
    */
   static async canRegisterStudent(identifier: string): Promise<{
     canRegister: boolean;
@@ -819,10 +1058,6 @@ export class StudentRegistrationService {
     }
   }
 
-  /**
-   * Method to get student data by identifier (for admin purposes).
-   * @param identifier - The matric number or JAMB registration number.
-   */
   static async getStudentData(
     identifier: string
   ): Promise<StudentVerificationData | null> {
@@ -833,10 +1068,6 @@ export class StudentRegistrationService {
     return this.loadStudentData(identifier);
   }
 
-  /**
-   * Method to check if student record exists.
-   * @param identifier - The matric number or JAMB registration number.
-   */
   static async studentRecordExists(identifier: string): Promise<boolean> {
     if (!identifier || identifier.trim() === "") {
       return false;
@@ -849,156 +1080,5 @@ export class StudentRegistrationService {
     });
 
     return !!student;
-  }
-
-  /**
-   * Sends password reset email
-   */
-  static async sendPasswordResetEmail(
-    email: string,
-    name: string
-  ): Promise<string> {
-    if (!email || !name) {
-      throw new ValidationError("Email and name are required");
-    }
-
-    // Generate reset token
-    const resetToken = crypto.randomBytes(32).toString("hex");
-
-    try {
-      // Find user first
-      const user = await prisma.user.findFirst({ where: { email } });
-      if (!user) {
-        throw new ValidationError("User not found");
-      }
-
-      // Delete any existing reset tokens for this user
-      await prisma.passwordResetToken.deleteMany({
-        where: { userId: user.id },
-      });
-
-      // Store NEW reset token in database
-      await prisma.passwordResetToken.create({
-        data: {
-          token: resetToken,
-          userId: user.id,
-          expires: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
-        },
-      });
-
-      // Fix: Use fallback for NEXT_PUBLIC_BASE_URL
-      const baseUrl =
-        process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3002";
-      const resetLink = `${baseUrl}/auth/reset-password?token=${resetToken}`;
-
-      const emailSent = await emailService.sendEmail({
-        to: email,
-        subject: "Reset Your MOUAU ClassMate Password",
-        template: "password-reset",
-        context: {
-          name: name,
-          resetLink: resetLink,
-        },
-      });
-
-      if (!emailSent) {
-        // Clean up token if email fails
-        await prisma.passwordResetToken.deleteMany({
-          where: { userId: user.id },
-        });
-        throw new StudentRegistrationError(
-          "Failed to send password reset email"
-        );
-      }
-
-      console.log(`✅ Password reset email sent to: ${email}`);
-
-      return resetToken;
-    } catch (error) {
-      console.error("Error sending password reset email:", error);
-
-      // Clean up the token if email sending fails
-      try {
-        const user = await prisma.user.findFirst({ where: { email } });
-        if (user) {
-          await prisma.passwordResetToken.deleteMany({
-            where: { userId: user.id },
-          });
-        }
-      } catch (cleanupError) {
-        console.error("Failed to clean up reset token:", cleanupError);
-      }
-
-      throw new StudentRegistrationError("Failed to send password reset email");
-    }
-  }
-
-  /**
-   * Resends verification email for existing users with enhanced security
-   */
-  static async resendVerificationEmail(email: string): Promise<string> {
-    console.log("🔄 Resending verification email for:", email);
-
-    if (!email) {
-      throw new ValidationError("Email is required");
-    }
-
-    // Validate email format
-    if (!ValidationUtils.validateEmail(email)) {
-      throw new ValidationError("Invalid email format");
-    }
-
-    // Find user by email
-    const user = await prisma.user.findFirst({
-      where: { email },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        isActive: true,
-        emailVerified: true,
-        // Check for recent verification attempts
-        auditLogs: {
-          where: {
-            action: "RESEND_VERIFICATION_REQUESTED",
-            createdAt: {
-              gte: new Date(Date.now() - 15 * 60 * 1000), // Last 15 minutes
-            },
-          },
-          orderBy: { createdAt: "desc" },
-          take: 5,
-        },
-      },
-    });
-
-    if (!user) {
-      // Don't throw error for security - just log and return
-      console.log(
-        "⚠️ Resend verification requested for non-existent email:",
-        email
-      );
-      // Still return a "success" to prevent email enumeration
-      return "email_sent";
-    }
-
-    if (user.isActive && user.emailVerified) {
-      throw new ValidationError("Email is already verified");
-    }
-
-    // Check for too many recent resend attempts
-    const recentAttempts = user.auditLogs.length;
-    if (recentAttempts >= 3) {
-      throw new StudentRegistrationError(
-        "Too many verification requests. Please wait 15 minutes before trying again.",
-        "RATE_LIMITED"
-      );
-    }
-
-    // Use the same secure method to send verification email
-    return await this.sendVerificationEmail(
-      user.email,
-      user.id,
-      user.name || "Student"
-    );
   }
 }

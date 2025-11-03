@@ -8,25 +8,44 @@ import Link from "next/link";
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const tokenId = searchParams.get("tokenId");
+
+  // Get parameters from URL (new security structure)
+  const verificationCode = searchParams.get("t"); // Code
+  const encodedEmail = searchParams.get("e"); // Encoded email
+  const hash = searchParams.get("h"); // Timestamp hash
+  const statusParam = searchParams.get("status"); // For GET redirect
+  const messageParam = searchParams.get("message"); // For GET redirect
 
   const [status, setStatus] = useState<
     "idle" | "loading" | "success" | "error"
   >("idle");
   const [message, setMessage] = useState("");
-  const [manualToken, setManualToken] = useState("");
+  const [manualCode, setManualCode] = useState("");
   const [showManualEntry, setShowManualEntry] = useState(false);
 
   useEffect(() => {
-    // If tokenId is provided in URL, automatically verify
-    if (tokenId) {
-      verifyEmailToken(tokenId);
-    }
-  }, [tokenId]);
+    // Handle GET redirect status
+    if (statusParam) {
+      setStatus(statusParam as any);
+      setMessage(messageParam || "");
 
-  const verifyEmailToken = async (token: string) => {
-    if (!token.trim()) {
-      setMessage("Please enter a verification token");
+      if (statusParam === "success") {
+        setTimeout(() => {
+          router.push("/auth/signin");
+        }, 3000);
+      }
+      return;
+    }
+
+    // If verification code is provided in URL, automatically verify
+    if (verificationCode) {
+      verifyEmailCode(verificationCode, encodedEmail || undefined);
+    }
+  }, [verificationCode, encodedEmail, statusParam, messageParam]);
+
+  const verifyEmailCode = async (code: string, email?: string) => {
+    if (!code.trim()) {
+      setMessage("Please enter a verification code");
       return;
     }
 
@@ -34,12 +53,16 @@ function VerifyEmailContent() {
     setMessage("Verifying your email...");
 
     try {
-      const response = await fetch("/auth/verify-email/verify", {
+      const response = await fetch("/api/auth/verify-email", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({
+          code,
+          encodedEmail: email,
+          hash: hash,
+        }),
       });
 
       const result = await response.json();
@@ -71,7 +94,7 @@ function VerifyEmailContent() {
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    verifyEmailToken(manualToken);
+    verifyEmailCode(manualCode);
   };
 
   const handleResendEmail = async () => {
@@ -79,7 +102,7 @@ function VerifyEmailContent() {
     setMessage("Sending new verification email...");
 
     try {
-      const response = await fetch("/auth/resend-verification", {
+      const response = await fetch("/api/auth/resend-verification", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -105,13 +128,13 @@ function VerifyEmailContent() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-green-50 via-blue-50 to-green-100 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-background via-primary/5 to-accent/10 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         {/* Header */}
         <div className="text-center">
-          <div className="mx-auto h-16 w-16 bg-linear-to-r from-green-600 to-green-800 rounded-full flex items-center justify-center mb-4">
+          <div className="mx-auto h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center mb-4 border-2 border-primary/20">
             <svg
-              className="h-8 w-8 text-white"
+              className="h-8 w-8 text-primary"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -124,34 +147,34 @@ function VerifyEmailContent() {
               />
             </svg>
           </div>
-          <h2 className="text-3xl font-extrabold text-gray-900">
+          <h2 className="text-3xl font-extrabold text-foreground">
             Verify Your Email
           </h2>
-          <p className="mt-2 text-sm text-gray-600">
+          <p className="mt-2 text-sm text-muted-foreground">
             Please verify your email address to complete your registration
           </p>
         </div>
 
         {/* Status Messages */}
         {status === "loading" && (
-          <div className="rounded-md bg-blue-50 p-4">
+          <div className="rounded-xl bg-primary/10 border border-primary/20 p-4">
             <div className="flex">
               <div className="shrink-0">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
               </div>
               <div className="ml-3">
-                <p className="text-sm font-medium text-blue-800">{message}</p>
+                <p className="text-sm font-medium text-foreground">{message}</p>
               </div>
             </div>
           </div>
         )}
 
         {status === "success" && (
-          <div className="rounded-md bg-green-50 p-4">
+          <div className="rounded-xl bg-primary/10 border border-primary/20 p-4">
             <div className="flex">
               <div className="shrink-0">
                 <svg
-                  className="h-5 w-5 text-green-400"
+                  className="h-5 w-5 text-primary"
                   fill="currentColor"
                   viewBox="0 0 20 20"
                 >
@@ -163,8 +186,8 @@ function VerifyEmailContent() {
                 </svg>
               </div>
               <div className="ml-3">
-                <p className="text-sm font-medium text-green-800">{message}</p>
-                <p className="mt-1 text-sm text-green-700">
+                <p className="text-sm font-medium text-foreground">{message}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
                   Redirecting to login page...
                 </p>
               </div>
@@ -173,11 +196,11 @@ function VerifyEmailContent() {
         )}
 
         {status === "error" && (
-          <div className="rounded-md bg-red-50 p-4">
+          <div className="rounded-xl bg-destructive/10 border border-destructive/20 p-4">
             <div className="flex">
               <div className="shrink-0">
                 <svg
-                  className="h-5 w-5 text-red-400"
+                  className="h-5 w-5 text-destructive"
                   fill="currentColor"
                   viewBox="0 0 20 20"
                 >
@@ -189,34 +212,36 @@ function VerifyEmailContent() {
                 </svg>
               </div>
               <div className="ml-3">
-                <p className="text-sm font-medium text-red-800">{message}</p>
+                <p className="text-sm font-medium text-destructive">
+                  {message}
+                </p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Manual Token Entry */}
-        {!tokenId && status === "idle" && (
-          <div className="bg-white py-8 px-6 shadow rounded-lg sm:px-10">
+        {/* Manual Code Entry */}
+        {!verificationCode && status === "idle" && !statusParam && (
+          <div className="bg-card py-8 px-6 shadow-lg rounded-2xl border border-border sm:px-10">
             <div className="space-y-6">
               <div>
-                <p className="text-sm text-gray-600 mb-4">
-                  Check your email for the verification token and enter it
-                  below, or click the verification link in your email.
+                <p className="text-sm text-muted-foreground mb-4">
+                  Check your email for the verification link, or enter the code
+                  manually below.
                 </p>
 
                 {!showManualEntry ? (
                   <div className="space-y-4">
                     <button
                       onClick={() => setShowManualEntry(true)}
-                      className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
+                      className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors duration-200"
                     >
-                      Enter Verification Token Manually
+                      Enter Verification Code Manually
                     </button>
 
                     <button
                       onClick={handleResendEmail}
-                      className="w-full flex justify-center py-3 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
+                      className="w-full flex justify-center py-3 px-4 border-2 border-border rounded-xl shadow-sm text-sm font-medium text-foreground bg-background hover:bg-accent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors duration-200"
                     >
                       Resend Verification Email
                     </button>
@@ -225,27 +250,27 @@ function VerifyEmailContent() {
                   <form onSubmit={handleManualSubmit} className="space-y-4">
                     <div>
                       <label
-                        htmlFor="token"
-                        className="block text-sm font-medium text-gray-700"
+                        htmlFor="code"
+                        className="block text-sm font-medium text-foreground"
                       >
-                        Verification Token
+                        Verification Code
                       </label>
                       <input
-                        id="token"
-                        name="token"
+                        id="code"
+                        name="code"
                         type="text"
                         required
-                        value={manualToken}
-                        onChange={(e) => setManualToken(e.target.value)}
-                        placeholder="Enter the token from your email"
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-3 px-4 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                        value={manualCode}
+                        onChange={(e) => setManualCode(e.target.value)}
+                        placeholder="Enter the code from your email"
+                        className="mt-1 block w-full border border-border rounded-xl shadow-sm py-3 px-4 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                       />
                     </div>
 
                     <div className="flex space-x-3">
                       <button
                         type="submit"
-                        className="flex-1 flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
+                        className="flex-1 flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors duration-200"
                       >
                         Verify Email
                       </button>
@@ -253,7 +278,7 @@ function VerifyEmailContent() {
                       <button
                         type="button"
                         onClick={() => setShowManualEntry(false)}
-                        className="flex-1 flex justify-center py-3 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
+                        className="flex-1 flex justify-center py-3 px-4 border-2 border-border rounded-xl shadow-sm text-sm font-medium text-foreground bg-background hover:bg-accent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors duration-200"
                       >
                         Cancel
                       </button>
@@ -270,7 +295,7 @@ function VerifyEmailContent() {
           <div className="text-center">
             <Link
               href="/auth/signin"
-              className="font-medium text-green-600 hover:text-green-500 transition-colors duration-200"
+              className="font-medium text-primary hover:text-primary/80 transition-colors duration-200"
             >
               Go to Sign In
             </Link>
@@ -282,14 +307,14 @@ function VerifyEmailContent() {
           <div className="text-center space-y-3">
             <button
               onClick={handleResendEmail}
-              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
+              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors duration-200"
             >
               Resend Verification Email
             </button>
 
             <Link
               href="/auth/signin"
-              className="block text-sm font-medium text-green-600 hover:text-green-500 transition-colors duration-200"
+              className="block text-sm font-medium text-primary hover:text-primary/80 transition-colors duration-200"
             >
               Return to Sign In
             </Link>
@@ -298,7 +323,7 @@ function VerifyEmailContent() {
 
         {/* Help Text */}
         <div className="text-center">
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-muted-foreground">
             Didn't receive the email? Check your spam folder or contact support.
           </p>
         </div>
@@ -310,10 +335,10 @@ function VerifyEmailContent() {
 // Loading component for Suspense
 function VerifyEmailLoading() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-green-50 via-blue-50 to-green-100">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-background via-primary/5 to-accent/10">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
-        <p className="mt-4 text-gray-600">Loading verification...</p>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+        <p className="mt-4 text-muted-foreground">Loading verification...</p>
       </div>
     </div>
   );

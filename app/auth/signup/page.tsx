@@ -422,18 +422,26 @@ export default function SignupPage() {
                     <p className="text-sm font-medium text-foreground mb-1">
                       Matric Number Format
                     </p>
-                    <div className="text-xs text-muted-foreground space-y-1">
+                    <div className="text-xs text-foreground space-y-1">
                       <p>
                         • Must contain <span className="font-mono">/</span> or{" "}
                         <span className="font-mono">-</span>
                       </p>
                       <p>
                         • Example:{" "}
-                        <span className="font-mono">MOUAU/20/12345</span>
+                        <span className="font-mono">
+                          MOUAU/25/COLPAS/PHY/12345
+                        </span>
                       </p>
                       <p>
                         • Example:{" "}
-                        <span className="font-mono">MOUAU-20-12345</span>
+                        <span className="font-mono">
+                          MOUAU-25-COLPAS-PHY-12345
+                        </span>
+                      </p>
+                      <p>
+                        • Example:{" "}
+                        <span className="font-mono">MOUAU/25/COLPAS/12345</span>
                       </p>
                     </div>
                   </div>

@@ -8,19 +8,23 @@ import { RateLimitService } from "@/lib/services/rateLimitService";
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
-  
+
   try {
     // Get client IP for rate limiting
-    const ipAddress = request.headers.get("x-forwarded-for")?.split(",")[0].trim() || 
-                     request.headers.get("x-real-ip") || 
-                     "unknown";
+    const ipAddress =
+      request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
+      request.headers.get("x-real-ip") ||
+      "unknown";
 
     // Rate limiting check
     const rateLimitKey = `resend_verification:${ipAddress}`;
-    const rateLimitResult = await RateLimitService.checkRateLimit(rateLimitKey, {
-      maxAttempts: 3,
-      windowMs: 15 * 60 * 1000, // 15 minutes
-    });
+    const rateLimitResult = await RateLimitService.checkRateLimit(
+      rateLimitKey,
+      {
+        maxAttempts: 3,
+        windowMs: 15 * 60 * 1000, // 15 minutes
+      }
+    );
 
     if (rateLimitResult.isLimited) {
       await prisma.auditLog.create({
@@ -42,18 +46,24 @@ export async function POST(request: NextRequest) {
           success: false,
           error: {
             code: "RATE_LIMIT_EXCEEDED",
-            message: `Too many verification requests. Please try again in ${Math.ceil(rateLimitResult.retryAfter! / 1000)} seconds.`,
+            message: `Too many verification requests. Please try again in ${Math.ceil(
+              rateLimitResult.retryAfter! / 1000
+            )} seconds.`,
             retryAfter: rateLimitResult.retryAfter,
           },
         },
-        { 
+        {
           status: 429,
           headers: {
-            'Retry-After': Math.ceil(rateLimitResult.retryAfter! / 1000).toString(),
-            'X-RateLimit-Limit': '3',
-            'X-RateLimit-Remaining': '0',
-            'X-RateLimit-Reset': new Date(Date.now() + rateLimitResult.retryAfter!).toISOString(),
-          }
+            "Retry-After": Math.ceil(
+              rateLimitResult.retryAfter! / 1000
+            ).toString(),
+            "X-RateLimit-Limit": "3",
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": new Date(
+              Date.now() + rateLimitResult.retryAfter!
+            ).toISOString(),
+          },
         }
       );
     }
@@ -70,8 +80,8 @@ export async function POST(request: NextRequest) {
       // Allow email to be provided in request body for non-authenticated users
       const body = await request.json().catch(() => ({}));
       email = body.email;
-      
-      if (!email || typeof email !== 'string') {
+
+      if (!email || typeof email !== "string") {
         return NextResponse.json(
           {
             success: false,
@@ -131,7 +141,8 @@ export async function POST(request: NextRequest) {
       // Return success even if user doesn't exist for security
       return NextResponse.json({
         success: true,
-        message: "If your email is registered, you will receive a verification email shortly.",
+        message:
+          "If your email is registered, you will receive a verification email shortly.",
       });
     }
 
@@ -142,17 +153,20 @@ export async function POST(request: NextRequest) {
           success: false,
           error: {
             code: "ALREADY_VERIFIED",
-            message: "Your email is already verified. You can sign in to your account.",
+            message:
+              "Your email is already verified. You can sign in to your account.",
           },
         },
         { status: 400 }
       );
     }
 
-    // Resend verification email
-    const token = await StudentRegistrationService.resendVerificationEmail(
+    // Resend verification email (returns nanoid code, but we don't expose it)
+    const code = await StudentRegistrationService.resendVerificationEmail(
       email
     );
+
+    console.log("✅ Resent verification email with new nanoid code");
 
     // Log successful resend
     await prisma.auditLog.create({
@@ -165,6 +179,7 @@ export async function POST(request: NextRequest) {
           email,
           status: "success",
           ipAddress,
+          securityMethod: "nanoid_encoded_email",
         },
         ipAddress,
         userAgent: request.headers.get("user-agent") || "unknown",
@@ -176,7 +191,8 @@ export async function POST(request: NextRequest) {
       data: {
         userId: user.id,
         title: "Verification Email Sent",
-        message: "A new verification email has been sent to your email address. Please check your inbox and spam folder.",
+        message:
+          "A new verification email has been sent to your email address. Please check your inbox and spam folder.",
         type: "SECURITY",
         priority: 2,
       },
@@ -198,10 +214,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: "Verification email sent successfully! Please check your inbox.",
-      // Don't return the token for security
+      // Don't return the code for security
     });
   } catch (error: any) {
-    console.error("Resend verification error:", error);
+    console.error("❌ Resend verification error:", error);
 
     const duration = Date.now() - startTime;
     await prisma.metric.create({
@@ -217,13 +233,18 @@ export async function POST(request: NextRequest) {
     });
 
     // Log security event for critical errors
-    if (error.name === "StudentRegistrationError" && error.code === "SECURITY_ISSUE") {
+    if (
+      error.name === "StudentRegistrationError" &&
+      error.code === "SECURITY_ISSUE"
+    ) {
       await prisma.securityEvent.create({
         data: {
           eventType: "verification_email_failure",
           severity: "high",
           description: `Failed to send verification email: ${error.message}`,
-          ipAddress: request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown",
+          ipAddress:
+            request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
+            "unknown",
           userAgent: request.headers.get("user-agent") || "unknown",
           metadata: {
             error: error.message,
