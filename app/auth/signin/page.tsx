@@ -12,7 +12,8 @@ import {
   Mail,
   AlertCircle,
 } from "lucide-react";
-// import { ThemeToggle } from "@/app/components/theme-toggle";
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 export default function SignInPage() {
   const [matricNumber, setMatricNumber] = useState("");
@@ -20,6 +21,7 @@ export default function SignInPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
   const [error, setError] = useState("");
+  const router = useRouter();
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,27 +41,65 @@ export default function SignInPage() {
     setIsLoading(true);
 
     try {
-      // Simulate API call with delay
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Use NextAuth signIn with credentials
+      const result = await signIn("credentials", {
+        matricNumber: matricNumber.trim().toUpperCase(),
+        password: password,
+        redirect: false,
+      });
 
-      // Simulate authentication check
-      const validMatricNumbers = ["MOUAU/20/12345", "MOUAU/21/67890"];
-      if (!validMatricNumbers.includes(matricNumber.toUpperCase())) {
-        throw new Error("Invalid credentials");
+      if (result?.error) {
+        // Handle specific error cases
+        if (result.error === "CredentialsSignin") {
+          throw new Error("Invalid matric number or password");
+        } else if (result.error === "AccountNotVerified") {
+          throw new Error("Please verify your email before signing in");
+        } else if (result.error === "AccountInactive") {
+          throw new Error(
+            "Your account has been deactivated. Please contact support."
+          );
+        } else {
+          throw new Error("Authentication failed. Please try again.");
+        }
       }
 
-      // Simulate successful login
-      setIsLoading(false);
-      setLoginSuccess(true);
+      if (result?.ok) {
+        // Successful login
+        setIsLoading(false);
+        setLoginSuccess(true);
 
-      // Redirect after success
-      setTimeout(() => {
-        window.location.href = "/dashboard";
-      }, 1500);
+        // Redirect to dashboard after success
+        setTimeout(() => {
+          router.push("/dashboard");
+          router.refresh(); // Refresh to update auth state
+        }, 1500);
+      } else {
+        throw new Error("Authentication failed");
+      }
     } catch (err) {
       setIsLoading(false);
-      setError("Invalid matric number or password. Please try again.");
+      setError(
+        err instanceof Error ? err.message : "An unexpected error occurred"
+      );
     }
+  };
+
+  // Demo login for testing
+  const handleDemoLogin = async (demoMatric: string) => {
+    setMatricNumber(demoMatric);
+    setPassword("demoPassword123!");
+
+    // Auto-submit after a brief delay
+    setTimeout(() => {
+      const form = document.querySelector("form");
+      if (form) {
+        const submitEvent = new Event("submit", {
+          cancelable: true,
+          bubbles: true,
+        });
+        form.dispatchEvent(submitEvent);
+      }
+    }, 500);
   };
 
   return (
@@ -127,7 +167,7 @@ export default function SignInPage() {
         {error && (
           <div className="mb-6 p-3 bg-error/10 border border-error/20 rounded-lg">
             <p className="text-error text-sm flex items-center gap-2">
-              <span className="w-1.5 h-1.5 bg-error rounded-full"></span>
+              <AlertCircle size={16} />
               {error}
             </p>
           </div>
@@ -218,7 +258,8 @@ export default function SignInPage() {
                     if (error) setError("");
                   }}
                   placeholder="e.g., MOUAU/20/12345"
-                  className="form-input w-full px-4 py-3 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-colors"
+                  autoComplete="username"
                 />
               </div>
 
@@ -246,27 +287,52 @@ export default function SignInPage() {
                     if (error) setError("");
                   }}
                   placeholder="Enter your password"
-                  className="form-input w-full px-4 py-3 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-colors"
+                  autoComplete="current-password"
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3 bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 relative overflow-hidden group"
+                disabled={isLoading}
+                className="w-full py-3 bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 relative overflow-hidden group"
               >
                 {/* Button background animation */}
                 <div className="absolute inset-0 bg-linear-to-r from-primary to-primary/80 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></div>
 
                 {/* Button content */}
                 <span className="relative z-10 flex items-center gap-2">
-                  Sign In
-                  <ArrowRight
-                    size={18}
-                    className="group-hover:translate-x-1 transition-transform duration-300"
-                  />
+                  {isLoading ? "Signing In..." : "Sign In"}
+                  {!isLoading && (
+                    <ArrowRight
+                      size={18}
+                      className="group-hover:translate-x-1 transition-transform duration-300"
+                    />
+                  )}
                 </span>
               </button>
             </form>
+
+            {/* Demo Credentials Section */}
+            <div className="mt-6 space-y-3">
+              <p className="text-xs text-muted-foreground text-center font-medium">
+                Quick Demo Access
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleDemoLogin("MOUAU/20/12345")}
+                  className="text-xs py-2 px-3 bg-muted hover:bg-muted/80 rounded-lg border border-border transition-colors text-foreground"
+                >
+                  Demo Student 1
+                </button>
+                <button
+                  onClick={() => handleDemoLogin("MOUAU/21/67890")}
+                  className="text-xs py-2 px-3 bg-muted hover:bg-muted/80 rounded-lg border border-border transition-colors text-foreground"
+                >
+                  Demo Student 2
+                </button>
+              </div>
+            </div>
 
             {/* Additional Links */}
             <div className="mt-6 space-y-4 text-center">
@@ -289,19 +355,6 @@ export default function SignInPage() {
                   Need help signing in?
                 </Link>
               </div>
-            </div>
-
-            {/* Demo Credentials Hint */}
-            <div className="mt-6 p-4 bg-muted/50 rounded-lg border border-border">
-              <p className="text-xs text-muted-foreground text-center">
-                <strong>Demo Credentials:</strong>
-                <br />
-                Matric: <span className="font-mono">
-                  MOUAU/20/12345
-                </span> or <span className="font-mono">MOUAU/21/67890</span>
-                <br />
-                Password: <span className="font-mono">any password works</span>
-              </p>
             </div>
           </>
         )}

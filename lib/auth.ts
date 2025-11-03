@@ -2,57 +2,73 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/lib/server/prisma";
-import { verifyPassword } from "@/lib/security/passwordUtils";
+import { 
+  hashData, 
+  verifyHash,
+  protectData,
+  unprotectData 
+} from "@/lib/security/dataProtection";
 
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
       name: "credentials",
       credentials: {
-        email: { label: "Email", type: "email" },
+        matricNumber: { label: "Matric Number", type: "text" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          throw new Error("Email and password are required");
+        if (!credentials?.matricNumber || !credentials?.password) {
+          throw new Error("Matric number and password are required");
         }
 
         try {
-          // Find user
-          const user = await prisma.user.findFirst({
-            where: { email: credentials.email },
+          // Normalize matric number
+          const normalizedMatric = credentials.matricNumber.trim().toUpperCase();
+
+          // Find student by matric number
+          const student = await prisma.student.findFirst({
+            where: { 
+              matricNumber: normalizedMatric 
+            },
             include: {
-              student: {
+              user: {
                 select: {
-                  matricNumber: true,
-                  department: true,
-                },
-              },
-              teacher: {
-                select: {
-                  employeeId: true,
-                  department: true,
+                  id: true,
+                  email: true,
+                  name: true,
+                  role: true,
+                  passwordHash: true,
+                  isActive: true,
+                  emailVerified: true,
+                  accountLocked: true,
+                  lockedUntil: true,
+                  failedLoginAttempts: true,
+                  lastLoginAt: true,
+                  loginCount: true,
                 },
               },
             },
           });
 
-          if (!user) {
+          if (!student || !student.user) {
             // Log failed login attempt
             await prisma.auditLog.create({
               data: {
                 action: "USER_LOGIN_FAILED",
                 resourceType: "USER",
                 details: {
-                  email: credentials.email,
-                  reason: "user_not_found",
+                  matricNumber: normalizedMatric,
+                  reason: "student_not_found",
                 },
-                ipAddress: "unknown", // Would be set by middleware
+                ipAddress: "unknown",
                 userAgent: "unknown",
               },
             });
-            throw new Error("Invalid email or password");
+            throw new Error("Invalid matric number or password");
           }
+
+          const user = student.user;
 
           // Check if account is locked
           if (
@@ -68,6 +84,7 @@ export const authOptions: NextAuthOptions = {
                 details: {
                   reason: "account_locked",
                   lockedUntil: user.lockedUntil,
+                  matricNumber: normalizedMatric,
                 },
                 ipAddress: "unknown",
                 userAgent: "unknown",
@@ -78,8 +95,8 @@ export const authOptions: NextAuthOptions = {
             );
           }
 
-          // Verify password
-          const isValidPassword = await verifyPassword(
+          // Verify password using dataProtection's verifyHash
+          const isValidPassword = await verifyHash(
             credentials.password,
             user.passwordHash!
           );
@@ -88,7 +105,7 @@ export const authOptions: NextAuthOptions = {
             // Increment failed login attempts
             const failedAttempts = user.failedLoginAttempts + 1;
             const updateData: any = {
-              failedAttempts,
+              failedLoginAttempts: failedAttempts,
               lastFailedLoginAt: new Date(),
             };
 
@@ -111,17 +128,22 @@ export const authOptions: NextAuthOptions = {
                 details: {
                   failedAttempts,
                   locked: failedAttempts >= 5,
+                  matricNumber: normalizedMatric,
                 },
                 ipAddress: "unknown",
                 userAgent: "unknown",
               },
             });
 
-            throw new Error("Invalid email or password");
+            throw new Error("Invalid matric number or password");
           }
 
-          // Check if email is verified
-          if (!user.isActive || !user.emailVerified) {
+          // Check if email is verified and account is active
+          if (!user.isActive) {
+            throw new Error("Your account has been deactivated. Please contact support.");
+          }
+
+          if (!user.emailVerified) {
             throw new Error("Please verify your email before signing in");
           }
 
@@ -137,12 +159,20 @@ export const authOptions: NextAuthOptions = {
             },
           });
 
+          // Decrypt student data for session
+          const decryptedEmail = await unprotectData(student.email, "email");
+          const decryptedDepartment = await unprotectData(student.department, "general");
+
           // Log successful login
           await prisma.auditLog.create({
             data: {
               userId: user.id,
               action: "USER_LOGGED_IN",
               resourceType: "USER",
+              details: {
+                matricNumber: normalizedMatric,
+                department: student.department,
+              },
               ipAddress: "unknown",
               userAgent: "unknown",
             },
@@ -150,15 +180,31 @@ export const authOptions: NextAuthOptions = {
 
           return {
             id: user.id,
-            email: user.email,
+            email: decryptedEmail,
             name: user.name,
             role: user.role,
-            matricNumber:
-              user.student?.matricNumber || user.teacher?.employeeId,
-            department: user.student?.department || user.teacher?.department,
+            matricNumber: student.matricNumber,
+            department: decryptedDepartment,
+            college: student.college,
+            course: student.course,
           };
         } catch (error) {
           console.error("Auth error:", error);
+          
+          // Log unexpected errors
+          await prisma.auditLog.create({
+            data: {
+              action: "USER_LOGIN_ERROR",
+              resourceType: "USER",
+              details: {
+                matricNumber: credentials.matricNumber,
+                error: error instanceof Error ? error.message : "Unknown error",
+              },
+              ipAddress: "unknown",
+              userAgent: "unknown",
+            },
+          });
+          
           throw error;
         }
       },
@@ -171,11 +217,12 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user && typeof user === "object") {
-        // guard property existence before assigning to token
-        if ("role" in user) token.role = (user as any).role;
-        if ("matricNumber" in user)
-          token.matricNumber = (user as any).matricNumber;
-        if ("department" in user) token.department = (user as any).department;
+        // Add user properties to token
+        token.role = (user as any).role;
+        token.matricNumber = (user as any).matricNumber;
+        token.department = (user as any).department;
+        token.college = (user as any).college;
+        token.course = (user as any).course;
       }
       return token;
     },
@@ -184,9 +231,10 @@ export const authOptions: NextAuthOptions = {
         const user = session.user ?? (session.user = {} as any);
         if (token.sub) user.id = token.sub;
         if (token.role) user.role = token.role as string;
-        if (token.matricNumber)
-          user.matricNumber = token.matricNumber as string;
+        if (token.matricNumber) user.matricNumber = token.matricNumber as string;
         if (token.department) user.department = token.department as string;
+        if (token.college) user.college = token.college as string;
+        if (token.course) user.course = token.course as string;
       }
       return session;
     },
