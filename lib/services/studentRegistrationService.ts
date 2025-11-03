@@ -207,8 +207,7 @@ class SecurityUtils {
   }
 
   /**
-   * Create secure verification URL parameters using the manual verification scheme.
-   * Parameters: e (encoded email), t (token), h (timestamp hash)
+   * Create verification URL parameters
    */
   static createVerificationParams(email: string, code: string): string {
     const e = this.encodeEmail(email);
@@ -437,8 +436,8 @@ export class StudentRegistrationService {
         OR: [
           { matricNumber: matricNumber },
           { jambRegNumber: jambReg },
-          { email: protectedEmail.encrypted }, // Search by encrypted email
-          { phone: protectedPhone.encrypted }, // Search by encrypted phone
+          { email: studentData.email },
+          { phone: studentData.phone },
         ],
       },
     });
@@ -559,8 +558,7 @@ export class StudentRegistrationService {
       );
     }
 
-    // Send verification email **OUTSIDE transaction**
-    // This call is placed here to ensure the email is only sent after successful account creation.
+    // Send verification email OUTSIDE transaction - ONLY ONCE
     try {
       const verificationToken = await this.sendVerificationEmail(
         studentData.email,
@@ -609,7 +607,7 @@ export class StudentRegistrationService {
 
   /**
    * Generates and stores a verification token and sends verification email.
-   * This function ENSURES **only one valid token exists** at any time for the given email.
+   * Modified to prevent duplicate emails by checking for existing tokens.
    */
   static async sendVerificationEmail(
     email: string,
@@ -635,14 +633,32 @@ export class StudentRegistrationService {
       throw new ValidationError("Name cannot be empty");
     }
 
-    // CRITICAL: Delete existing tokens for this user's email.
-    // This prevents duplicate/stale tokens from being valid, ensuring only the
-    // latest link sent can be used, solving the duplication issue.
-    await prisma.verificationToken.deleteMany({
-      where: { identifier: email },
+    // Check if there's already a recent verification token (within 5 minutes)
+    const existingToken = await prisma.verificationToken.findFirst({
+      where: {
+        identifier: email,
+        createdAt: {
+          gte: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
+        },
+      },
     });
 
-    console.log("🔒 Deleted any existing verification tokens for:", email);
+    if (existingToken) {
+      console.log(`⏭️ Verification email already sent recently to: ${email}`);
+      return existingToken.token;
+    }
+
+    // Delete any older tokens for security
+    await prisma.verificationToken.deleteMany({
+      where: {
+        identifier: email,
+        createdAt: {
+          lt: new Date(Date.now() - 5 * 60 * 1000), // Older than 5 minutes
+        },
+      },
+    });
+
+    console.log("🔒 Deleted any old verification tokens for:", email);
 
     // Generate NEW verification code using nanoid (48 chars for high security)
     const verificationCode = SecurityUtils.generateVerificationCode(48);
@@ -662,19 +678,17 @@ export class StudentRegistrationService {
       // Use the new base URL utility
       const baseUrl = UrlUtils.getBaseUrl();
 
-      // Create secure verification URL with encoded parameters (e=email, t=token, h=hash)
+      // Create secure verification URL with encoded parameters
       const verificationParams = SecurityUtils.createVerificationParams(
         email,
         verificationCode
       );
-
-      // Verification link suitable for click or manual copy/paste
       const verificationLink = `${baseUrl}/auth/verify-email/verify?${verificationParams}`;
 
       console.log(`🔗 Preparing secure verification email for ${email}`);
       console.log(`🌐 Using base URL: ${baseUrl}`);
       console.log(
-        `🔐 Verification link structure: /auth/verify-email/verify?e=[encoded_email]&t=[code]&h=[hash]`
+        `🔐 Verification link structure: /auth/verify-email/verify?e=[encoded]&t=[code]&h=[hash]`
       );
 
       const emailSent = await emailService.sendEmail({
@@ -691,7 +705,6 @@ export class StudentRegistrationService {
       if (!emailSent) {
         console.error("❌ Email service failed to send verification email");
 
-        // Clean up the newly created token if email sending fails
         await prisma.verificationToken.deleteMany({
           where: { identifier: email },
         });
@@ -709,7 +722,6 @@ export class StudentRegistrationService {
       console.error("❌ Error in sendVerificationEmail:", error);
 
       try {
-        // Ensure token is cleaned up on any failure
         await prisma.verificationToken.deleteMany({
           where: { identifier: email },
         });
@@ -892,7 +904,6 @@ export class StudentRegistrationService {
         throw new ValidationError("User not found");
       }
 
-      // Delete all existing reset tokens for the user
       await prisma.passwordResetToken.deleteMany({
         where: { userId: user.id },
       });
@@ -907,7 +918,7 @@ export class StudentRegistrationService {
 
       const baseUrl = UrlUtils.getBaseUrl();
 
-      // Create secure reset URL with encoded parameters (e=email, t=token, h=hash)
+      // Create secure reset URL with encoded parameters
       const resetParams = SecurityUtils.createVerificationParams(
         email,
         resetCode
@@ -915,7 +926,7 @@ export class StudentRegistrationService {
       const resetLink = `${baseUrl}/auth/reset-password?${resetParams}`;
 
       console.log(
-        "🔐 Password reset link structure: /auth/reset-password?e=[encoded_email]&t=[code]&h=[hash]"
+        "🔐 Password reset link structure: /auth/reset-password?e=[encoded]&t=[code]&h=[hash]"
       );
 
       const emailSent = await emailService.sendEmail({
@@ -929,7 +940,6 @@ export class StudentRegistrationService {
       });
 
       if (!emailSent) {
-        // Clean up the newly created token if email sending fails
         await prisma.passwordResetToken.deleteMany({
           where: { userId: user.id },
         });
@@ -950,7 +960,6 @@ export class StudentRegistrationService {
       try {
         const user = await prisma.user.findFirst({ where: { email } });
         if (user) {
-          // Clean up tokens on failure
           await prisma.passwordResetToken.deleteMany({
             where: { userId: user.id },
           });
@@ -1003,7 +1012,6 @@ export class StudentRegistrationService {
         "⚠️ Resend verification requested for non-existent email:",
         email
       );
-      // Return success message even if user doesn't exist to prevent enumeration attacks
       return "email_sent";
     }
 
@@ -1018,6 +1026,18 @@ export class StudentRegistrationService {
         "RATE_LIMITED"
       );
     }
+
+    // Create audit log for resend request
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "RESEND_VERIFICATION_REQUESTED",
+        resourceType: "USER",
+        resourceId: user.id,
+        ipAddress: "email_verification",
+        userAgent: "email_verification",
+      },
+    });
 
     return await this.sendVerificationEmail(
       user.email,
