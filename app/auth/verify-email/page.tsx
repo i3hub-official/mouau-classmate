@@ -53,7 +53,7 @@ function VerifyEmailContent() {
     setMessage("Verifying your email...");
 
     try {
-      const response = await fetch("/api/auth/verify-email", {
+      const response = await fetch("/auth/verify-email", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
