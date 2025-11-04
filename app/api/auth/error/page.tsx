@@ -1,7 +1,7 @@
 // app/auth/error/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -13,7 +13,31 @@ import {
   Lock,
 } from "lucide-react";
 
-export default function AuthError() {
+// Loading fallback component
+function ErrorPageLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-background via-accent/5 to-primary/5 p-4">
+      <div className="w-full max-w-md bg-card border border-border rounded-xl p-8 shadow-lg">
+        <div className="flex flex-col items-center justify-center space-y-4">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-primary/20 rounded-full"></div>
+            <div className="absolute top-0 left-0 w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-2 h-2 bg-primary rounded-full"></div>
+          </div>
+          <p className="text-sm font-medium text-foreground">
+            Loading error details...
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Please wait while we process your request
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Main error component
+function AuthErrorContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const error = searchParams.get("error");
@@ -232,5 +256,14 @@ export default function AuthError() {
         )}
       </div>
     </div>
+  );
+}
+
+// Export the wrapped component
+export default function AuthError() {
+  return (
+    <Suspense fallback={<ErrorPageLoading />}>
+      <AuthErrorContent />
+    </Suspense>
   );
 }

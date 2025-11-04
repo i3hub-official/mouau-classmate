@@ -13,7 +13,6 @@ import {
   Shield,
   HelpCircle,
   ChevronRight,
-  Home,
   ArrowLeft,
   CheckCircle,
   AlertCircle,
