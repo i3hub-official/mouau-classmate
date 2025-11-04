@@ -2,6 +2,7 @@
 "use client";
 import { LogOut } from "lucide-react";
 import { useState } from "react";
+import { useEffect } from "react";
 
 interface SignOutModalProps {
   isOpen: boolean;
@@ -15,6 +16,20 @@ export function SignOutModal({
   onSignOut,
 }: SignOutModalProps) {
   const [signingOut, setSigningOut] = useState(false);
+
+  // Optional enhancement: Add escape key support
+useEffect(() => {
+  const handleEscape = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && !signingOut) {
+      onClose();
+    }
+  };
+
+  if (isOpen) {
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }
+}, [isOpen, signingOut, onClose]);
 
   const handleSignOut = async () => {
     setSigningOut(true);
