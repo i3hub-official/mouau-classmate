@@ -15,8 +15,6 @@ import {
   MoreVertical,
   Download,
   Eye,
-  Edit,
-  Trash2,
 } from "lucide-react";
 import {
   AssignmentService,
@@ -46,15 +44,7 @@ export default function AssignmentsPage() {
     submitted: 0,
     overdue: 0,
   });
-
-  // Sample courses for filter (you can fetch these from your API)
-  const courses = [
-    "CSC 101 - Introduction to Computer Science",
-    "MTH 101 - Elementary Mathematics",
-    "PHY 101 - General Physics",
-    "CHM 101 - Basic Chemistry",
-    "STA 101 - Statistics",
-  ];
+  const [courses, setCourses] = useState<string[]>([]);
 
   useEffect(() => {
     fetchAssignments();
@@ -64,17 +54,26 @@ export default function AssignmentsPage() {
   useEffect(() => {
     filterAssignments();
     updateStats();
+    extractCourses();
   }, [assignments, searchTerm, statusFilter, courseFilter]);
 
   const fetchAssignments = async () => {
     try {
       setLoading(true);
-      // This would come from your session/context
-      const studentId = "student-id-from-session";
-      const assignments = await AssignmentService.getAssignmentsByStudent(
+      // In a real app, you'd get the studentId from session/context
+      // For now, we'll use a placeholder - you'll need to implement auth context
+      const studentId = await getCurrentStudentId();
+
+      if (!studentId) {
+        console.error("No student ID found");
+        setLoading(false);
+        return;
+      }
+
+      const assignmentsData = await AssignmentService.getAssignmentsByStudent(
         studentId
       );
-      setAssignments(assignments);
+      setAssignments(assignmentsData);
     } catch (error) {
       console.error("Error fetching assignments:", error);
     } finally {
@@ -82,18 +81,52 @@ export default function AssignmentsPage() {
     }
   };
 
+  const getCurrentStudentId = async (): Promise<string | null> => {
+    // TODO: Implement this based on your auth system
+    // This should return the current logged-in student's ID
+    // For now, return null - you'll need to implement proper auth context
+    return null;
+  };
+
   const fetchUserData = async () => {
     try {
-      // Simulate user data fetch - replace with actual API call
-      setUserData({
-        name: "John Doe",
-        matricNumber: "MOUAU/20/CS/001",
-        department: "Computer Science",
-        email: "john.doe@student.mouau.edu.ng",
-      });
+      // TODO: Replace with actual user data fetch from your API
+      // This should come from your session/context
+      const response = await fetch("/api/user/me");
+      if (response.ok) {
+        const user = await response.json();
+        setUserData(user);
+      } else {
+        // Fallback to placeholder data
+        setUserData({
+          name: "Student",
+          matricNumber: "MOUAU/XX/XX/XXX",
+          department: "Student Portal",
+          email: "student@mouau.edu.ng",
+        });
+      }
     } catch (error) {
       console.error("Error fetching user data:", error);
+      // Fallback data
+      setUserData({
+        name: "Student",
+        matricNumber: "MOUAU/XX/XX/XXX",
+        department: "Student Portal",
+        email: "student@mouau.edu.ng",
+      });
     }
+  };
+
+  const extractCourses = () => {
+    const uniqueCourses = Array.from(
+      new Set(
+        assignments.map(
+          (assignment) =>
+            `${assignment.course.code} - ${assignment.course.title}`
+        )
+      )
+    );
+    setCourses(uniqueCourses);
   };
 
   const filterAssignments = () => {
@@ -124,7 +157,9 @@ export default function AssignmentsPage() {
     // Course filter
     if (courseFilter !== "all") {
       filtered = filtered.filter(
-        (assignment) => assignment.course.code === courseFilter.split(" - ")[0]
+        (assignment) =>
+          `${assignment.course.code} - ${assignment.course.title}` ===
+          courseFilter
       );
     }
 
@@ -217,12 +252,29 @@ export default function AssignmentsPage() {
 
   const handleSubmitAssignment = async (assignmentId: string) => {
     try {
-      // This would open a submission modal or navigate to submission page
+      // TODO: Implement assignment submission flow
+      // This would typically open a modal or navigate to a submission page
       console.log("Submit assignment:", assignmentId);
-      // Implementation for submission would go here
+
+      // Example implementation:
+      // const studentId = await getCurrentStudentId();
+      // if (studentId) {
+      //   const canSubmit = await AssignmentService.canStudentSubmitAssignment(studentId, assignmentId);
+      //   if (canSubmit.canSubmit) {
+      //     // Open submission modal or navigate to submission page
+      //     window.location.href = `/assignments/${assignmentId}/submit`;
+      //   } else {
+      //     alert(`Cannot submit: ${canSubmit.reason}`);
+      //   }
+      // }
     } catch (error) {
       console.error("Error submitting assignment:", error);
     }
+  };
+
+  const handleViewAssignment = (assignmentId: string) => {
+    // Navigate to assignment detail page
+    window.location.href = `/assignments/${assignmentId}`;
   };
 
   if (loading) {
@@ -238,7 +290,7 @@ export default function AssignmentsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-     <DashboardHeader userData={userData ?? undefined} />
+           <DashboardHeader userData={userData ?? undefined} />
 
       {/* Main Content */}
       <main className="w-full px-6 xl:px-8 py-8">
@@ -252,7 +304,10 @@ export default function AssignmentsPage() {
               Manage and track your academic assignments
             </p>
           </div>
-          <button className="mt-4 lg:mt-0 bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors flex items-center gap-2">
+          <button
+            onClick={() => (window.location.href = "/assignments/submit")}
+            className="mt-4 lg:mt-0 bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
+          >
             <Plus className="h-5 w-5" />
             New Submission
           </button>
@@ -371,12 +426,14 @@ export default function AssignmentsPage() {
             <div className="text-center py-12">
               <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium text-foreground mb-2">
-                No assignments found
+                {assignments.length === 0
+                  ? "No assignments found"
+                  : "No matching assignments"}
               </h3>
               <p className="text-muted-foreground">
-                {searchTerm || statusFilter !== "all" || courseFilter !== "all"
-                  ? "Try adjusting your search or filters"
-                  : "You don't have any assignments yet"}
+                {assignments.length === 0
+                  ? "You don't have any assignments in your enrolled courses yet."
+                  : "Try adjusting your search or filters to find what you're looking for."}
               </p>
             </div>
           ) : (
@@ -442,6 +499,13 @@ export default function AssignmentsPage() {
                         </p>
                       )}
 
+                      {assignment.instructions && (
+                        <p className="text-muted-foreground mb-4 line-clamp-2 text-sm">
+                          <strong>Instructions:</strong>{" "}
+                          {assignment.instructions}
+                        </p>
+                      )}
+
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div className="flex items-center gap-4 text-sm">
                           <div className="flex items-center gap-1 text-muted-foreground">
@@ -459,7 +523,7 @@ export default function AssignmentsPage() {
                             <span className="text-orange-600 font-medium">
                               {daysLeft} days left
                             </span>
-                          ) : submission?.score ? (
+                          ) : submission?.score !== null && submission?.score !== undefined ? (
                             <span className="text-green-600 font-medium">
                               Grade: {submission.score}%
                             </span>
@@ -467,7 +531,10 @@ export default function AssignmentsPage() {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <button className="px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors flex items-center gap-2">
+                          <button
+                            onClick={() => handleViewAssignment(assignment.id)}
+                            className="px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors flex items-center gap-2"
+                          >
                             <Eye className="h-4 w-4" />
                             View
                           </button>
