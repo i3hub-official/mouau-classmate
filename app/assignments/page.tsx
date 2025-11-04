@@ -38,6 +38,7 @@ export default function AssignmentsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [courseFilter, setCourseFilter] = useState<string>("all");
   const [userData, setUserData] = useState<UserData | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
@@ -60,8 +61,6 @@ export default function AssignmentsPage() {
   const fetchAssignments = async () => {
     try {
       setLoading(true);
-      // In a real app, you'd get the studentId from session/context
-      // For now, we'll use a placeholder - you'll need to implement auth context
       const studentId = await getCurrentStudentId();
 
       if (!studentId) {
@@ -82,22 +81,16 @@ export default function AssignmentsPage() {
   };
 
   const getCurrentStudentId = async (): Promise<string | null> => {
-    // TODO: Implement this based on your auth system
-    // This should return the current logged-in student's ID
-    // For now, return null - you'll need to implement proper auth context
     return null;
   };
 
   const fetchUserData = async () => {
     try {
-      // TODO: Replace with actual user data fetch from your API
-      // This should come from your session/context
       const response = await fetch("/api/user/me");
       if (response.ok) {
         const user = await response.json();
         setUserData(user);
       } else {
-        // Fallback to placeholder data
         setUserData({
           name: "Student",
           matricNumber: "MOUAU/XX/XX/XXX",
@@ -107,7 +100,6 @@ export default function AssignmentsPage() {
       }
     } catch (error) {
       console.error("Error fetching user data:", error);
-      // Fallback data
       setUserData({
         name: "Student",
         matricNumber: "MOUAU/XX/XX/XXX",
@@ -132,7 +124,6 @@ export default function AssignmentsPage() {
   const filterAssignments = () => {
     let filtered = assignments;
 
-    // Search filter
     if (searchTerm) {
       filtered = filtered.filter(
         (assignment) =>
@@ -146,7 +137,6 @@ export default function AssignmentsPage() {
       );
     }
 
-    // Status filter
     if (statusFilter !== "all") {
       filtered = filtered.filter((assignment) => {
         const status = getAssignmentStatus(assignment);
@@ -154,7 +144,6 @@ export default function AssignmentsPage() {
       });
     }
 
-    // Course filter
     if (courseFilter !== "all") {
       filtered = filtered.filter(
         (assignment) =>
@@ -185,7 +174,6 @@ export default function AssignmentsPage() {
     const now = new Date();
     const dueDate = new Date(assignment.dueDate);
 
-    // Check if assignment has submissions
     const hasSubmission = assignment.submissions.length > 0;
     const isGraded = assignment.submissions.some((sub) => sub.isGraded);
     const isOverdue = dueDate < now && !hasSubmission;
@@ -251,30 +239,22 @@ export default function AssignmentsPage() {
   };
 
   const handleSubmitAssignment = async (assignmentId: string) => {
+    if (signingOut) return;
     try {
-      // TODO: Implement assignment submission flow
-      // This would typically open a modal or navigate to a submission page
       console.log("Submit assignment:", assignmentId);
-
-      // Example implementation:
-      // const studentId = await getCurrentStudentId();
-      // if (studentId) {
-      //   const canSubmit = await AssignmentService.canStudentSubmitAssignment(studentId, assignmentId);
-      //   if (canSubmit.canSubmit) {
-      //     // Open submission modal or navigate to submission page
-      //     window.location.href = `/assignments/${assignmentId}/submit`;
-      //   } else {
-      //     alert(`Cannot submit: ${canSubmit.reason}`);
-      //   }
-      // }
     } catch (error) {
       console.error("Error submitting assignment:", error);
     }
   };
 
   const handleViewAssignment = (assignmentId: string) => {
-    // Navigate to assignment detail page
+    if (signingOut) return;
     window.location.href = `/assignments/${assignmentId}`;
+  };
+
+  const handleNewSubmission = () => {
+    if (signingOut) return;
+    window.location.href = "/assignments/submit";
   };
 
   if (loading) {
@@ -290,10 +270,28 @@ export default function AssignmentsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-           <DashboardHeader userData={userData ?? undefined} />
+      <DashboardHeader userData={userData ?? undefined} />
+
+      {/* Overlay during sign out */}
+      {signingOut && (
+        <div className="fixed inset-0 bg-black/20 z-40 flex items-center justify-center">
+          <div className="bg-card border border-border rounded-lg p-4 shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+              <span className="text-foreground font-medium">
+                Signing out...
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
-      <main className="w-full px-6 xl:px-8 py-8">
+      <main
+        className={`w-full px-6 xl:px-8 py-8 ${
+          signingOut ? "pointer-events-none opacity-60" : ""
+        }`}
+      >
         {/* Header Section */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8">
           <div>
@@ -305,8 +303,9 @@ export default function AssignmentsPage() {
             </p>
           </div>
           <button
-            onClick={() => (window.location.href = "/assignments/submit")}
-            className="mt-4 lg:mt-0 bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
+            onClick={handleNewSubmission}
+            disabled={signingOut}
+            className="mt-4 lg:mt-0 bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="h-5 w-5" />
             New Submission
@@ -382,7 +381,8 @@ export default function AssignmentsPage() {
                 placeholder="Search assignments, courses..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                disabled={signingOut}
+                className="w-full pl-10 pr-4 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
@@ -390,7 +390,8 @@ export default function AssignmentsPage() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              disabled={signingOut}
+              className="px-4 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <option value="all">All Status</option>
               <option value="pending">Pending</option>
@@ -403,7 +404,8 @@ export default function AssignmentsPage() {
             <select
               value={courseFilter}
               onChange={(e) => setCourseFilter(e.target.value)}
-              className="px-4 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              disabled={signingOut}
+              className="px-4 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <option value="all">All Courses</option>
               {courses.map((course) => (
@@ -413,7 +415,10 @@ export default function AssignmentsPage() {
               ))}
             </select>
 
-            <button className="px-4 py-2 border border-border rounded-lg bg-background hover:bg-muted transition-colors flex items-center gap-2">
+            <button
+              disabled={signingOut}
+              className="px-4 py-2 border border-border rounded-lg bg-background hover:bg-muted transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               <Filter className="h-4 w-4" />
               More Filters
             </button>
@@ -487,7 +492,10 @@ export default function AssignmentsPage() {
                             {getStatusIcon(status)}
                             {status.charAt(0).toUpperCase() + status.slice(1)}
                           </span>
-                          <button className="p-2 hover:bg-muted rounded-lg transition-colors">
+                          <button
+                            disabled={signingOut}
+                            className="p-2 hover:bg-muted rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
                             <MoreVertical className="h-4 w-4" />
                           </button>
                         </div>
@@ -523,7 +531,8 @@ export default function AssignmentsPage() {
                             <span className="text-orange-600 font-medium">
                               {daysLeft} days left
                             </span>
-                          ) : submission?.score !== null && submission?.score !== undefined ? (
+                          ) : submission?.score !== null &&
+                            submission?.score !== undefined ? (
                             <span className="text-green-600 font-medium">
                               Grade: {submission.score}%
                             </span>
@@ -533,7 +542,8 @@ export default function AssignmentsPage() {
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => handleViewAssignment(assignment.id)}
-                            className="px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors flex items-center gap-2"
+                            disabled={signingOut}
+                            className="px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <Eye className="h-4 w-4" />
                             View
@@ -543,7 +553,8 @@ export default function AssignmentsPage() {
                               onClick={() =>
                                 handleSubmitAssignment(assignment.id)
                               }
-                              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-2"
+                              disabled={signingOut}
+                              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <Download className="h-4 w-4" />
                               Submit

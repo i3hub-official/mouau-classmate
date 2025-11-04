@@ -45,6 +45,8 @@ export function DashboardHeader({
     { href: "/grades", label: "Grades" },
   ];
 
+  const tagline = "Your Academic Partner";
+
   // Check if a nav item is active
   const isActive = (href: string) => {
     if (href === "/dashboard") {
@@ -86,7 +88,11 @@ export function DashboardHeader({
             {/* Logo and Brand */}
             <div className="flex items-center gap-3">
               <div className="p-2 bg-linear-to-br from-primary to-primary/80 rounded-lg shadow-lg">
-                <BookOpen className="h-6 w-6 text-white" />
+                <img
+                  src="/mouau_logo.webp"
+                  alt="MOUAU Logo"
+                  className="h-6 w-6 sm:h-7 sm:w-7 object-contain"
+                />
               </div>
               <div>
                 <h1 className="text-xl font-bold text-foreground">
@@ -95,9 +101,7 @@ export function DashboardHeader({
                 {loading ? (
                   <div className="animate-pulse h-4 w-32 bg-muted rounded"></div>
                 ) : (
-                  <p className="text-xs text-muted-foreground">
-                    {userData?.department || "Student Portal"}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{tagline}</p>
                 )}
               </div>
             </div>
