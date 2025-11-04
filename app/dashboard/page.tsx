@@ -84,8 +84,6 @@ function StatCard({
   );
 }
 
-
-
 export default function DashboardPage() {
   const [dashboardData, setDashboardData] = useState<DashboardStats | null>(
     null
@@ -179,7 +177,7 @@ export default function DashboardPage() {
           <div className="flex justify-between items-center">
             {/* Logo and Brand */}
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-linear-to-br from-primary to-primary/80 rounded-lg shadow-lg">
+              <div className="p-2 bg-gradient-to-br from-primary to-primary/80 rounded-lg shadow-lg">
                 <BookOpen className="h-6 w-6 text-white" />
               </div>
               <div>
@@ -240,7 +238,7 @@ export default function DashboardPage() {
                     onClick={() => setShowUserMenu(!showUserMenu)}
                     className="flex items-center gap-2 p-2 hover:bg-muted rounded-lg transition-colors"
                   >
-                    <div className="h-8 w-8 bg-linear-to-br from-primary to-primary/80 rounded-full flex items-center justify-center">
+                    <div className="h-8 w-8 bg-gradient-to-br from-primary to-primary/80 rounded-full flex items-center justify-center">
                       <User size={16} className="text-white" />
                     </div>
                     <div className="hidden lg:block text-left">
@@ -296,16 +294,19 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Mobile Menu Button */}
-            <button
-              className="md:hidden p-2 hover:bg-muted rounded-lg transition-colors"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-            </button>
+            {/* Mobile Navigation - ThemeToggle before hamburger */}
+            <div className="flex items-center gap-2 md:hidden">
+              <ThemeToggle />
+              <button
+                className="p-2 hover:bg-muted rounded-lg transition-colors"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              >
+                {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+              </button>
+            </div>
           </div>
 
-          {/* Mobile Navigation */}
+          {/* Mobile Navigation Menu */}
           {mobileMenuOpen && (
             <div className="md:hidden mt-4 pb-4 border-t border-border pt-4">
               <nav className="flex flex-col gap-3">
@@ -333,11 +334,17 @@ export default function DashboardPage() {
                 >
                   Schedule
                 </a>
+                <a
+                  href="/grades"
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground py-2 px-3 rounded-lg transition-colors"
+                >
+                  Grades
+                </a>
 
                 {/* Mobile User Info */}
                 <div className="border-t border-border pt-4 mt-2">
                   <div className="flex items-center gap-3 px-3 py-2">
-                    <div className="h-10 w-10 bg-linear-to-br from-primary to-primary/80 rounded-full flex items-center justify-center">
+                    <div className="h-10 w-10 bg-gradient-to-br from-primary to-primary/80 rounded-full flex items-center justify-center">
                       <User size={18} className="text-white" />
                     </div>
                     <div>
