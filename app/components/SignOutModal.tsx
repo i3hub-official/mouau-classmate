@@ -18,18 +18,18 @@ export function SignOutModal({
   const [signingOut, setSigningOut] = useState(false);
 
   // Optional enhancement: Add escape key support
-useEffect(() => {
-  const handleEscape = (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && !signingOut) {
-      onClose();
-    }
-  };
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !signingOut) {
+        onClose();
+      }
+    };
 
-  if (isOpen) {
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
-  }
-}, [isOpen, signingOut, onClose]);
+    if (isOpen) {
+      document.addEventListener("keydown", handleEscape);
+      return () => document.removeEventListener("keydown", handleEscape);
+    }
+  }, [isOpen, signingOut, onClose]);
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -44,10 +44,11 @@ useEffect(() => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
+      {/* Backdrop - disabled during sign out */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={() => !signingOut && onClose()}
+        style={{ cursor: signingOut ? "not-allowed" : "pointer" }}
       />
 
       {/* Modal */}
@@ -66,14 +67,14 @@ useEffect(() => {
           <div className="flex justify-center gap-4">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm bg-muted hover:bg-muted/80 text-foreground rounded-lg transition-colors font-medium"
+              className="px-4 py-2 text-sm bg-muted hover:bg-muted/80 text-foreground rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={signingOut}
             >
               Cancel
             </button>
             <button
               onClick={handleSignOut}
-              className="px-4 py-2 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors font-medium"
+              className="px-4 py-2 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={signingOut}
             >
               {signingOut ? "Signing out..." : "Sign Out"}
