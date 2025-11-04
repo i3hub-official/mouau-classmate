@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { StudentRegistrationService } from "@/lib/services/studentRegistrationService";
 import { prisma } from "@/lib/server/prisma";
+import { JWTUtils } from "@/lib/server/jwt";
+import { nanoid } from "nanoid";
 
 export async function POST(request: NextRequest) {
   try {
@@ -183,7 +185,34 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Create session (you can use cookies or JWT)
+    // Generate session tokens
+    const sessionToken = nanoid();
+    const refreshToken = await JWTUtils.generateRefreshToken(user.id);
+    const authToken = await JWTUtils.generateAuthToken({
+      userId: user.id,
+      email: user.email,
+      schoolId: user.id,
+      role: user.role,
+      schoolNumber: normalizedMatric,
+    });
+
+    // Calculate session expiry
+    const sessionExpiry = new Date();
+    sessionExpiry.setHours(sessionExpiry.getHours() + 8); // 8 hours
+
+    // Create session in database
+    await prisma.session.create({
+      data: {
+        sessionToken,
+        userId: user.id,
+        expires: sessionExpiry,
+        deviceFingerprint: generateDeviceFingerprint(request),
+        userAgent: request.headers.get("user-agent") || "unknown",
+        ipAddress: ipAddress,
+      },
+    });
+
+    // Create user session data for response
     const userSession = {
       id: user.id,
       email: user.email,
@@ -195,16 +224,44 @@ export async function POST(request: NextRequest) {
       course: studentData?.course || student.course,
     };
 
-    // Set session cookie (simplified - you might want to use JWT)
-    const response = NextResponse.json({ success: true, user: userSession });
+    // Create response with proper cookies
+    const response = NextResponse.json({
+      success: true,
+      user: userSession,
+      token: authToken, // Include auth token in response for client-side usage
+    });
 
-    // Set a simple cookie (consider using httpOnly for production)
-    response.cookies.set("user_session", JSON.stringify(userSession), {
+    // Set session cookie (httpOnly for security)
+    response.cookies.set("session-token", sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 60 * 60 * 8, // 8 hours
+      path: "/",
+      expires: sessionExpiry,
     });
+
+    // Set refresh token cookie
+    response.cookies.set("refresh-token", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+    });
+
+    // Set user ID cookie (non-httpOnly for client-side access)
+    response.cookies.set("userId", user.id, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      expires: sessionExpiry,
+    });
+
+    // Add security headers
+    response.headers.set("x-session-created", "true");
+    response.headers.set("x-user-id", user.id);
+    response.headers.set("x-user-role", user.role);
 
     return response;
   } catch (error) {
@@ -214,4 +271,17 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// Helper function to generate device fingerprint
+function generateDeviceFingerprint(request: NextRequest): string {
+  const components = [
+    request.headers.get("user-agent") || "unknown",
+    request.headers.get("accept-language") || "unknown",
+    request.headers.get("accept-encoding") || "unknown",
+    request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown",
+  ];
+
+  const fingerprint = components.join("|");
+  return Buffer.from(fingerprint).toString("base64").substring(0, 32);
 }
