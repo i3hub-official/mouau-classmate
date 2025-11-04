@@ -53,7 +53,7 @@ export function AcademicProgress({
 
       <div className="space-y-6 flex-1">
         {/* Overall Progress */}
-        <div className="bg-gradient-to-r from-primary/5 to-primary/10 p-4 rounded-xl">
+        <div className="bg-linear-to-r from-primary/5 to-primary/10 p-4 rounded-xl">
           <div className="flex justify-between items-center mb-3">
             <span className="text-sm font-medium text-foreground">
               Overall Progress
@@ -64,7 +64,7 @@ export function AcademicProgress({
           </div>
           <div className="w-full bg-muted rounded-full h-3">
             <div
-              className="bg-gradient-to-r from-primary to-primary/80 h-3 rounded-full transition-all duration-500"
+              className="bg-linear-to-r from-primary to-primary/80 h-3 rounded-full transition-all duration-500"
               style={{ width: `${progress?.averageProgress || 0}%` }}
             ></div>
           </div>
@@ -133,7 +133,7 @@ export function AcademicProgress({
         </div>
 
         {/* Average Score - Enhanced */}
-        <div className="text-center p-5 bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl border border-primary/20">
+        <div className="text-center p-5 bg-linear-to-br from-primary/10 to-primary/5 rounded-xl border border-primary/20">
           <div className="flex items-center justify-center gap-2 mb-3">
             <Award className="h-6 w-6 text-primary" />
             <p className="text-sm font-semibold text-foreground">
@@ -147,7 +147,7 @@ export function AcademicProgress({
         </div>
 
         {/* Performance Indicator */}
-        <div className="bg-gradient-to-r from-slate-50 to-slate-100 p-4 rounded-xl border">
+        <div className="bg-card p-4 rounded-xl border">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-foreground">
               Performance
