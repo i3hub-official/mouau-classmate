@@ -68,24 +68,6 @@ export default function SignInPage() {
     }
   };
 
-  // Demo login for testing
-  const handleDemoLogin = async (demoMatric: string) => {
-    setMatricNumber(demoMatric);
-    setPassword("demoPassword123!");
-
-    // Auto-submit after a brief delay
-    setTimeout(() => {
-      const form = document.querySelector("form");
-      if (form) {
-        const submitEvent = new Event("submit", {
-          cancelable: true,
-          bubbles: true,
-        });
-        form.dispatchEvent(submitEvent);
-      }
-    }, 500);
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-background via-accent/5 to-primary/5 p-4">
       <div className="w-full max-w-md bg-card border border-border rounded-xl p-8 shadow-lg">
@@ -337,29 +319,6 @@ export default function SignInPage() {
                 </span>
               </button>
             </form>
-
-            {/* Demo Credentials Section */}
-            <div className="mt-6 space-y-3">
-              <p className="text-xs text-muted-foreground text-center font-medium">
-                Quick Demo Access
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => handleDemoLogin("MOUAU/20/12345")}
-                  disabled={isLoading}
-                  className="text-xs py-2 px-3 bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg border border-border transition-colors text-foreground"
-                >
-                  Demo Student 1
-                </button>
-                <button
-                  onClick={() => handleDemoLogin("MOUAU/21/67890")}
-                  disabled={isLoading}
-                  className="text-xs py-2 px-3 bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg border border-border transition-colors text-foreground"
-                >
-                  Demo Student 2
-                </button>
-              </div>
-            </div>
 
             {/* Additional Links */}
             <div className="mt-6 space-y-4 text-center">
