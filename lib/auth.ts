@@ -14,11 +14,10 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.matricNumber || !credentials?.password) {
-          throw new Error("Matric number and password are required");
+          return null;
         }
 
         try {
-          // Normalize matric number
           const normalizedMatric = credentials.matricNumber
             .trim()
             .toUpperCase();
@@ -49,7 +48,7 @@ export const authOptions: NextAuthOptions = {
           });
 
           if (!student || !student.user) {
-            // Log failed login attempt
+            // Log but return null (no throw!)
             await prisma.auditLog.create({
               data: {
                 action: "USER_LOGIN_FAILED",
@@ -62,12 +61,12 @@ export const authOptions: NextAuthOptions = {
                 userAgent: "unknown",
               },
             });
-            throw new Error("StudentNotFound");
+            return null;
           }
 
           const user = student.user;
 
-          // Check if account is locked
+          // Check if account is locked - return null instead of throwing
           if (
             user.accountLocked &&
             user.lockedUntil &&
@@ -87,10 +86,10 @@ export const authOptions: NextAuthOptions = {
                 userAgent: "unknown",
               },
             });
-            throw new Error("AccountLocked");
+            return null; // No throw!
           }
 
-          // Verify password using StudentRegistrationService
+          // Verify password
           const isValidPassword =
             await StudentRegistrationService.verifyPasswordForAuth(
               credentials.password,
@@ -105,7 +104,6 @@ export const authOptions: NextAuthOptions = {
               lastFailedLoginAt: new Date(),
             };
 
-            // Lock account after 5 failed attempts for 30 minutes
             if (failedAttempts >= 5) {
               updateData.accountLocked = true;
               updateData.lockedUntil = new Date(Date.now() + 30 * 60 * 1000);
@@ -131,16 +129,16 @@ export const authOptions: NextAuthOptions = {
               },
             });
 
-            throw new Error("CredentialsSignin");
+            return null; // No throw!
           }
 
-          // Check if email is verified and account is active
+          // Check if email is verified and account is active - return null instead of throwing
           if (!user.isActive) {
-            throw new Error("AccountInactive");
+            return null; // No throw!
           }
 
           if (!user.emailVerified) {
-            throw new Error("AccountNotVerified");
+            return null; // No throw!
           }
 
           // Reset failed login attempts on successful login
@@ -154,11 +152,6 @@ export const authOptions: NextAuthOptions = {
               loginCount: { increment: 1 },
             },
           });
-
-          // Decrypt student data for session
-          const studentData = await StudentRegistrationService.getStudentData(
-            normalizedMatric
-          );
 
           // Log successful login
           await prisma.auditLog.create({
@@ -181,14 +174,14 @@ export const authOptions: NextAuthOptions = {
             name: user.name,
             role: user.role,
             matricNumber: student.matricNumber,
-            department: studentData?.department || student.department,
-            college: studentData?.college || student.college,
-            course: studentData?.course || student.course,
+            department: student.department,
+            college: student.college,
+            course: student.course,
           };
         } catch (error) {
           console.error("Auth error:", error);
 
-          // Log unexpected errors
+          // Log but return null (no throw!)
           await prisma.auditLog.create({
             data: {
               action: "USER_LOGIN_ERROR",
@@ -202,7 +195,7 @@ export const authOptions: NextAuthOptions = {
             },
           });
 
-          throw error;
+          return null; // No throw!
         }
       },
     }),
@@ -214,7 +207,6 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user && typeof user === "object") {
-        // Add user properties to token
         token.role = (user as any).role;
         token.matricNumber = (user as any).matricNumber;
         token.department = (user as any).department;
@@ -240,7 +232,8 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: "/auth/signin",
     verifyRequest: "/auth/verify-email",
-    error: "/auth/error",
+    // REMOVE error page completely to prevent any redirects
+    // error: "/auth/error",
   },
   events: {
     async signOut({ token }) {

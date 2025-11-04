@@ -60,8 +60,8 @@ export class ApiJWTUtils {
       const jwt = await new SignJWT(payload)
         .setProtectedHeader({ alg: "HS256" })
         .setIssuedAt()
-        .setIssuer("cecms-api-system")
-        .setAudience("cecms-api-clients")
+        .setIssuer("mouaucm-api-system")
+        .setAudience("mouaucm-api-clients")
         .setSubject("api-access-token")
         .setExpirationTime(options.expiresIn || "1h")
         .sign(secretKey);
@@ -82,8 +82,8 @@ export class ApiJWTUtils {
       const key = this.getSecretKey(secretKey);
 
       const { payload } = await jwtVerify(token, key, {
-        issuer: "cecms-api-system",
-        audience: "cecms-api-clients",
+        issuer: "mouaucm-api-system",
+        audience: "mouaucm-api-clients",
       });
 
       const apiPayload = payload as ApiTokenPayload;

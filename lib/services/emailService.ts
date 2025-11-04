@@ -44,8 +44,8 @@ export class EmailService {
       tls: {
         rejectUnauthorized: false,
       },
-      debug: true,
-      logger: true,
+      debug: false,
+      logger: false,
     });
 
     this.templatesDir = path.join(process.cwd(), "lib/templates/emails");

@@ -3,16 +3,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import {
-  BookOpen,
-  ArrowRight,
-  Home,
-  Lock,
-  CheckCircle,
-  Mail,
-  AlertCircle,
-} from "lucide-react";
-import { signIn } from "next-auth/react";
+import { ArrowRight, Home, Lock, CheckCircle, AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function SignInPage() {
@@ -41,41 +32,34 @@ export default function SignInPage() {
     setIsLoading(true);
 
     try {
-      // Use NextAuth signIn with credentials
-      const result = await signIn("credentials", {
-        matricNumber: matricNumber.trim().toUpperCase(),
-        password: password,
-        redirect: false,
+      // Call our custom API endpoint instead of NextAuth
+      const response = await fetch("/auth/signin/auth", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          matricNumber: matricNumber.trim().toUpperCase(),
+          password: password,
+        }),
       });
 
-      if (result?.error) {
-        // Handle specific error cases
-        if (result.error === "CredentialsSignin") {
-          throw new Error("Invalid matric number or password");
-        } else if (result.error === "AccountNotVerified") {
-          throw new Error("Please verify your email before signing in");
-        } else if (result.error === "AccountInactive") {
-          throw new Error(
-            "Your account has been deactivated. Please contact support."
-          );
-        } else {
-          throw new Error("Authentication failed. Please try again.");
-        }
+      const data = await response.json();
+
+      if (!response.ok) {
+        // Use the specific error message from our API
+        throw new Error(data.error || "Authentication failed");
       }
 
-      if (result?.ok) {
-        // Successful login
-        setIsLoading(false);
-        setLoginSuccess(true);
+      // Successful login
+      setIsLoading(false);
+      setLoginSuccess(true);
 
-        // Redirect to dashboard after success
-        setTimeout(() => {
-          router.push("/dashboard");
-          router.refresh(); // Refresh to update auth state
-        }, 1500);
-      } else {
-        throw new Error("Authentication failed");
-      }
+      // Redirect to dashboard after success
+      setTimeout(() => {
+        router.push("/dashboard");
+        router.refresh(); // Refresh to update auth state
+      }, 1500);
     } catch (err) {
       setIsLoading(false);
       setError(
@@ -165,11 +149,58 @@ export default function SignInPage() {
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 p-3 bg-error/10 border border-error/20 rounded-lg">
-            <p className="text-error text-sm flex items-center gap-2">
-              <AlertCircle size={16} />
-              {error}
-            </p>
+          <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+            <div className="flex items-start gap-3">
+              <AlertCircle
+                size={20}
+                className="text-destructive mt-0.5 flex-shrink-0"
+              />
+              <div className="flex-1">
+                <p className="text-destructive text-sm font-medium mb-1">
+                  Sign In Failed
+                </p>
+                <p className="text-destructive text-sm opacity-90">{error}</p>
+                {/* Show helpful actions based on error type */}
+                {(error.includes("verify") ||
+                  error.includes("Verification")) && (
+                  <div className="mt-2 flex gap-2">
+                    <Link
+                      href="/auth/verify-email"
+                      className="text-xs text-primary hover:underline font-medium"
+                    >
+                      Resend verification email
+                    </Link>
+                  </div>
+                )}
+                {(error.includes("locked") || error.includes("Locked")) && (
+                  <div className="mt-2 flex gap-2">
+                    <Link
+                      href="/auth/forgot-password"
+                      className="text-xs text-primary hover:underline font-medium"
+                    >
+                      Reset password
+                    </Link>
+                    <span className="text-xs text-muted-foreground">•</span>
+                    <Link
+                      href="/support"
+                      className="text-xs text-primary hover:underline font-medium"
+                    >
+                      Contact support
+                    </Link>
+                  </div>
+                )}
+                {error.includes("Invalid") && (
+                  <div className="mt-2">
+                    <Link
+                      href="/auth/forgot-password"
+                      className="text-xs text-primary hover:underline font-medium"
+                    >
+                      Forgot your password?
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -271,12 +302,6 @@ export default function SignInPage() {
                   >
                     Password
                   </label>
-                  <Link
-                    href="/auth/forgot-password"
-                    className="text-xs text-primary hover:underline font-medium"
-                  >
-                    Forgot Password?
-                  </Link>
                 </div>
                 <input
                   type="password"
@@ -321,13 +346,15 @@ export default function SignInPage() {
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => handleDemoLogin("MOUAU/20/12345")}
-                  className="text-xs py-2 px-3 bg-muted hover:bg-muted/80 rounded-lg border border-border transition-colors text-foreground"
+                  disabled={isLoading}
+                  className="text-xs py-2 px-3 bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg border border-border transition-colors text-foreground"
                 >
                   Demo Student 1
                 </button>
                 <button
                   onClick={() => handleDemoLogin("MOUAU/21/67890")}
-                  className="text-xs py-2 px-3 bg-muted hover:bg-muted/80 rounded-lg border border-border transition-colors text-foreground"
+                  disabled={isLoading}
+                  className="text-xs py-2 px-3 bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg border border-border transition-colors text-foreground"
                 >
                   Demo Student 2
                 </button>
@@ -348,7 +375,7 @@ export default function SignInPage() {
 
               <div className="border-t border-border pt-4">
                 <Link
-                  href="/auth/help"
+                  href="/support"
                   className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <Lock size={12} />

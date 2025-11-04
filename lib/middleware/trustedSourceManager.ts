@@ -84,7 +84,7 @@ export class TrustedSourceManager {
     {
       name: "Admin Development",
       type: "ip",
-      value: "192.168.0.127", // Your IP that got blocked
+      value: "192.168.0.105", // Your IP that got blocked
       description: "Admin development machine",
       isActive: true,
       trustLevel: "ABSOLUTE",
@@ -92,7 +92,7 @@ export class TrustedSourceManager {
     {
       name: "Admin Secondary",
       type: "ip",
-      value: "192.168.0.159", // Your server IP
+      value: "192.168.0.105", // Your server IP
       description: "Admin server machine",
       isActive: true,
       trustLevel: "ABSOLUTE",
