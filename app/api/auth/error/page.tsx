@@ -147,7 +147,9 @@ export default function AuthError() {
         <div
           className={`p-4 rounded-lg border ${errorDetails.borderColor} ${errorDetails.bgColor} mb-6`}
         >
-          <p className="text-sm text-muted-foreground">{errorDetails.message}</p>
+          <p className="text-sm text-muted-foreground">
+            {errorDetails.message}
+          </p>
         </div>
 
         {/* Error Code (if present) */}
@@ -208,15 +210,7 @@ export default function AuthError() {
               <span className="text-xs text-muted-foreground hidden sm:inline">
                 •
               </span>
-              <Link
-                href="/auth/verify-email"
-                className="text-xs text-primary hover:underline font-medium"
-              >
-                Resend Verification
-              </Link>
-              <span className="text-xs text-muted-foreground hidden sm:inline">
-                •
-              </span>
+
               <Link
                 href="/support"
                 className="text-xs text-primary hover:underline font-medium"

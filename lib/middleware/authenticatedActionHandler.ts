@@ -15,7 +15,7 @@ export interface AuthenticatedActionContext extends MiddlewareContext {
     | "user_action"
     | "none";
   userContext?: {
-  userId: string | null;
+    userId: string | null;
     role: string;
     sessionAge: number;
     trustLevel: number;
@@ -25,7 +25,6 @@ export interface AuthenticatedActionContext extends MiddlewareContext {
     sensitivityReduction: number;
     trustBonus: number;
   };
-  
 }
 
 export class AuthenticatedActionHandler {
@@ -46,9 +45,8 @@ export class AuthenticatedActionHandler {
   };
 
   private static readonly USER_ACTION_PATTERNS = [
-    "/api/dashboard/",
-    "/api/dashboard/*",
-    "/dashboard",
+    "/dashboard/",
+    "/dashboard/*",
     "/profile",
     "/settings",
   ];

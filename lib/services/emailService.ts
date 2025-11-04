@@ -158,7 +158,7 @@ export class EmailService {
       console.log("🚀 Starting email send process...");
       console.log("📧 Environment:", process.env.NODE_ENV);
       console.log("📬 Recipient:", options.to);
-      console.log("📄 Template:", options.template);
+      // console.log("📄 Template:", options.template);
 
       // Load and compile template first
       console.log("📝 Loading email template...");
