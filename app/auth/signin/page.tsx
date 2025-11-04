@@ -153,7 +153,7 @@ export default function SignInPage() {
             <div className="flex items-start gap-3">
               <AlertCircle
                 size={20}
-                className="text-destructive mt-0.5 flex-shrink-0"
+                className="text-destructive mt-0.5 shrink-0"
               />
               <div className="flex-1">
                 <p className="text-destructive text-sm font-medium mb-1">

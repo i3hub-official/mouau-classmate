@@ -13,6 +13,13 @@ import {
   ChevronDown,
   Menu,
   X,
+  Clock,
+  AlertCircle,
+  CheckCircle2,
+  TrendingUp,
+  BarChart3,
+  Target,
+  Award,
 } from "lucide-react";
 
 interface UserData {
@@ -26,58 +33,143 @@ interface UserData {
   course: string;
 }
 
+interface DashboardStats {
+  activeCourses: number;
+  pendingAssignments: number;
+  upcomingDeadlines: number;
+  classmatesCount: number;
+  recentActivities: any[];
+  userInfo: UserData;
+  academicProgress?: {
+    totalCourses: number;
+    completedCourses: number;
+    inProgressCourses: number;
+    averageProgress: number;
+    averageScore: number;
+  };
+}
+
+interface RecentActivity {
+  id: string;
+  title: string;
+  description: string;
+  type: "assignment" | "lecture" | "schedule" | "notification";
+  courseCode: string;
+  courseName: string;
+  timestamp: Date;
+  icon: string;
+  color: string;
+}
+
+// Icon mapping for activities
+const iconMap = {
+  FileText: FileText,
+  BookOpen: BookOpen,
+  Calendar: Calendar,
+  Clock: Clock,
+};
+
 export default function DashboardPage() {
-  const [userData, setUserData] = useState<UserData | null>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardStats | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    fetchUserData();
+    fetchDashboardData();
   }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      const response = await fetch("/api/dashboard");
+      if (response.ok) {
+        const data = await response.json();
+        setDashboardData(data);
+      } else {
+        console.error("Failed to fetch dashboard data");
+        // Fallback to basic user data
+        await fetchUserData();
+      }
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+      await fetchUserData();
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchUserData = async () => {
     try {
       const response = await fetch("/api/user/me");
       if (response.ok) {
         const user = await response.json();
-        setUserData(user);
-      } else {
-        // Fallback to cookie data if API fails
-        const cookies = document.cookie.split(";");
-        const userCookie = cookies.find((cookie) =>
-          cookie.trim().startsWith("user_session=")
-        );
-        if (userCookie) {
-          const userDataString = decodeURIComponent(userCookie.split("=")[1]);
-          setUserData(JSON.parse(userDataString));
-        }
+        setDashboardData({
+          activeCourses: 0,
+          pendingAssignments: 0,
+          upcomingDeadlines: 0,
+          classmatesCount: 0,
+          recentActivities: [],
+          userInfo: user,
+        });
       }
     } catch (error) {
       console.error("Error fetching user data:", error);
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleSignOut = async () => {
     try {
-      const response = await fetch("/auth/signout", {
+      const response = await fetch("/signout", {
         method: "POST",
         credentials: "include",
       });
 
       if (response.ok) {
-        // Clear client-side state and redirect
         window.location.href = "/auth/signin";
       } else {
         console.error("Sign out failed");
       }
     } catch (error) {
       console.error("Error during sign out:", error);
-      // Force redirect even if API call fails
       window.location.href = "/auth/signin";
     }
+  };
+
+  const getTimeAgo = (timestamp: Date) => {
+    const now = new Date();
+    const diffInMs = now.getTime() - new Date(timestamp).getTime();
+    const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
+    const diffInDays = Math.floor(diffInHours / 24);
+
+    if (diffInHours < 1) {
+      return "Just now";
+    } else if (diffInHours < 24) {
+      return `${diffInHours}h ago`;
+    } else {
+      return `${diffInDays}d ago`;
+    }
+  };
+
+  const getActivityIcon = (iconName: string, color: string) => {
+    const IconComponent = iconMap[iconName as keyof typeof iconMap] || FileText;
+    const colorClasses = {
+      blue: "bg-blue-100 text-blue-600",
+      green: "bg-green-100 text-green-600",
+      orange: "bg-orange-100 text-orange-600",
+      purple: "bg-purple-100 text-purple-600",
+    };
+
+    return (
+      <div
+        className={`p-2 rounded-lg ${
+          colorClasses[color as keyof typeof colorClasses] || colorClasses.blue
+        }`}
+      >
+        <IconComponent size={16} />
+      </div>
+    );
   };
 
   if (loading) {
@@ -88,11 +180,14 @@ export default function DashboardPage() {
     );
   }
 
+  const userData = dashboardData?.userInfo;
+  const progress = dashboardData?.academicProgress;
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card/95 backdrop-blur-lg sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-3">
+      {/* Header - Full width */}
+      <header className="border-b border-border bg-card/95 backdrop-blur-lg sticky top-0 z-50 w-full">
+        <div className="w-full px-6 xl:px-8 py-3">
           <div className="flex justify-between items-center">
             {/* Logo and Brand */}
             <div className="flex items-center gap-3">
@@ -111,7 +206,7 @@ export default function DashboardPage() {
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center gap-6">
-              <nav className="flex items-center gap-6">
+              <nav className="flex items-center gap-8">
                 <a
                   href="/dashboard"
                   className="text-sm font-medium text-foreground hover:text-primary transition-colors"
@@ -136,9 +231,15 @@ export default function DashboardPage() {
                 >
                   Schedule
                 </a>
+                <a
+                  href="/grades"
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Grades
+                </a>
               </nav>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-4">
                 {/* Notifications */}
                 <button className="p-2 hover:bg-muted rounded-lg transition-colors relative">
                   <Bell size={20} className="text-muted-foreground" />
@@ -286,203 +387,341 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* Dashboard Content */}
-      <main className="container mx-auto px-4 py-8">
+      {/* Dashboard Content - Full width with optimal max-width */}
+      <main className="w-full px-6 xl:px-8 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-foreground mb-2">
+          <h2 className="text-3xl font-bold text-foreground mb-2">
             Welcome back, {userData?.name?.split(" ")[0] || "Student"}! 👋
           </h2>
-          <p className="text-muted-foreground">
-            Here's what's happening with your courses today.
+          <p className="text-lg text-muted-foreground">
+            Here's what's happening with your academic journey today.
           </p>
         </div>
 
-        {/* User Info Card */}
-        <div className="bg-gradient-to-br from-primary to-primary/80 rounded-2xl p-6 text-white mb-8 shadow-lg">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-            <div>
-              <h3 className="text-lg font-semibold mb-2">
+        {/* User Info Card - Full width */}
+        <div className="bg-gradient-to-br from-primary to-primary/80 rounded-2xl p-8 text-white mb-8 shadow-lg w-full">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex-1">
+              <h3 className="text-xl font-semibold mb-4">
                 Student Information
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-sm">
                 <div>
-                  <p className="text-primary-foreground/80">Matric Number</p>
-                  <p className="font-medium">
+                  <p className="text-primary-foreground/80 text-xs font-medium uppercase tracking-wide">
+                    Matric Number
+                  </p>
+                  <p className="font-semibold text-lg">
                     {userData?.matricNumber || "N/A"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-primary-foreground/80">Department</p>
-                  <p className="font-medium">{userData?.department || "N/A"}</p>
+                  <p className="text-primary-foreground/80 text-xs font-medium uppercase tracking-wide">
+                    Department
+                  </p>
+                  <p className="font-semibold text-lg">
+                    {userData?.department || "N/A"}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-primary-foreground/80">Course</p>
-                  <p className="font-medium">{userData?.course || "N/A"}</p>
+                  <p className="text-primary-foreground/80 text-xs font-medium uppercase tracking-wide">
+                    Course
+                  </p>
+                  <p className="font-semibold text-lg">
+                    {userData?.course || "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-primary-foreground/80 text-xs font-medium uppercase tracking-wide">
+                    College
+                  </p>
+                  <p className="font-semibold text-lg">
+                    {userData?.college || "N/A"}
+                  </p>
                 </div>
               </div>
             </div>
-            <div className="mt-4 md:mt-0">
-              <div className="bg-white/20 rounded-lg px-4 py-2 text-sm">
-                <p className="text-primary-foreground/80">College</p>
-                <p className="font-medium">{userData?.college || "N/A"}</p>
+          </div>
+        </div>
+
+        {/* Main Dashboard Grid - Optimized for wide screens */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-8">
+          {/* Left Column - Stats Cards */}
+          <div className="xl:col-span-2">
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+              {/* Active Courses */}
+              <div className="bg-card border border-border rounded-2xl p-6 hover:border-primary transition-all duration-300 hover:shadow-lg">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-primary/10 rounded-xl">
+                    <BookOpen className="h-7 w-7 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-3xl font-bold text-foreground">
+                      {dashboardData?.activeCourses || 0}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Active Courses
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Pending Assignments */}
+              <div className="bg-card border border-border rounded-2xl p-6 hover:border-primary transition-all duration-300 hover:shadow-lg">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-primary/10 rounded-xl">
+                    <FileText className="h-7 w-7 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-3xl font-bold text-foreground">
+                      {dashboardData?.pendingAssignments || 0}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Pending Assignments
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Upcoming Deadlines */}
+              <div className="bg-card border border-border rounded-2xl p-6 hover:border-accent transition-all duration-300 hover:shadow-lg">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-accent/20 rounded-xl">
+                    <Calendar className="h-7 w-7 text-accent" />
+                  </div>
+                  <div>
+                    <p className="text-3xl font-bold text-foreground">
+                      {dashboardData?.upcomingDeadlines || 0}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Upcoming Deadlines
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Classmates */}
+              <div className="bg-card border border-border rounded-2xl p-6 hover:border-secondary transition-all duration-300 hover:shadow-lg">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-secondary/20 rounded-xl">
+                    <Users className="h-7 w-7 text-secondary" />
+                  </div>
+                  <div>
+                    <p className="text-3xl font-bold text-foreground">
+                      {dashboardData?.classmatesCount || 0}
+                    </p>
+                    <p className="text-sm text-muted-foreground">Classmates</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Activities - Wider on large screens */}
+            <div className="bg-card border border-border rounded-2xl p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-foreground">
+                  Recent Activities
+                </h3>
+                <a
+                  href="/activities"
+                  className="text-sm text-primary hover:underline font-medium"
+                >
+                  View All
+                </a>
+              </div>
+              <div className="space-y-4">
+                {dashboardData?.recentActivities &&
+                dashboardData.recentActivities.length > 0 ? (
+                  dashboardData.recentActivities.map((activity) => (
+                    <div
+                      key={activity.id}
+                      className="flex items-center gap-4 p-4 hover:bg-muted rounded-xl transition-colors"
+                    >
+                      {getActivityIcon(activity.icon, activity.color)}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-base font-medium text-foreground">
+                          {activity.title}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {activity.courseCode} - {activity.courseName}
+                        </p>
+                      </div>
+                      <div className="text-sm text-muted-foreground whitespace-nowrap">
+                        {getTimeAgo(activity.timestamp)}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-12">
+                    <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4 opacity-50" />
+                    <p className="text-muted-foreground text-lg">
+                      No recent activities
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Your recent activities will appear here
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column - Progress and Quick Actions */}
+          <div className="space-y-8">
+            {/* Academic Progress */}
+            <div className="bg-card border border-border rounded-2xl p-6">
+              <h3 className="text-xl font-semibold text-foreground mb-6">
+                Academic Progress
+              </h3>
+              <div className="space-y-6">
+                {/* Overall Progress */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-medium text-foreground">
+                      Overall Progress
+                    </span>
+                    <span className="text-sm font-bold text-primary">
+                      {progress?.averageProgress || 0}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-3">
+                    <div
+                      className="bg-primary h-3 rounded-full transition-all duration-500"
+                      style={{ width: `${progress?.averageProgress || 0}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {/* Courses Summary */}
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div className="p-3 bg-blue-50 rounded-lg">
+                    <p className="text-2xl font-bold text-blue-600">
+                      {progress?.totalCourses || 0}
+                    </p>
+                    <p className="text-xs text-blue-600 font-medium">Total</p>
+                  </div>
+                  <div className="p-3 bg-green-50 rounded-lg">
+                    <p className="text-2xl font-bold text-green-600">
+                      {progress?.completedCourses || 0}
+                    </p>
+                    <p className="text-xs text-green-600 font-medium">
+                      Completed
+                    </p>
+                  </div>
+                  <div className="p-3 bg-orange-50 rounded-lg">
+                    <p className="text-2xl font-bold text-orange-600">
+                      {progress?.inProgressCourses || 0}
+                    </p>
+                    <p className="text-xs text-orange-600 font-medium">
+                      In Progress
+                    </p>
+                  </div>
+                </div>
+
+                {/* Average Score */}
+                <div className="text-center p-4 bg-gradient-to-r from-primary/10 to-primary/5 rounded-xl">
+                  <Award className="h-8 w-8 text-primary mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">Average Score</p>
+                  <p className="text-2xl font-bold text-foreground">
+                    {progress?.averageScore
+                      ? progress.averageScore.toFixed(1)
+                      : "0.0"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="bg-card border border-border rounded-2xl p-6">
+              <h3 className="text-xl font-semibold text-foreground mb-6">
+                Quick Actions
+              </h3>
+              <div className="grid grid-cols-2 gap-4">
+                <a
+                  href="/assignments/upload"
+                  className="p-5 bg-primary/10 hover:bg-primary/20 rounded-xl transition-all duration-300 hover:scale-105 group text-center"
+                >
+                  <FileText className="h-7 w-7 text-primary mx-auto mb-3" />
+                  <p className="text-sm font-medium text-foreground">
+                    Upload Assignment
+                  </p>
+                </a>
+                <a
+                  href="/courses"
+                  className="p-5 bg-primary/10 hover:bg-primary/20 rounded-xl transition-all duration-300 hover:scale-105 group text-center"
+                >
+                  <BookOpen className="h-7 w-7 text-primary mx-auto mb-3" />
+                  <p className="text-sm font-medium text-foreground">
+                    View Courses
+                  </p>
+                </a>
+                <a
+                  href="/forum"
+                  className="p-5 bg-primary/10 hover:bg-primary/20 rounded-xl transition-all duration-300 hover:scale-105 group text-center"
+                >
+                  <Users className="h-7 w-7 text-primary mx-auto mb-3" />
+                  <p className="text-sm font-medium text-foreground">
+                    Class Forum
+                  </p>
+                </a>
+                <a
+                  href="/schedule"
+                  className="p-5 bg-primary/10 hover:bg-primary/20 rounded-xl transition-all duration-300 hover:scale-105 group text-center"
+                >
+                  <Calendar className="h-7 w-7 text-primary mx-auto mb-3" />
+                  <p className="text-sm font-medium text-foreground">
+                    Schedule
+                  </p>
+                </a>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-card border border-border rounded-xl p-4 hover:border-primary transition-all duration-300 hover:shadow-lg">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <BookOpen className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">5</p>
-                <p className="text-sm text-muted-foreground">Active Courses</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-card border border-border rounded-xl p-4 hover:border-primary transition-all duration-300 hover:shadow-lg">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <FileText className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">3</p>
-                <p className="text-sm text-muted-foreground">
-                  Pending Assignments
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-card border border-border rounded-xl p-4 hover:border-accent transition-all duration-300 hover:shadow-lg">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-accent/20 rounded-lg">
-                <Calendar className="h-5 w-5 text-accent" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">2</p>
-                <p className="text-sm text-muted-foreground">
-                  Upcoming Deadlines
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-card border border-border rounded-xl p-4 hover:border-secondary transition-all duration-300 hover:shadow-lg">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-secondary/20 rounded-lg">
-                <Users className="h-5 w-5 text-secondary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">45</p>
-                <p className="text-sm text-muted-foreground">Classmates</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Recent Activities */}
-          <div className="bg-card border border-border rounded-xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-foreground">
-                Recent Activities
+        {/* Additional Sections for Wide Screens */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          {/* Upcoming Deadlines */}
+          <div className="bg-card border border-border rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-foreground">
+                Upcoming Deadlines
               </h3>
               <a
-                href="/activities"
-                className="text-sm text-primary hover:underline"
+                href="/assignments"
+                className="text-sm text-primary hover:underline font-medium"
               >
                 View All
               </a>
             </div>
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 p-3 hover:bg-muted rounded-lg transition-colors">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <FileText size={16} className="text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    New assignment posted
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    PHY 301 - Quantum Mechanics • 2 hours ago
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 hover:bg-muted rounded-lg transition-colors">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <BookOpen size={16} className="text-green-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    Lecture notes updated
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    MAT 201 - Advanced Calculus • 5 hours ago
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 hover:bg-muted rounded-lg transition-colors">
-                <div className="p-2 bg-orange-100 rounded-lg">
-                  <Calendar size={16} className="text-orange-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    Class schedule changed
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    CHE 101 - General Chemistry • 1 day ago
-                  </p>
-                </div>
+            <div className="space-y-4">
+              <div className="text-center py-8">
+                <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                <p className="text-muted-foreground">No upcoming deadlines</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Your upcoming assignments will appear here
+                </p>
               </div>
             </div>
           </div>
 
-          {/* Quick Actions */}
-          <div className="bg-card border border-border rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-foreground mb-4">
-              Quick Actions
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <a
-                href="/assignments/upload"
-                className="p-4 bg-primary/10 hover:bg-primary/20 rounded-xl transition-all duration-300 hover:scale-105 group text-center"
-              >
-                <FileText className="h-6 w-6 text-primary mx-auto mb-2" />
-                <p className="text-sm font-medium text-foreground">
-                  Upload Assignment
+          {/* Performance Metrics */}
+          <div className="bg-card border border-border rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-foreground">
+                Performance Overview
+              </h3>
+              <BarChart3 className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div className="space-y-4">
+              <div className="text-center py-8">
+                <TrendingUp className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                <p className="text-muted-foreground">
+                  Performance data loading
                 </p>
-              </a>
-              <a
-                href="/courses"
-                className="p-4 bg-primary/10 hover:bg-primary/20 rounded-xl transition-all duration-300 hover:scale-105 group text-center"
-              >
-                <BookOpen className="h-6 w-6 text-primary mx-auto mb-2" />
-                <p className="text-sm font-medium text-foreground">
-                  View Courses
+                <p className="text-sm text-muted-foreground mt-1">
+                  Your academic performance metrics will appear here
                 </p>
-              </a>
-              <a
-                href="/forum"
-                className="p-4 bg-primary/10 hover:bg-primary/20 rounded-xl transition-all duration-300 hover:scale-105 group text-center"
-              >
-                <Users className="h-6 w-6 text-primary mx-auto mb-2" />
-                <p className="text-sm font-medium text-foreground">
-                  Class Forum
-                </p>
-              </a>
-              <a
-                href="/schedule"
-                className="p-4 bg-primary/10 hover:bg-primary/20 rounded-xl transition-all duration-300 hover:scale-105 group text-center"
-              >
-                <Calendar className="h-6 w-6 text-primary mx-auto mb-2" />
-                <p className="text-sm font-medium text-foreground">Schedule</p>
-              </a>
+              </div>
             </div>
           </div>
         </div>
