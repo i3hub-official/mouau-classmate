@@ -16,8 +16,8 @@ const envPaths = [
 
 envPaths.forEach(envPath => {
     if (fs.existsSync(envPath)) {
-        console.log(`Loading environment variables from: ${envPath}`);
-        dotenv.config({ path: envPath });
+        // console.log(`Loading environment variables from: ${envPath}`);
+         dotenv.config({ path: envPath });
     }
 });
 
