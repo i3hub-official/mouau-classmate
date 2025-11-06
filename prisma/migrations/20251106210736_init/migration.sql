@@ -11,13 +11,16 @@ CREATE TYPE "MaritalStatus" AS ENUM ('SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED')
 CREATE TYPE "Grade" AS ENUM ('A', 'B', 'C', 'D', 'E', 'F');
 
 -- CreateEnum
-CREATE TYPE "NotificationType" AS ENUM ('INFO', 'SUCCESS', 'WARNING', 'ERROR');
+CREATE TYPE "NotificationType" AS ENUM ('INFO', 'SUCCESS', 'WARNING', 'ERROR', 'SECURITY');
 
 -- CreateEnum
-CREATE TYPE "AuditAction" AS ENUM ('USER_REGISTERED', 'USER_LOGGED_IN', 'USER_LOGGED_OUT', 'EMAIL_VERIFIED', 'PROFILE_UPDATED', 'STUDENT_REGISTERED', 'ENROLLMENT_CREATED', 'ASSIGNMENT_SUBMITTED', 'PORTFOLIO_CREATED', 'COURSE_CREATED', 'ASSIGNMENT_CREATED', 'GRADE_ASSIGNED', 'PASSWORD_RESET_REQUESTED', 'PASSWORD_RESET');
+CREATE TYPE "AuditAction" AS ENUM ('USER_REGISTERED', 'USER_LOGGED_IN', 'USER_LOGGED_OUT', 'EMAIL_VERIFIED', 'PROFILE_UPDATED', 'STUDENT_REGISTERED', 'ENROLLMENT_CREATED', 'ASSIGNMENT_SUBMITTED', 'PORTFOLIO_CREATED', 'COURSE_CREATED', 'ASSIGNMENT_CREATED', 'GRADE_ASSIGNED', 'PASSWORD_RESET_REQUESTED', 'PASSWORD_RESET', 'SESSION_REFRESHED', 'SESSION_CLEANED_UP', 'SESSION_CREATED', 'SESSION_INVALIDATED', 'ALL_SESSIONS_INVALIDATED', 'NOTIFICATION_SENT', 'SYSTEM_CONFIG_UPDATED', 'SUSPICIOUS_ACTIVITY_DETECTED', 'RATE_LIMIT_EXCEEDED', 'DEVICE_FINGERPRINT_MISMATCH', 'RESEND_VERIFICATION_REQUESTED', 'USER_LOGIN_FAILED', 'EMAIL_VERIFICATION_FAILED', 'USER_LOGIN_ERROR');
 
 -- CreateEnum
-CREATE TYPE "ResourceType" AS ENUM ('USER', 'STUDENT', 'TEACHER', 'COURSE', 'LECTURE', 'ASSIGNMENT', 'ENROLLMENT', 'PORTFOLIO');
+CREATE TYPE "ResourceType" AS ENUM ('USER', 'STUDENT', 'TEACHER', 'COURSE', 'LECTURE', 'ASSIGNMENT', 'ENROLLMENT', 'PORTFOLIO', 'SESSION', 'NOTIFICATION');
+
+-- CreateEnum
+CREATE TYPE "SessionSecurityLevel" AS ENUM ('LOW', 'MEDIUM', 'HIGH');
 
 -- CreateTable
 CREATE TABLE "users" (
@@ -29,6 +32,11 @@ CREATE TABLE "users" (
     "role" "Role" NOT NULL DEFAULT 'STUDENT',
     "isActive" BOOLEAN NOT NULL DEFAULT false,
     "lastLoginAt" TIMESTAMP(3),
+    "loginCount" INTEGER NOT NULL DEFAULT 0,
+    "failedLoginAttempts" INTEGER NOT NULL DEFAULT 0,
+    "lastFailedLoginAt" TIMESTAMP(3),
+    "accountLocked" BOOLEAN NOT NULL DEFAULT false,
+    "lockedUntil" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "passwordHash" TEXT,
@@ -64,6 +72,12 @@ CREATE TABLE "sessions" (
     "expires" TIMESTAMP(3) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "deviceFingerprint" TEXT,
+    "userAgent" TEXT,
+    "ipAddress" TEXT,
+    "securityLevel" "SessionSecurityLevel" NOT NULL DEFAULT 'MEDIUM',
+    "lastAccessedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "refreshCount" INTEGER NOT NULL DEFAULT 0,
 
     CONSTRAINT "sessions_pkey" PRIMARY KEY ("id")
 );
@@ -73,7 +87,8 @@ CREATE TABLE "verification_tokens" (
     "identifier" TEXT NOT NULL,
     "token" TEXT NOT NULL,
     "expires" TIMESTAMP(3) NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "tokenId" TEXT
 );
 
 -- CreateTable
@@ -84,6 +99,8 @@ CREATE TABLE "password_reset_tokens" (
     "expires" TIMESTAMP(3) NOT NULL,
     "used" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "ipAddress" TEXT,
+    "userAgent" TEXT,
 
     CONSTRAINT "password_reset_tokens_pkey" PRIMARY KEY ("id")
 );
@@ -109,10 +126,14 @@ CREATE TABLE "students" (
     "maritalStatus" "MaritalStatus" DEFAULT 'SINGLE',
     "dateEnrolled" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "admissionYear" INTEGER,
+    "dateOfBirth" TIMESTAMP(3),
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     "emailSearchHash" TEXT,
     "phoneSearchHash" TEXT,
     "jambRegSearchHash" TEXT,
     "ninSearchHash" TEXT,
+    "lastActivityAt" TIMESTAMP(3),
     "userId" TEXT NOT NULL,
 
     CONSTRAINT "students_pkey" PRIMARY KEY ("id")
@@ -133,6 +154,7 @@ CREATE TABLE "teachers" (
     "specialization" TEXT,
     "dateJoined" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "lastActivityAt" TIMESTAMP(3),
     "userId" TEXT NOT NULL,
 
     CONSTRAINT "teachers_pkey" PRIMARY KEY ("id")
@@ -186,6 +208,7 @@ CREATE TABLE "enrollments" (
     "score" DOUBLE PRECISION,
     "progress" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "lastAccessedAt" TIMESTAMP(3),
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "enrollments_pkey" PRIMARY KEY ("id")
 );
@@ -268,6 +291,7 @@ CREATE TABLE "audit_logs" (
     "details" JSONB,
     "ipAddress" TEXT,
     "userAgent" TEXT,
+    "securityLevel" "SessionSecurityLevel",
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "audit_logs_pkey" PRIMARY KEY ("id")
@@ -284,6 +308,7 @@ CREATE TABLE "notifications" (
     "actionUrl" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "readAt" TIMESTAMP(3),
+    "priority" INTEGER NOT NULL DEFAULT 1,
 
     CONSTRAINT "notifications_pkey" PRIMARY KEY ("id")
 );
@@ -302,6 +327,64 @@ CREATE TABLE "system_configs" (
     CONSTRAINT "system_configs_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "metrics" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "value" DOUBLE PRECISION NOT NULL,
+    "tags" JSONB,
+    "timestamp" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "userId" TEXT,
+
+    CONSTRAINT "metrics_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "rate_limits" (
+    "id" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "count" INTEGER NOT NULL DEFAULT 1,
+    "windowStart" TIMESTAMP(3) NOT NULL,
+    "windowEnd" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "rate_limits_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "security_events" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT,
+    "eventType" TEXT NOT NULL,
+    "severity" TEXT NOT NULL DEFAULT 'medium',
+    "description" TEXT NOT NULL,
+    "ipAddress" TEXT,
+    "userAgent" TEXT,
+    "metadata" JSONB,
+    "resolved" BOOLEAN NOT NULL DEFAULT false,
+    "resolvedAt" TIMESTAMP(3),
+    "resolvedBy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "security_events_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "user_activities" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "action" TEXT NOT NULL,
+    "resourceType" TEXT,
+    "resourceId" TEXT,
+    "details" JSONB,
+    "ipAddress" TEXT,
+    "userAgent" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "user_activities_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 
@@ -313,6 +396,12 @@ CREATE INDEX "users_role_idx" ON "users"("role");
 
 -- CreateIndex
 CREATE INDEX "users_createdAt_idx" ON "users"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "users_isActive_idx" ON "users"("isActive");
+
+-- CreateIndex
+CREATE INDEX "users_accountLocked_idx" ON "users"("accountLocked");
 
 -- CreateIndex
 CREATE INDEX "accounts_userId_idx" ON "accounts"("userId");
@@ -330,13 +419,34 @@ CREATE INDEX "sessions_userId_idx" ON "sessions"("userId");
 CREATE INDEX "sessions_sessionToken_idx" ON "sessions"("sessionToken");
 
 -- CreateIndex
+CREATE INDEX "sessions_expires_idx" ON "sessions"("expires");
+
+-- CreateIndex
+CREATE INDEX "sessions_deviceFingerprint_idx" ON "sessions"("deviceFingerprint");
+
+-- CreateIndex
+CREATE INDEX "sessions_securityLevel_idx" ON "sessions"("securityLevel");
+
+-- CreateIndex
+CREATE INDEX "sessions_createdAt_idx" ON "sessions"("createdAt");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "verification_tokens_token_key" ON "verification_tokens"("token");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "verification_tokens_token_id_key" ON "verification_tokens"("tokenId");
 
 -- CreateIndex
 CREATE INDEX "verification_tokens_token_idx" ON "verification_tokens"("token");
 
 -- CreateIndex
+CREATE INDEX "verification_tokens_tokenId_idx" ON "verification_tokens"("tokenId");
+
+-- CreateIndex
 CREATE INDEX "verification_tokens_expires_idx" ON "verification_tokens"("expires");
+
+-- CreateIndex
+CREATE INDEX "verification_tokens_createdAt_idx" ON "verification_tokens"("createdAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "verification_tokens_identifier_token_key" ON "verification_tokens"("identifier", "token");
@@ -352,6 +462,9 @@ CREATE INDEX "password_reset_tokens_userId_idx" ON "password_reset_tokens"("user
 
 -- CreateIndex
 CREATE INDEX "password_reset_tokens_expires_idx" ON "password_reset_tokens"("expires");
+
+-- CreateIndex
+CREATE INDEX "password_reset_tokens_used_idx" ON "password_reset_tokens"("used");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "students_matric_number_key" ON "students"("matricNumber");
@@ -402,6 +515,9 @@ CREATE INDEX "students_college_idx" ON "students"("college");
 CREATE INDEX "students_dateEnrolled_idx" ON "students"("dateEnrolled");
 
 -- CreateIndex
+CREATE INDEX "students_lastActivityAt_idx" ON "students"("lastActivityAt");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "students_user_id_key" ON "students"("userId");
 
 -- CreateIndex
@@ -430,6 +546,9 @@ CREATE INDEX "teachers_phone_idx" ON "teachers"("phone");
 
 -- CreateIndex
 CREATE INDEX "teachers_department_idx" ON "teachers"("department");
+
+-- CreateIndex
+CREATE INDEX "teachers_lastActivityAt_idx" ON "teachers"("lastActivityAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "teachers_user_id_key" ON "teachers"("userId");
@@ -537,6 +656,9 @@ CREATE INDEX "audit_logs_resourceType_resourceId_idx" ON "audit_logs"("resourceT
 CREATE INDEX "audit_logs_createdAt_idx" ON "audit_logs"("createdAt");
 
 -- CreateIndex
+CREATE INDEX "audit_logs_securityLevel_idx" ON "audit_logs"("securityLevel");
+
+-- CreateIndex
 CREATE INDEX "notifications_userId_idx" ON "notifications"("userId");
 
 -- CreateIndex
@@ -549,6 +671,9 @@ CREATE INDEX "notifications_createdAt_idx" ON "notifications"("createdAt");
 CREATE INDEX "notifications_type_idx" ON "notifications"("type");
 
 -- CreateIndex
+CREATE INDEX "notifications_priority_idx" ON "notifications"("priority");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "system_configs_key_key" ON "system_configs"("key");
 
 -- CreateIndex
@@ -556,6 +681,54 @@ CREATE INDEX "system_configs_key_idx" ON "system_configs"("key");
 
 -- CreateIndex
 CREATE INDEX "system_configs_category_idx" ON "system_configs"("category");
+
+-- CreateIndex
+CREATE INDEX "metrics_name_idx" ON "metrics"("name");
+
+-- CreateIndex
+CREATE INDEX "metrics_timestamp_idx" ON "metrics"("timestamp");
+
+-- CreateIndex
+CREATE INDEX "metrics_userId_idx" ON "metrics"("userId");
+
+-- CreateIndex
+CREATE INDEX "rate_limits_key_idx" ON "rate_limits"("key");
+
+-- CreateIndex
+CREATE INDEX "rate_limits_windowStart_idx" ON "rate_limits"("windowStart");
+
+-- CreateIndex
+CREATE INDEX "rate_limits_windowEnd_idx" ON "rate_limits"("windowEnd");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "rate_limits_key_window_start_key" ON "rate_limits"("key", "windowStart");
+
+-- CreateIndex
+CREATE INDEX "security_events_userId_idx" ON "security_events"("userId");
+
+-- CreateIndex
+CREATE INDEX "security_events_eventType_idx" ON "security_events"("eventType");
+
+-- CreateIndex
+CREATE INDEX "security_events_severity_idx" ON "security_events"("severity");
+
+-- CreateIndex
+CREATE INDEX "security_events_createdAt_idx" ON "security_events"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "security_events_resolved_idx" ON "security_events"("resolved");
+
+-- CreateIndex
+CREATE INDEX "user_activities_userId_idx" ON "user_activities"("userId");
+
+-- CreateIndex
+CREATE INDEX "user_activities_action_idx" ON "user_activities"("action");
+
+-- CreateIndex
+CREATE INDEX "user_activities_resourceType_resourceId_idx" ON "user_activities"("resourceType", "resourceId");
+
+-- CreateIndex
+CREATE INDEX "user_activities_createdAt_idx" ON "user_activities"("createdAt");
 
 -- AddForeignKey
 ALTER TABLE "accounts" ADD CONSTRAINT "accounts_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -616,3 +789,12 @@ ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_userId_fkey" FOREIGN KEY ("u
 
 -- AddForeignKey
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "metrics" ADD CONSTRAINT "metrics_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "security_events" ADD CONSTRAINT "security_events_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "user_activities" ADD CONSTRAINT "user_activities_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;

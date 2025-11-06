@@ -259,6 +259,9 @@ model Student {
   maritalStatus MaritalStatus? @default(SINGLE)
   dateEnrolled  DateTime       @default(now())
   isActive      Boolean        @default(true)
+  admissionYear Int?
+  dateOfBirth   DateTime?
+  updatedAt     DateTime       @updatedAt
 
   // Search hashes for encrypted field queries
   emailSearchHash   String? @unique(map: "students_email_search_hash_key")
@@ -402,6 +405,7 @@ model Enrollment {
   score          Float?
   progress       Float     @default(0)
   lastAccessedAt DateTime?
+  updatedAt      DateTime  @updatedAt
 
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
