@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { UserServiceServer } from "@/lib/services/userService.server";
+import PDFDocument from "pdfkit";
+import { format } from "date-fns";
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,7 +18,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const requestedStudentId = searchParams.get("studentId");
-    const format = searchParams.get("format") || "json";
+    const formatType = searchParams.get("format") || "json";
 
     // Get the correct student ID using the centralized service
     const correctStudentId = await UserServiceServer.getCorrectStudentId(
@@ -75,7 +77,7 @@ export async function GET(request: NextRequest) {
 
     // Calculate GPA and other statistics using consistent grading scale
     const gradePoints: Record<string, number> = {
-      A: 5.0, // Consistent with performance route
+      A: 5.0,
       B: 4.0,
       C: 3.0,
       D: 2.0,
@@ -136,7 +138,7 @@ export async function GET(request: NextRequest) {
       },
       academicSummary: {
         gpa: gpa.toFixed(2),
-        cgpa: gpa.toFixed(2), // Assuming same as GPA for simplicity
+        cgpa: gpa.toFixed(2),
         totalCredits,
         completedCredits,
         totalCourses: enrollments.length,
@@ -155,25 +157,24 @@ export async function GET(request: NextRequest) {
       generatedAt: new Date().toISOString(),
     };
 
-    // For now, return as JSON
-    // In production, you would generate actual PDF/Excel here
-    const filename = `transcript_${student.matricNumber}.${
-      format === "json" ? "json" : "json"
-    }`;
+    if (formatType === "pdf") {
+      // Generate PDF
+      const pdfBuffer = await generatePDF(transcriptData);
 
-    if (format === "pdf") {
-      // Generate PDF using a library like pdfkit or puppeteer
-      return NextResponse.json(transcriptData, {
+      return new NextResponse(pdfBuffer, {
+        status: 200,
         headers: {
-          "Content-Disposition": `attachment; filename="${filename}"`,
-          "Content-Type": "application/json",
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="transcript_${student.matricNumber}.pdf"`,
+          "Content-Length": pdfBuffer.length.toString(),
         },
       });
-    } else if (format === "excel") {
-      // Generate Excel using a library like exceljs
+    } else if (formatType === "excel") {
+      // For now, return JSON for Excel format
+      // You can implement Excel generation later using exceljs
       return NextResponse.json(transcriptData, {
         headers: {
-          "Content-Disposition": `attachment; filename="${filename}"`,
+          "Content-Disposition": `attachment; filename="transcript_${student.matricNumber}.json"`,
           "Content-Type": "application/json",
         },
       });
@@ -181,7 +182,7 @@ export async function GET(request: NextRequest) {
       // Return JSON by default
       return NextResponse.json(transcriptData, {
         headers: {
-          "Content-Disposition": `attachment; filename="${filename}"`,
+          "Content-Disposition": `attachment; filename="transcript_${student.matricNumber}.json"`,
           "Content-Type": "application/json",
         },
       });
@@ -193,6 +194,195 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+async function generatePDF(transcriptData: any): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ margin: 50 });
+      const buffers: Buffer[] = [];
+
+      doc.on("data", buffers.push.bind(buffers));
+      doc.on("end", () => {
+        const pdfData = Buffer.concat(buffers);
+        resolve(pdfData);
+      });
+
+      // Header
+      doc
+        .fontSize(16)
+        .font("Helvetica-Bold")
+        .text(transcriptData.institution.name, { align: "center" })
+        .moveDown(0.5);
+
+      doc
+        .fontSize(12)
+        .font("Helvetica")
+        .text(transcriptData.institution.address, { align: "center" })
+        .text(`Website: ${transcriptData.institution.website}`, {
+          align: "center",
+        })
+        .moveDown(1);
+
+      // Title
+      doc
+        .fontSize(14)
+        .font("Helvetica-Bold")
+        .text("OFFICIAL ACADEMIC TRANSCRIPT", { align: "center" })
+        .moveDown(1);
+
+      // Student Information
+      doc
+        .fontSize(10)
+        .font("Helvetica-Bold")
+        .text("STUDENT INFORMATION:")
+        .moveDown(0.3);
+
+      doc
+        .font("Helvetica")
+        .text(`Full Name: ${transcriptData.student.name}`)
+        .text(`Matriculation Number: ${transcriptData.student.matricNumber}`)
+        .text(`Department: ${transcriptData.student.department}`)
+        .text(`College: ${transcriptData.student.college}`)
+        .text(`Program: ${transcriptData.student.course}`)
+        .text(
+          `Date of Birth: ${format(
+            new Date(transcriptData.student.dateOfBirth),
+            "dd/MM/yyyy"
+          )}`
+        )
+        .text(`Admission Year: ${transcriptData.student.admissionYear}`)
+        .moveDown(1);
+
+      // Academic Summary
+      doc.font("Helvetica-Bold").text("ACADEMIC SUMMARY:").moveDown(0.3);
+
+      doc
+        .font("Helvetica")
+        .text(`Current GPA: ${transcriptData.academicSummary.gpa}`)
+        .text(`CGPA: ${transcriptData.academicSummary.cgpa}`)
+        .text(`Total Credits: ${transcriptData.academicSummary.totalCredits}`)
+        .text(
+          `Completed Credits: ${transcriptData.academicSummary.completedCredits}`
+        )
+        .text(`Total Courses: ${transcriptData.academicSummary.totalCourses}`)
+        .text(
+          `Completed Courses: ${transcriptData.academicSummary.completedCourses}`
+        )
+        .text(`Current Level: ${transcriptData.academicSummary.currentLevel}`)
+        .moveDown(1);
+
+      // Course Details Table Header
+      doc
+        .font("Helvetica-Bold")
+        .text("COURSE DETAILS:", 50, doc.y)
+        .moveDown(0.5);
+
+      // Table Headers
+      const tableTop = doc.y;
+      const headers = [
+        "Code",
+        "Title",
+        "Credits",
+        "Semester",
+        "Level",
+        "Grade",
+        "Instructor",
+        "Status",
+      ];
+      const columnWidths = [60, 150, 40, 60, 40, 40, 100, 60];
+
+      let xPosition = 50;
+      headers.forEach((header, i) => {
+        doc
+          .fontSize(8)
+          .font("Helvetica-Bold")
+          .text(header, xPosition, tableTop, {
+            width: columnWidths[i],
+            align: "left",
+          });
+        xPosition += columnWidths[i];
+      });
+
+      doc.moveDown(0.3);
+
+      // Course Rows
+      let yPosition = doc.y;
+      transcriptData.courses.forEach((course: any, index: number) => {
+        if (yPosition > 700) {
+          // Add new page if needed
+          doc.addPage();
+          yPosition = 50;
+        }
+
+        xPosition = 50;
+        const rowData = [
+          course.code,
+          course.title,
+          course.credits.toString(),
+          course.semester,
+          course.level,
+          course.grade || "-",
+          course.instructor,
+          course.status,
+        ];
+
+        rowData.forEach((data, i) => {
+          doc
+            .fontSize(8)
+            .font("Helvetica")
+            .text(data || "-", xPosition, yPosition, {
+              width: columnWidths[i],
+              align: "left",
+              lineBreak: false,
+            });
+          xPosition += columnWidths[i];
+        });
+
+        yPosition += 20;
+
+        // Draw line between rows
+        doc
+          .moveTo(50, yPosition - 5)
+          .lineTo(50 + columnWidths.reduce((a, b) => a + b, 0), yPosition - 5)
+          .strokeOpacity(0.2)
+          .stroke();
+      });
+
+      doc.y = yPosition + 10;
+
+      // Grading System
+      doc.font("Helvetica-Bold").text("GRADING SYSTEM:").moveDown(0.3);
+
+      doc
+        .font("Helvetica")
+        .text(`A: ${transcriptData.gradingSystem.A}`)
+        .text(`B: ${transcriptData.gradingSystem.B}`)
+        .text(`C: ${transcriptData.gradingSystem.C}`)
+        .text(`D: ${transcriptData.gradingSystem.D}`)
+        .text(`E: ${transcriptData.gradingSystem.E}`)
+        .text(`F: ${transcriptData.gradingSystem.F}`)
+        .moveDown(1);
+
+      // Footer
+      doc
+        .fontSize(8)
+        .text(
+          `Generated on: ${format(
+            new Date(transcriptData.generatedAt),
+            "dd/MM/yyyy HH:mm"
+          )}`,
+          { align: "center" }
+        )
+        .text("This is an official document issued by the University.", {
+          align: "center",
+        });
+
+      doc.end();
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 
 function getCurrentLevel(enrollments: any[]): string {
