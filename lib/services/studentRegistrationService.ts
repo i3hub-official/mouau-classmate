@@ -285,7 +285,7 @@ export class StudentRegistrationService {
   /**
    * Load and decrypt existing student data from database record.
    */
-  private static async loadStudentData(
+  public static async loadStudentData(
     identifier: string
   ): Promise<StudentVerificationData | null> {
     try {
