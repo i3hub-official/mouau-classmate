@@ -8,28 +8,31 @@ export async function GET(request: NextRequest) {
     const currentUser = await UserServiceServer.getCurrentUserFromSession();
 
     if (!currentUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const studentId = searchParams.get("studentId");
-    const format = searchParams.get("format") || "json";
-
-    if (!studentId) {
       return NextResponse.json(
-        { error: "Student ID is required" },
-        { status: 400 }
+        { error: "Unauthorized - Please sign in" },
+        { status: 401 }
       );
     }
 
-    const hasAccess = await UserServiceServer.verifyStudentAccess(studentId);
-    if (!hasAccess) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const { searchParams } = new URL(request.url);
+    const requestedStudentId = searchParams.get("studentId");
+    const format = searchParams.get("format") || "json";
+
+    // Get the correct student ID using the centralized service
+    const correctStudentId = await UserServiceServer.getCorrectStudentId(
+      requestedStudentId || undefined
+    );
+
+    if (!correctStudentId) {
+      return NextResponse.json(
+        { error: "Student profile not found" },
+        { status: 404 }
+      );
     }
 
     // Get student details
     const student = await prisma.student.findUnique({
-      where: { id: studentId },
+      where: { id: correctStudentId },
       select: {
         userId: true,
         firstName: true,
@@ -49,7 +52,7 @@ export async function GET(request: NextRequest) {
 
     // Get all enrollments with grades
     const enrollments = await prisma.enrollment.findMany({
-      where: { studentId },
+      where: { studentId: correctStudentId },
       include: {
         course: {
           include: {
@@ -70,13 +73,13 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Calculate GPA and other statistics
+    // Calculate GPA and other statistics using consistent grading scale
     const gradePoints: Record<string, number> = {
-      A: 4.0,
-      B: 3.0,
-      C: 2.0,
-      D: 1.0,
-      E: 0.5,
+      A: 5.0, // Consistent with performance route
+      B: 4.0,
+      C: 3.0,
+      D: 2.0,
+      E: 1.0,
       F: 0.0,
     };
 
@@ -142,11 +145,11 @@ export async function GET(request: NextRequest) {
       },
       courses: courseDetails,
       gradingSystem: {
-        A: "4.00 - 5.00 (Excellent)",
-        B: "3.00 - 3.99 (Very Good)",
-        C: "2.00 - 2.99 (Good)",
-        D: "1.00 - 1.99 (Pass)",
-        E: "0.50 - 0.99 (Poor)",
+        A: "4.50 - 5.00 (Excellent)",
+        B: "3.50 - 4.49 (Very Good)",
+        C: "2.50 - 3.49 (Good)",
+        D: "1.50 - 2.49 (Pass)",
+        E: "1.00 - 1.49 (Poor)",
         F: "0.00 (Fail)",
       },
       generatedAt: new Date().toISOString(),
@@ -154,11 +157,15 @@ export async function GET(request: NextRequest) {
 
     // For now, return as JSON
     // In production, you would generate actual PDF/Excel here
+    const filename = `transcript_${student.matricNumber}.${
+      format === "json" ? "json" : "json"
+    }`;
+
     if (format === "pdf") {
       // Generate PDF using a library like pdfkit or puppeteer
       return NextResponse.json(transcriptData, {
         headers: {
-          "Content-Disposition": `attachment; filename="transcript_${student.matricNumber}.json"`,
+          "Content-Disposition": `attachment; filename="${filename}"`,
           "Content-Type": "application/json",
         },
       });
@@ -166,7 +173,7 @@ export async function GET(request: NextRequest) {
       // Generate Excel using a library like exceljs
       return NextResponse.json(transcriptData, {
         headers: {
-          "Content-Disposition": `attachment; filename="transcript_${student.matricNumber}.json"`,
+          "Content-Disposition": `attachment; filename="${filename}"`,
           "Content-Type": "application/json",
         },
       });
@@ -174,7 +181,7 @@ export async function GET(request: NextRequest) {
       // Return JSON by default
       return NextResponse.json(transcriptData, {
         headers: {
-          "Content-Disposition": `attachment; filename="transcript_${student.matricNumber}.json"`,
+          "Content-Disposition": `attachment; filename="${filename}"`,
           "Content-Type": "application/json",
         },
       });

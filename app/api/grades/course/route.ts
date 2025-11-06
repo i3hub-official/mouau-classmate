@@ -7,30 +7,34 @@ import { Grade } from "@prisma/client";
 export async function GET(request: NextRequest) {
   try {
     const currentUser = await UserServiceServer.getCurrentUserFromSession();
-    
+
     if (!currentUser) {
       return NextResponse.json(
-        { error: "Unauthorized" },
+        { error: "Unauthorized - Please sign in" },
         { status: 401 }
       );
     }
 
     const { searchParams } = new URL(request.url);
-    const studentId = searchParams.get("studentId");
+    const requestedStudentId = searchParams.get("studentId");
     const courseId = searchParams.get("courseId");
 
-    if (!studentId || !courseId) {
+    if (!courseId) {
       return NextResponse.json(
-        { error: "Student ID and Course ID are required" },
+        { error: "Course ID is required" },
         { status: 400 }
       );
     }
 
-    const hasAccess = await UserServiceServer.verifyStudentAccess(studentId);
-    if (!hasAccess) {
+    // Get the correct student ID using the centralized service
+    const correctStudentId = await UserServiceServer.getCorrectStudentId(
+      requestedStudentId || undefined
+    );
+
+    if (!correctStudentId) {
       return NextResponse.json(
-        { error: "Forbidden" },
-        { status: 403 }
+        { error: "Student profile not found" },
+        { status: 404 }
       );
     }
 
@@ -38,7 +42,7 @@ export async function GET(request: NextRequest) {
     const enrollment = await prisma.enrollment.findUnique({
       where: {
         studentId_courseId: {
-          studentId,
+          studentId: correctStudentId,
           courseId,
         },
       },
@@ -49,7 +53,7 @@ export async function GET(request: NextRequest) {
               where: { isPublished: true },
               include: {
                 submissions: {
-                  where: { studentId },
+                  where: { studentId: correctStudentId },
                   orderBy: { submittedAt: "desc" },
                   take: 1,
                 },
@@ -70,13 +74,14 @@ export async function GET(request: NextRequest) {
     // Calculate assignment grades
     const assignments = enrollment.course.assignments.map((assignment) => {
       const submission = assignment.submissions[0] || null;
-      const percentage = submission?.isGraded && submission?.score
-        ? (submission.score / assignment.maxScore) * 100
-        : 0;
+      const percentage =
+        submission?.isGraded && submission?.score
+          ? (submission.score / assignment.maxScore) * 100
+          : 0;
 
-      const status = submission 
-        ? submission.isGraded 
-          ? "graded" 
+      const status = submission
+        ? submission.isGraded
+          ? "graded"
           : "submitted"
         : assignment.dueDate < new Date()
         ? "overdue"
@@ -116,9 +121,10 @@ export async function GET(request: NextRequest) {
 
     // Calculate assignment completion rate
     const submittedAssignments = assignments.filter((a) => a.submission);
-    const completionRate = assignments.length > 0
-      ? (submittedAssignments.length / assignments.length) * 100
-      : 0;
+    const completionRate =
+      assignments.length > 0
+        ? (submittedAssignments.length / assignments.length) * 100
+        : 0;
 
     const courseGrade = {
       course: {
@@ -139,14 +145,19 @@ export async function GET(request: NextRequest) {
         score: enrollment.score,
       },
       assignments,
-      overallGrade: enrollment.grade || getGradeFromPercentage(overallPercentage),
+      overallGrade:
+        enrollment.grade || getGradeFromPercentage(overallPercentage),
       overallPercentage: Math.round(overallPercentage * 100) / 100,
       completedAssignments: gradedAssignments.length,
       totalAssignments: assignments.length,
       completionRate: Math.round(completionRate),
-      averageScore: gradedAssignments.length > 0
-        ? Math.round(gradedAssignments.reduce((sum, a) => sum + a.percentage, 0) / gradedAssignments.length)
-        : 0,
+      averageScore:
+        gradedAssignments.length > 0
+          ? Math.round(
+              gradedAssignments.reduce((sum, a) => sum + a.percentage, 0) /
+                gradedAssignments.length
+            )
+          : 0,
     };
 
     return NextResponse.json(courseGrade);
