@@ -14,23 +14,22 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/app/components/theme-toggle";
 import { SignOutModal } from "@/app/components/SignOutModal";
+import { UserService } from "@/lib/services/userService";
 
 interface DashboardHeaderProps {
-  userData?: {
-    name?: string;
-    matricNumber?: string;
-    department?: string;
-    email?: string;
-  };
   onSignOut?: () => void;
-  loading?: boolean;
 }
 
-export function DashboardHeader({
-  userData,
-  onSignOut,
-  loading,
-}: DashboardHeaderProps) {
+interface HeaderUserData {
+  name?: string;
+  matricNumber?: string;
+  department?: string;
+  email?: string;
+}
+
+export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
+  const [userData, setUserData] = useState<HeaderUserData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
@@ -47,6 +46,23 @@ export function DashboardHeader({
 
   const tagline = "Your Academic Partner";
 
+  useEffect(() => {
+    fetchUserData();
+  }, []);
+
+  const fetchUserData = async () => {
+    try {
+      setLoading(true);
+      const userData = await UserService.getHeaderUserData();
+      setUserData(userData);
+    } catch (error) {
+      console.error("Error fetching user data for header:", error);
+      setUserData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Check if a nav item is active
   const isActive = (href: string) => {
     if (href === "/dashboard") {
@@ -62,7 +78,7 @@ export function DashboardHeader({
 
   const handleSignOut = async () => {
     try {
-      const response = await fetch("/signout", {
+      const response = await fetch("/api/auth/signout", {
         method: "POST",
         credentials: "include",
       });
@@ -155,18 +171,22 @@ export function DashboardHeader({
                             <div className="animate-pulse h-3 w-40 bg-muted rounded mb-1"></div>
                             <div className="animate-pulse h-3 w-48 bg-muted rounded"></div>
                           </>
-                        ) : (
+                        ) : userData ? (
                           <>
                             <p className="text-sm font-medium text-foreground">
-                              {userData?.name || "Student"}
+                              {userData.name || "Student"}
                             </p>
                             <p className="text-sm text-muted-foreground">
-                              {userData?.email}
+                              {userData.email}
                             </p>
                             <p className="text-xs text-muted-foreground mt-1">
-                              {userData?.matricNumber} • {userData?.department}
+                              {userData.matricNumber} • {userData.department}
                             </p>
                           </>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            Not signed in
+                          </p>
                         )}
                       </div>
                       <a
@@ -200,6 +220,9 @@ export function DashboardHeader({
 
             {/* Mobile Navigation */}
             <div className="flex items-center gap-2 md:hidden">
+              {/* Mobile User Info */}
+             
+
               <ThemeToggle />
               <button
                 className="p-2 hover:bg-muted rounded-lg transition-colors"
@@ -244,18 +267,22 @@ export function DashboardHeader({
                           <div className="animate-pulse h-3 w-20 bg-muted rounded mb-1"></div>
                           <div className="animate-pulse h-3 w-28 bg-muted rounded"></div>
                         </>
-                      ) : (
+                      ) : userData ? (
                         <>
                           <p className="text-sm font-medium text-foreground">
-                            {userData?.name || "Student"}
+                            {userData.name || "Student"}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {userData?.matricNumber}
+                            {userData.matricNumber}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {userData?.department}
+                            {userData.department}
                           </p>
                         </>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Not signed in
+                        </p>
                       )}
                     </div>
                   </div>

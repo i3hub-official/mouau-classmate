@@ -50,7 +50,7 @@ export function useAuth() {
   }, []);
 
   const signOut = useCallback(async () => {
-    await fetch("/api/auth/signout", { method: "POST" });
+    await fetch("/auth/signout", { method: "POST" });
     setUser(null);
     router.push("/auth/signin");
   }, [router]);

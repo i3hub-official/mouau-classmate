@@ -1,4 +1,4 @@
-// app/auth/signout/route.ts
+// app/signout/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 

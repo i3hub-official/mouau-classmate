@@ -18,7 +18,7 @@ import {
   GradeService,
   GradeSummary,
   PerformanceMetric,
-} from "@/lib/services/gradeServices";
+} from "@/lib/services/gradeService";
 import { Grade } from "@prisma/client";
 
 interface UserData {
@@ -163,7 +163,7 @@ export default function GradesPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <DashboardHeader userData={userData ?? undefined} />
+        <DashboardHeader />
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         </div>
@@ -173,7 +173,7 @@ export default function GradesPage() {
 
   return (
     <div className="min-h-screen bg-background">
-     <DashboardHeader userData={userData ?? undefined} />
+      <DashboardHeader />
 
       {/* Main Content */}
       <main className="w-full px-6 xl:px-8 py-8">

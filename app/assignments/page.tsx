@@ -19,7 +19,7 @@ import {
 import {
   AssignmentService,
   AssignmentWithRelations,
-} from "@/lib/services/assignmentServices";
+} from "@/lib/services/assignmentService";
 
 interface UserData {
   name?: string;
@@ -46,7 +46,7 @@ export default function AssignmentsPage() {
     overdue: 0,
   });
   const [courses, setCourses] = useState<string[]>([]);
-
+  const [showSignOutModal, setShowSignOutModal] = useState(false);
   useEffect(() => {
     fetchAssignments();
     fetchUserData();
@@ -260,7 +260,7 @@ export default function AssignmentsPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <DashboardHeader userData={userData ?? undefined} />
+        <DashboardHeader onSignOut={() => setShowSignOutModal(true)} />
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         </div>
@@ -270,7 +270,7 @@ export default function AssignmentsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <DashboardHeader userData={userData ?? undefined} />
+      <DashboardHeader onSignOut={() => setShowSignOutModal(true)} />
 
       {/* Overlay during sign out */}
       {signingOut && (

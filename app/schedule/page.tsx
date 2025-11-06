@@ -18,7 +18,7 @@ import {
   ScheduleService,
   ScheduleItem,
   DailySchedule,
-} from "@/lib/services/scheduleServices";
+} from "@/lib/services/scheduleService";
 
 interface UserData {
   name?: string;
@@ -174,7 +174,7 @@ export default function SchedulePage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <DashboardHeader userData={userData ?? undefined} />
+        <DashboardHeader />
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         </div>
@@ -184,7 +184,7 @@ export default function SchedulePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <DashboardHeader userData={userData ?? undefined} />
+      <DashboardHeader />
 
       {/* Main Content */}
       <main className="w-full px-6 xl:px-8 py-8">

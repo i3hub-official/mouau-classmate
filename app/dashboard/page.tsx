@@ -143,10 +143,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <DashboardHeader
-          userData={dashboardData?.userInfo}
-          onSignOut={() => setShowSignOutModal(true)}
-        />
+        <DashboardHeader onSignOut={() => setShowSignOutModal(true)} />
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         </div>
@@ -159,10 +156,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Use DashboardHeader component - properly integrated */}
-      <DashboardHeader
-        userData={userData}
-        onSignOut={() => setShowSignOutModal(true)}
-      />
+      <DashboardHeader onSignOut={() => setShowSignOutModal(true)} />
 
       {/* Dashboard Content */}
       <main className="w-full px-6 xl:px-8 py-8 space-y-8">
