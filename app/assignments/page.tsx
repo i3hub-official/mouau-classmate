@@ -429,11 +429,6 @@ export default function AssignmentsPage() {
             </h1>
             <p className="text-lg text-muted-foreground">
               Manage and track your academic assignments
-              {userData && (
-                <span className="text-sm block mt-1">
-                  Welcome back, {userData.name} • {userData.matricNumber}
-                </span>
-              )}
             </p>
           </div>
           <div className="flex items-center gap-3 mt-4 lg:mt-0">
@@ -703,7 +698,7 @@ export default function AssignmentsPage() {
                           {isGraded && score !== null && (
                             <p className="text-sm text-green-600 font-medium mt-1">
                               Grade: {score}/{assignment.maxScore} (
-                              {Math.round((score / assignment.maxScore) * 100)}
+                              {Math.round(((score ?? 0) / assignment.maxScore) * 100)}
                               %)
                             </p>
                           )}
