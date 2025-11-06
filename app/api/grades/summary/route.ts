@@ -6,32 +6,35 @@ import { Grade } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
   try {
-    // Check authentication using Server-side UserService
+    console.log('🔍 Starting grade summary request');
     const currentUser = await UserServiceServer.getCurrentUserFromSession();
-
+    
     if (!currentUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const studentId = searchParams.get("studentId");
-
-    if (!studentId) {
+      console.log('❌ Unauthorized access attempt');
       return NextResponse.json(
-        { error: "Student ID is required" },
-        { status: 400 }
+        { error: "Unauthorized - Please sign in" },
+        { status: 401 }
       );
     }
 
-    // Verify the user has access to this student's data using Server-side UserService
-    const hasAccess = await UserServiceServer.verifyStudentAccess(studentId);
-    if (!hasAccess) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const { searchParams } = new URL(request.url);
+    const requestedId = searchParams.get("studentId");
+
+    // Get the correct student ID
+    const correctStudentId = await UserServiceServer.getCorrectStudentId(requestedId || undefined);
+    
+    if (!correctStudentId) {
+      return NextResponse.json(
+        { error: "Student profile not found" },
+        { status: 404 }
+      );
     }
+
+    console.log('📊 Fetching grade summary for student:', correctStudentId);
 
     // Get all enrollments with course and assignment data
     const enrollments = await prisma.enrollment.findMany({
-      where: { studentId },
+      where: { studentId: correctStudentId },
       include: {
         course: {
           include: {
@@ -39,7 +42,7 @@ export async function GET(request: NextRequest) {
               where: { isPublished: true },
               include: {
                 submissions: {
-                  where: { studentId },
+                  where: { studentId: correctStudentId },
                   orderBy: { submittedAt: "desc" },
                   take: 1,
                 },
@@ -146,6 +149,7 @@ export async function GET(request: NextRequest) {
       earnedCredits,
     };
 
+    console.log("✅ Grade summary calculated");
     return NextResponse.json(summary);
   } catch (error) {
     console.error("Error fetching grade summary:", error);
@@ -174,7 +178,7 @@ function calculateGPA(courseGrades: any[]): number {
     C: 3.0,
     D: 2.0,
     E: 1.0,
-    F: 0.5,
+    F: 0.0,
   };
 
   let totalPoints = 0;

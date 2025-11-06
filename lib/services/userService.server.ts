@@ -19,10 +19,12 @@ export class UserServiceServer {
    */
   static async getCurrentUserFromSession(): Promise<UserData | null> {
     try {
+      // FIX: await the cookies() function
       const cookieStore = await cookies();
       const sessionToken = cookieStore.get("session-token")?.value;
 
       if (!sessionToken) {
+        console.log("❌ No session token found");
         return null;
       }
 
@@ -39,7 +41,13 @@ export class UserServiceServer {
         },
       });
 
-      if (!session || session.expires < new Date()) {
+      if (!session) {
+        console.log("❌ Session not found");
+        return null;
+      }
+
+      if (session.expires < new Date()) {
+        console.log("❌ Session expired");
         return null;
       }
 
@@ -70,6 +78,7 @@ export class UserServiceServer {
         };
       }
 
+      console.log("✅ User data retrieved successfully");
       return userData;
     } catch (error) {
       console.error("Error fetching user from session:", error);
@@ -78,27 +87,53 @@ export class UserServiceServer {
   }
 
   /**
-   * Verify user has access to student data (Server-side only)
+   * Enhanced verifyStudentAccess that handles both studentId and userId
    */
-  static async verifyStudentAccess(studentId: string): Promise<boolean> {
+  static async verifyStudentAccess(requestedId: string): Promise<boolean> {
     try {
       const currentUser = await this.getCurrentUserFromSession();
 
+      console.log("🔍 verifyStudentAccess - Current User:", {
+        userId: currentUser?.id,
+        role: currentUser?.role,
+        requestedId: requestedId,
+      });
+
       if (!currentUser) {
+        console.log("❌ No current user found");
         return false;
       }
 
       // If user is a student, they can only access their own data
       if (currentUser.role === "STUDENT") {
-        const student = await prisma.student.findUnique({
-          where: { id: studentId },
-          select: { userId: true },
+        // Get the student record for the current user
+        const student = await prisma.student.findFirst({
+          where: {
+            userId: currentUser.id,
+          },
+          select: {
+            id: true,
+            userId: true,
+          },
         });
 
-        return student?.userId === currentUser.id;
+        console.log("🔍 Student record found for current user:", {
+          studentId: student?.id,
+          studentUserId: student?.userId,
+          currentUserId: currentUser.id,
+          requestedId: requestedId,
+          isUserIdMatch: requestedId === currentUser.id,
+          isStudentIdMatch: student?.id === requestedId,
+        });
+
+        // Check if the requested ID matches either:
+        // 1. The current student's ID, OR
+        // 2. The current user's ID (common mistake from frontend)
+        return student?.id === requestedId || currentUser.id === requestedId;
       }
 
       // Teachers and admins can access student data
+      console.log("✅ User is teacher/admin, granting access");
       return true;
     } catch (error) {
       console.error("Error verifying student access:", error);
@@ -107,9 +142,40 @@ export class UserServiceServer {
   }
 
   /**
-   * Get student ID for current user (Server-side only)
+   * Get the correct student ID for API calls
    */
-  static async getCurrentStudentId(): Promise<string | null> {
+  static async getCorrectStudentId(
+    requestedId?: string
+  ): Promise<string | null> {
+    try {
+      const currentUser = await this.getCurrentUserFromSession();
+
+      if (!currentUser) {
+        return null;
+      }
+
+      // If user is a student, get their actual student ID
+      if (currentUser.role === "STUDENT") {
+        const student = await prisma.student.findFirst({
+          where: { userId: currentUser.id },
+          select: { id: true },
+        });
+
+        return student?.id || null;
+      }
+
+      // For teachers/admins, use the requested ID if provided
+      return requestedId || null;
+    } catch (error) {
+      console.error("Error getting correct student ID:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Get current student data (Server-side only)
+   */
+  static async getCurrentStudent() {
     try {
       const currentUser = await this.getCurrentUserFromSession();
 
@@ -119,12 +185,19 @@ export class UserServiceServer {
 
       const student = await prisma.student.findFirst({
         where: { userId: currentUser.id },
-        select: { id: true },
+        include: {
+          user: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+        },
       });
 
-      return student?.id || null;
+      return student;
     } catch (error) {
-      console.error("Error getting current student ID:", error);
+      console.error("Error getting current student:", error);
       return null;
     }
   }

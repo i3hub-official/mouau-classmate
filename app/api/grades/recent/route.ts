@@ -6,38 +6,39 @@ import { Grade } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
   try {
+    console.log("🔍 Starting recent grades request");
     const currentUser = await UserServiceServer.getCurrentUserFromSession();
-    
+
     if (!currentUser) {
+      console.log("❌ Unauthorized access attempt");
       return NextResponse.json(
-        { error: "Unauthorized" },
+        { error: "Unauthorized - Please sign in" },
         { status: 401 }
       );
     }
 
     const { searchParams } = new URL(request.url);
-    const studentId = searchParams.get("studentId");
+    const requestedId = searchParams.get("studentId");
     const limit = parseInt(searchParams.get("limit") || "5");
 
-    if (!studentId) {
+    // Get the correct student ID
+    const correctStudentId = await UserServiceServer.getCorrectStudentId(
+      requestedId || undefined
+    );
+
+    if (!correctStudentId) {
       return NextResponse.json(
-        { error: "Student ID is required" },
-        { status: 400 }
+        { error: "Student profile not found" },
+        { status: 404 }
       );
     }
 
-    const hasAccess = await UserServiceServer.verifyStudentAccess(studentId);
-    if (!hasAccess) {
-      return NextResponse.json(
-        { error: "Forbidden" },
-        { status: 403 }
-      );
-    }
+    console.log("📊 Fetching recent grades for student:", correctStudentId);
 
     // Get recent graded submissions
     const submissions = await prisma.assignmentSubmission.findMany({
       where: {
-        studentId,
+        studentId: correctStudentId,
         isGraded: true,
       },
       include: {
@@ -69,12 +70,13 @@ export async function GET(request: NextRequest) {
         percentage: Math.round(percentage),
         grade,
         submittedAt: submission.submittedAt,
-        gradedAt: submission.submittedAt, // Using submittedAt as gradedAt for now
+        gradedAt: submission.submittedAt,
         feedback: submission.feedback,
         assignmentDueDate: submission.assignment.dueDate,
       };
     });
 
+    console.log("✅ Found recent grades:", recentGraded.length);
     return NextResponse.json(recentGraded);
   } catch (error) {
     console.error("Error fetching recent graded assignments:", error);
