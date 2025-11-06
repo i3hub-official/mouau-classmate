@@ -8,6 +8,12 @@ const nextConfig: NextConfig = {
   // Simple Turbopack fix - either use this or remove entirely
   turbopack: {},
 
+  // Ensure environment variables are available
+  env: {
+    DATABASE_URL: process.env.DATABASE_URL,
+    DIRECT_URL: process.env.DIRECT_URL,
+  },
+
   experimental: {
     serverActions: {
       bodySizeLimit: "10mb",
@@ -70,6 +76,11 @@ const nextConfig: NextConfig = {
         net: false,
         tls: false,
       };
+      config.externals = [
+        ...(config.externals || []),
+        "@prisma/client",
+        "@prisma/engines",
+      ];
     }
     return config;
   },

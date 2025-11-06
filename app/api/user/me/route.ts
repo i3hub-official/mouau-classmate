@@ -1,13 +1,21 @@
 // app/api/user/me/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
+import { cookies } from "next/headers";
 
 export async function GET(request: NextRequest) {
   try {
-    const sessionToken = request.cookies.get("session-token")?.value;
+    // Get session token from cookies
+    const cookieStore = await cookies();
+    const sessionToken = cookieStore.get("session-token")?.value;
+
+    console.log("Session token found:", !!sessionToken);
 
     if (!sessionToken) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Not authenticated", code: "NO_SESSION" },
+        { status: 401 }
+      );
     }
 
     // Find session and user
@@ -23,11 +31,24 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    if (!session || session.expires < new Date()) {
-      return NextResponse.json({ error: "Session expired" }, { status: 401 });
+    console.log("Session found:", !!session);
+
+    if (!session) {
+      return NextResponse.json(
+        { error: "Session not found", code: "SESSION_NOT_FOUND" },
+        { status: 401 }
+      );
+    }
+
+    if (session.expires < new Date()) {
+      return NextResponse.json(
+        { error: "Session expired", code: "SESSION_EXPIRED" },
+        { status: 401 }
+      );
     }
 
     const user = session.user;
+
     type UserData = {
       id: string;
       email: string;
@@ -64,11 +85,18 @@ export async function GET(request: NextRequest) {
       };
     }
 
+    console.log("Returning user data for:", user.email);
     return NextResponse.json(userData);
   } catch (error) {
     console.error("Error fetching user data:", error);
+
+    // Return proper JSON error response
     return NextResponse.json(
-      { error: "Internal server error" },
+      {
+        error: "Internal server error",
+        code: "INTERNAL_ERROR",
+        message: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }
