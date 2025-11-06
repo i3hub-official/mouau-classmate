@@ -61,7 +61,6 @@ export default function AssignmentsPage() {
     graded: 0,
   });
   const [courses, setCourses] = useState<string[]>([]);
-  const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   // Initialize data on component mount
@@ -363,7 +362,7 @@ export default function AssignmentsPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <DashboardHeader onSignOut={() => setShowSignOutModal(true)} />
+        <DashboardHeader />
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
@@ -376,7 +375,7 @@ export default function AssignmentsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <DashboardHeader onSignOut={() => setShowSignOutModal(true)} />
+      <DashboardHeader />
 
       {/* Sign Out Overlay */}
       {signingOut && (
@@ -698,7 +697,9 @@ export default function AssignmentsPage() {
                           {isGraded && score !== null && (
                             <p className="text-sm text-green-600 font-medium mt-1">
                               Grade: {score}/{assignment.maxScore} (
-                              {Math.round(((score ?? 0) / assignment.maxScore) * 100)}
+                              {Math.round(
+                                ((score ?? 0) / assignment.maxScore) * 100
+                              )}
                               %)
                             </p>
                           )}

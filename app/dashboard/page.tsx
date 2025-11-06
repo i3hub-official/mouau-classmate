@@ -77,7 +77,6 @@ export default function DashboardPage() {
     null
   );
   const [loading, setLoading] = useState(true);
-  const [showSignOutModal, setShowSignOutModal] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
@@ -132,7 +131,6 @@ export default function DashboardPage() {
         window.location.href = "/auth/signin";
       } else {
         console.error("Sign out failed");
-        setShowSignOutModal(false);
       }
     } catch (error) {
       console.error("Error during sign out:", error);
@@ -143,7 +141,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <DashboardHeader onSignOut={() => setShowSignOutModal(true)} />
+        <DashboardHeader />
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         </div>
@@ -156,7 +154,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Use DashboardHeader component - properly integrated */}
-      <DashboardHeader onSignOut={() => setShowSignOutModal(true)} />
+      <DashboardHeader />
 
       {/* Dashboard Content */}
       <main className="w-full px-6 xl:px-8 py-8 space-y-8">
@@ -276,13 +274,6 @@ export default function DashboardPage() {
         {/* Quick Actions - Always at the bottom */}
         <QuickActions />
       </main>
-
-      {/* Sign Out Modal */}
-      <SignOutModal
-        isOpen={showSignOutModal}
-        onClose={() => setShowSignOutModal(false)}
-        onSignOut={handleSignOut}
-      />
     </div>
   );
 }

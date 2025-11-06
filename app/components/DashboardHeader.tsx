@@ -17,7 +17,7 @@ import { SignOutModal } from "@/app/components/SignOutModal";
 import { UserService } from "@/lib/services/userService";
 
 interface DashboardHeaderProps {
-  onSignOut?: () => void;
+  onSignOut?: () => Promise<void>;
 }
 
 interface HeaderUserData {
@@ -33,6 +33,7 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const pathname = usePathname();
 
   // Navigation items with their paths
@@ -73,27 +74,54 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
 
   const handleSignOutClick = () => {
     setShowUserMenu(false);
+    setMobileMenuOpen(false);
     setShowSignOutModal(true);
   };
 
-  const handleSignOut = async () => {
+  const handleSignOut = async (): Promise<{
+    success: boolean;
+    error?: string;
+  }> => {
+    setSigningOut(true);
     try {
-      const response = await fetch("/api/auth/signout", {
+      // If parent component provided onSignOut, use it
+      if (onSignOut) {
+        await onSignOut();
+        return { success: true };
+      }
+
+      // Otherwise use the default implementation
+      const response = await fetch("/auth/signout", {
         method: "POST",
         credentials: "include",
       });
 
       if (response.ok) {
+        // Wait a moment for cookies to clear, then redirect
         await new Promise((resolve) => setTimeout(resolve, 500));
         window.location.href = "/auth/signin";
+        return { success: true };
       } else {
-        console.error("Sign out failed");
-        setShowSignOutModal(false);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Sign out failed");
       }
     } catch (error) {
       console.error("Error during sign out:", error);
-      window.location.href = "/auth/signin";
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Sign out failed",
+      };
+    } finally {
+      setSigningOut(false);
     }
+  };
+
+  const handleModalSignOut = async () => {
+    const result = await handleSignOut();
+    if (result.success) {
+      setShowSignOutModal(false);
+    }
+    return result;
   };
 
   return (
@@ -154,7 +182,8 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
                 <div className="relative">
                   <button
                     onClick={() => setShowUserMenu(!showUserMenu)}
-                    className="flex items-center gap-2 p-2 hover:bg-muted rounded-lg transition-colors"
+                    disabled={signingOut}
+                    className="flex items-center gap-2 p-2 hover:bg-muted rounded-lg transition-colors disabled:opacity-50"
                   >
                     <div className="h-8 w-8 bg-linear-to-br from-primary to-primary/80 rounded-full flex items-center justify-center">
                       <User size={16} className="text-white" />
@@ -192,6 +221,7 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
                       <a
                         href="/profile"
                         className="flex items-center gap-3 px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                        onClick={() => setShowUserMenu(false)}
                       >
                         <User size={16} />
                         Profile Settings
@@ -199,6 +229,7 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
                       <a
                         href="/settings"
                         className="flex items-center gap-3 px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                        onClick={() => setShowUserMenu(false)}
                       >
                         <Settings size={16} />
                         Account Settings
@@ -206,10 +237,11 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
                       <div className="border-t border-border mt-2 pt-2">
                         <button
                           onClick={handleSignOutClick}
-                          className="flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left transition-colors"
+                          disabled={signingOut}
+                          className="flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left transition-colors disabled:opacity-50"
                         >
                           <LogOut size={16} />
-                          Sign Out
+                          {signingOut ? "Signing Out..." : "Sign Out"}
                         </button>
                       </div>
                     </div>
@@ -220,13 +252,11 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
 
             {/* Mobile Navigation */}
             <div className="flex items-center gap-2 md:hidden">
-              {/* Mobile User Info */}
-             
-
               <ThemeToggle />
               <button
                 className="p-2 hover:bg-muted rounded-lg transition-colors"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                disabled={signingOut}
               >
                 {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
               </button>
@@ -248,6 +278,7 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
                           ? "bg-primary/10 text-foreground"
                           : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                       }`}
+                      onClick={() => setMobileMenuOpen(false)}
                     >
                       {item.label}
                     </a>
@@ -290,14 +321,16 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
                     <a
                       href="/profile"
                       className="text-center text-sm text-foreground py-2 px-3 bg-muted rounded-lg transition-colors"
+                      onClick={() => setMobileMenuOpen(false)}
                     >
                       Profile
                     </a>
                     <button
                       onClick={handleSignOutClick}
-                      className="text-center text-sm text-red-600 py-2 px-3 bg-red-50 rounded-lg transition-colors"
+                      disabled={signingOut}
+                      className="text-center text-sm text-red-600 py-2 px-3 bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                     >
-                      Sign Out
+                      {signingOut ? "Signing Out..." : "Sign Out"}
                     </button>
                   </div>
                 </div>
@@ -309,14 +342,8 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
 
       <SignOutModal
         isOpen={showSignOutModal}
-        onClose={() => setShowSignOutModal(false)}
-        onSignOut={
-          onSignOut
-            ? async () => {
-                onSignOut();
-              }
-            : handleSignOut
-        }
+        onClose={() => !signingOut && setShowSignOutModal(false)}
+        onSignOut={handleModalSignOut}
       />
 
       {/* Close dropdown when clicking outside */}

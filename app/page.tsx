@@ -1,5 +1,7 @@
 // app/page.tsx
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import {
   BookOpen,
   Users,
@@ -16,8 +18,50 @@ import {
   Linkedin,
 } from "lucide-react";
 import { ThemeToggle } from "@/app/components/theme-toggle";
+import { prisma } from "@/lib/server/prisma";
 
-export default function HomePage() {
+async function checkAuth() {
+  try {
+    const cookieStore = await cookies();
+    const sessionToken = cookieStore.get("session-token")?.value;
+
+    if (!sessionToken) {
+      return null;
+    }
+
+    // Check if session exists and is valid
+    const session = await prisma.session.findUnique({
+      where: { sessionToken },
+      include: {
+        user: {
+          select: {
+            id: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    if (!session || session.expires < new Date()) {
+      return null;
+    }
+
+    return session.user;
+  } catch (error) {
+    console.error("Auth check error:", error);
+    return null;
+  }
+}
+
+export default async function HomePage() {
+  // Check if user is authenticated
+  const user = await checkAuth();
+
+  // If user is authenticated, redirect to dashboard
+  if (user) {
+    redirect("/dashboard");
+  }
+
   return (
     <div className="min-h-screen bg-linear-to-br from-background via-accent/5 to-primary/5 flex flex-col">
       {/* Header */}

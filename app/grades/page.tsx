@@ -11,18 +11,31 @@ import {
   Clock,
   AlertCircle,
   Download,
-  Eye,
   BarChart3,
+  ChevronDown,
+  ChevronUp,
+  Filter,
+  Calendar,
+  Info,
+  RefreshCw,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import {
   GradeService,
   GradeSummary,
   PerformanceMetric,
+  CourseGrade,
+  SortBy,
+  SortOrder,
 } from "@/lib/services/gradeService";
+import { UserService } from "@/lib/services/userService";
 import { Grade } from "@prisma/client";
 
 interface UserData {
-  name?: string;
+  id: string;
+  name?: string | null;
   matricNumber?: string;
   department?: string;
   email?: string;
@@ -30,84 +43,127 @@ interface UserData {
 
 export default function GradesPage() {
   const [gradeSummary, setGradeSummary] = useState<GradeSummary | null>(null);
+  const [displayedCourseGrades, setDisplayedCourseGrades] = useState<
+    CourseGrade[]
+  >([]);
   const [performanceMetrics, setPerformanceMetrics] = useState<
     PerformanceMetric[]
   >([]);
   const [recentGraded, setRecentGraded] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [userData, setUserData] = useState<UserData | null>(null);
+  const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"overview" | "detailed">("overview");
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [sortBy, setSortBy] = useState<SortBy>("grade");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
-    fetchGradesData();
-    fetchUserData();
+    initializeData();
   }, []);
 
-  const fetchGradesData = async () => {
+  useEffect(() => {
+    if (gradeSummary) {
+      applySorting();
+    }
+  }, [sortBy, sortOrder, gradeSummary]);
+
+  const initializeData = async () => {
     try {
       setLoading(true);
-      const studentId = await getCurrentStudentId();
+      setError(null);
 
-      if (!studentId) {
-        console.error("No student ID found");
+      const user = await UserService.getCurrentUser();
+      if (!user?.id) {
+        setError(
+          "Unable to load user information. Please try refreshing the page."
+        );
         setLoading(false);
         return;
       }
 
-      const [summary, metrics, recent] = await Promise.all([
-        GradeService.getGradeSummary(studentId),
-        GradeService.getPerformanceMetrics(studentId),
-        GradeService.getRecentGradedAssignments(studentId),
-      ]);
-
-      setGradeSummary(summary);
-      setPerformanceMetrics(metrics);
-      setRecentGraded(recent);
-    } catch (error) {
-      console.error("Error fetching grades data:", error);
+      setUserData(user);
+      await fetchGradesData(user.id);
+    } catch (err) {
+      console.error("Error initializing data:", err);
+      setError(
+        "Failed to load data. Please check your connection and try again."
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const getCurrentStudentId = async (): Promise<string | null> => {
-    // TODO: Implement this based on your auth system
-    return null;
+  const fetchGradesData = async (userId: string) => {
+    if (!userId) return;
+
+    try {
+      const [summary, metrics, recent] = await Promise.all([
+        GradeService.getGradeSummary(userId),
+        GradeService.getPerformanceMetrics(userId),
+        GradeService.getRecentGradedAssignments(userId, 5),
+      ]);
+
+      setGradeSummary(summary);
+      setPerformanceMetrics(metrics);
+      setRecentGraded(recent);
+      setError(null);
+    } catch (error) {
+      console.error("Error fetching grades data:", error);
+      setError("Failed to load grades. Please try again.");
+    }
   };
 
-  const fetchUserData = async () => {
+  const handleRefresh = async () => {
+    if (!userData?.id) return;
+
+    setRefreshing(true);
     try {
-      // TODO: Replace with actual user data fetch
-      setUserData({
-        name: "Student",
-        matricNumber: "MOUAU/XX/XX/XXX",
-        department: "Computer Science",
-        email: "student@mouau.edu.ng",
-      });
-    } catch (error) {
-      console.error("Error fetching user data:", error);
+      await fetchGradesData(userData.id);
+    } finally {
+      setRefreshing(false);
     }
+  };
+
+  const applySorting = () => {
+    if (!gradeSummary) return;
+
+    const sorted = GradeService.sortCourseGrades(
+      gradeSummary.courseGrades,
+      sortBy,
+      sortOrder
+    );
+    setDisplayedCourseGrades(sorted);
+  };
+
+  const handleSortChange = (newSortBy: SortBy) => {
+    if (sortBy === newSortBy) {
+      // Toggle order if same field
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      // Set new field with default desc order
+      setSortBy(newSortBy);
+      setSortOrder("desc");
+    }
+    setShowSortMenu(false);
+  };
+
+  const getSortLabel = () => {
+    const labels: Record<SortBy, string> = {
+      grade: "Grade",
+      course: "Course Name",
+      percentage: "Percentage",
+      progress: "Progress",
+    };
+    return labels[sortBy];
   };
 
   const getGradeColor = (grade: Grade | null) => {
-    if (!grade) return "bg-gray-100 text-gray-800";
-
-    switch (grade) {
-      case Grade.A:
-        return "bg-green-100 text-green-800";
-      case Grade.B:
-        return "bg-blue-100 text-blue-800";
-      case Grade.C:
-        return "bg-yellow-100 text-yellow-800";
-      case Grade.D:
-        return "bg-orange-100 text-orange-800";
-      case Grade.E:
-        return "bg-red-100 text-red-800";
-      case Grade.F:
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
+    return GradeService.getGradeColor(grade);
   };
 
   const getGradeIcon = (grade: Grade | null) => {
@@ -115,15 +171,12 @@ export default function GradesPage() {
 
     switch (grade) {
       case Grade.A:
-        return <Award className="h-4 w-4" />;
       case Grade.B:
         return <Award className="h-4 w-4" />;
       case Grade.C:
         return <CheckCircle2 className="h-4 w-4" />;
       case Grade.D:
-        return <AlertCircle className="h-4 w-4" />;
       case Grade.E:
-        return <AlertCircle className="h-4 w-4" />;
       case Grade.F:
         return <AlertCircle className="h-4 w-4" />;
       default:
@@ -131,33 +184,45 @@ export default function GradesPage() {
     }
   };
 
-  const getTrendColor = (trend: string) => {
-    switch (trend) {
-      case "up":
-        return "text-green-600";
-      case "down":
-        return "text-red-600";
-      default:
-        return "text-gray-600";
-    }
-  };
-
   const getTrendIcon = (trend: string) => {
     switch (trend) {
       case "up":
-        return "↗";
+        return <TrendingUp className="h-4 w-4" />;
       case "down":
-        return "↘";
+        return <TrendingUp className="h-4 w-4 rotate-180" />;
       default:
-        return "→";
+        return <TrendingUp className="h-4 w-4 rotate-90" />;
     }
   };
 
   const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
+    return GradeService.formatDate(date, "short");
+  };
+
+  const toggleCourseExpansion = (courseId: string) => {
+    setExpandedCourse(expandedCourse === courseId ? null : courseId);
+  };
+
+  const handleExport = async (format: "pdf" | "excel") => {
+    if (!userData?.id) return;
+
+    try {
+      const blob = await GradeService.exportTranscript(userData.id, format);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `transcript-${userData.matricNumber}.${
+        format === "pdf" ? "pdf" : "xlsx"
+      }`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setShowExportModal(false);
+    } catch (error) {
+      console.error("Error exporting transcript:", error);
+      setError("Failed to export transcript. Please try again.");
+    }
   };
 
   if (loading) {
@@ -165,7 +230,10 @@ export default function GradesPage() {
       <div className="min-h-screen bg-background">
         <DashboardHeader />
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading grades...</p>
+          </div>
         </div>
       </div>
     );
@@ -175,8 +243,87 @@ export default function GradesPage() {
     <div className="min-h-screen bg-background">
       <DashboardHeader />
 
-      {/* Main Content */}
-      <main className="w-full px-6 xl:px-8 py-8">
+      {/* Sign Out Overlay */}
+      {signingOut && (
+        <div className="fixed inset-0 bg-black/20 z-40 flex items-center justify-center">
+          <div className="bg-card border border-border rounded-lg p-4 shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+              <span className="text-foreground font-medium">
+                Signing out...
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+          <div className="bg-card border border-border rounded-xl p-6 shadow-lg max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-foreground mb-4">
+              Export Transcript
+            </h3>
+            <p className="text-sm text-muted-foreground mb-6">
+              Choose the format for your transcript export. The file will be
+              downloaded to your device.
+            </p>
+            <div className="space-y-3 mb-6">
+              <button
+                onClick={() => handleExport("pdf")}
+                className="w-full p-3 border border-border rounded-lg hover:bg-muted transition-colors flex items-center justify-between"
+              >
+                <span className="text-foreground">PDF Document</span>
+                <Download className="h-4 w-4 text-muted-foreground" />
+              </button>
+              <button
+                onClick={() => handleExport("excel")}
+                className="w-full p-3 border border-border rounded-lg hover:bg-muted transition-colors flex items-center justify-between"
+              >
+                <span className="text-foreground">Excel Spreadsheet</span>
+                <Download className="h-4 w-4 text-muted-foreground" />
+              </button>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="flex-1 px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <main
+        className={`w-full px-6 xl:px-8 py-8 ${
+          signingOut ? "pointer-events-none opacity-60" : ""
+        }`}
+      >
+        {/* Error Alert */}
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-red-800">Error</h3>
+                <p className="text-sm text-red-700 mt-1">{error}</p>
+              </div>
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="text-sm text-red-600 hover:text-red-800 font-medium disabled:opacity-50 flex items-center gap-1"
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+                />
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Header Section */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8">
           <div>
@@ -187,10 +334,26 @@ export default function GradesPage() {
               Track your academic performance and progress
             </p>
           </div>
-          <button className="mt-4 lg:mt-0 bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors flex items-center gap-2">
-            <Download className="h-5 w-5" />
-            Export Transcript
-          </button>
+          <div className="flex items-center gap-3 mt-4 lg:mt-0">
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing || signingOut}
+              className="px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors flex items-center gap-2 disabled:opacity-50"
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+              />
+              Refresh
+            </button>
+            <button
+              onClick={() => setShowExportModal(true)}
+              disabled={signingOut}
+              className="bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50"
+            >
+              <Download className="h-5 w-5" />
+              Export Transcript
+            </button>
+          </div>
         </div>
 
         {/* Performance Overview */}
@@ -198,19 +361,20 @@ export default function GradesPage() {
           {performanceMetrics.map((metric, index) => (
             <div
               key={index}
-              className="bg-card border border-border rounded-2xl p-6"
+              className="bg-card border border-border rounded-xl p-6 hover:shadow-md transition-all duration-300"
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-primary/10 rounded-xl">
                   <BarChart3 className="h-6 w-6 text-primary" />
                 </div>
-                <span
-                  className={`text-sm font-medium ${getTrendColor(
+                <div
+                  className={`flex items-center gap-1 text-sm font-medium ${GradeService.getTrendColor(
                     metric.trend
                   )}`}
                 >
-                  {getTrendIcon(metric.trend)} {metric.change}%
-                </span>
+                  {getTrendIcon(metric.trend)}
+                  <span>{metric.change}%</span>
+                </div>
               </div>
               <div>
                 <p className="text-2xl font-bold text-foreground">
@@ -225,12 +389,82 @@ export default function GradesPage() {
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
           {/* Course Grades */}
           <div className="xl:col-span-2 space-y-6">
-            <h3 className="text-2xl font-bold text-foreground">
-              Course Grades
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-2xl font-bold text-foreground">
+                Course Grades
+              </h3>
 
-            {gradeSummary?.courseGrades.length === 0 ? (
-              <div className="bg-card border border-border rounded-2xl p-8 text-center">
+              {/* Sort Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowSortMenu(!showSortMenu)}
+                  disabled={signingOut}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
+                >
+                  <Filter className="h-4 w-4" />
+                  <span>Sort by: {getSortLabel()}</span>
+                  {sortOrder === "asc" ? (
+                    <ArrowUp className="h-4 w-4" />
+                  ) : (
+                    <ArrowDown className="h-4 w-4" />
+                  )}
+                </button>
+
+                {showSortMenu && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setShowSortMenu(false)}
+                    />
+                    <div className="absolute right-0 top-full mt-2 w-48 bg-card border border-border rounded-lg shadow-lg py-2 z-20">
+                      <button
+                        onClick={() => handleSortChange("grade")}
+                        className={`w-full px-4 py-2 text-left text-sm hover:bg-muted transition-colors ${
+                          sortBy === "grade"
+                            ? "text-primary font-medium"
+                            : "text-foreground"
+                        }`}
+                      >
+                        Grade
+                      </button>
+                      <button
+                        onClick={() => handleSortChange("course")}
+                        className={`w-full px-4 py-2 text-left text-sm hover:bg-muted transition-colors ${
+                          sortBy === "course"
+                            ? "text-primary font-medium"
+                            : "text-foreground"
+                        }`}
+                      >
+                        Course Name
+                      </button>
+                      <button
+                        onClick={() => handleSortChange("percentage")}
+                        className={`w-full px-4 py-2 text-left text-sm hover:bg-muted transition-colors ${
+                          sortBy === "percentage"
+                            ? "text-primary font-medium"
+                            : "text-foreground"
+                        }`}
+                      >
+                        Percentage
+                      </button>
+                      <button
+                        onClick={() => handleSortChange("progress")}
+                        className={`w-full px-4 py-2 text-left text-sm hover:bg-muted transition-colors ${
+                          sortBy === "progress"
+                            ? "text-primary font-medium"
+                            : "text-foreground"
+                        }`}
+                      >
+                        Progress
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {displayedCourseGrades.length === 0 ? (
+              <div className="bg-card border border-border rounded-xl p-8 text-center">
                 <BookOpen className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
                 <h4 className="text-lg font-medium text-foreground mb-2">
                   No grades available
@@ -241,103 +475,129 @@ export default function GradesPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {gradeSummary?.courseGrades.map((courseGrade) => (
-                  <div
-                    key={courseGrade.course.id}
-                    className="bg-card border border-border rounded-2xl p-6 hover:shadow-lg transition-all duration-300"
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h4 className="text-xl font-semibold text-foreground mb-1">
-                          {courseGrade.course.title}
-                        </h4>
-                        <p className="text-muted-foreground">
-                          {courseGrade.course.code} •{" "}
-                          {courseGrade.course.credits} Credits
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <span
-                          className={`px-3 py-2 rounded-lg text-sm font-medium border flex items-center gap-1 ${getGradeColor(
-                            courseGrade.overallGrade
-                          )}`}
-                        >
-                          {getGradeIcon(courseGrade.overallGrade)}
-                          {courseGrade.overallGrade || "N/A"}
-                        </span>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {Math.round(courseGrade.overallPercentage)}%
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div className="mb-4">
-                      <div className="flex justify-between text-sm text-muted-foreground mb-2">
-                        <span>Course Progress</span>
-                        <span>
-                          {Math.round(courseGrade.enrollment.progress)}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-muted rounded-full h-2">
-                        <div
-                          className="bg-primary h-2 rounded-full transition-all duration-300"
-                          style={{
-                            width: `${courseGrade.enrollment.progress}%`,
-                          }}
-                        ></div>
-                      </div>
-                    </div>
-
-                    {/* Assignment Grades */}
-                    <div className="space-y-3">
-                      <h5 className="font-medium text-foreground">
-                        Assignment Grades
-                      </h5>
-                      {courseGrade.assignments.map((assignment) => (
-                        <div
-                          key={assignment.assignment.id}
-                          className="flex items-center justify-between p-3 border border-border rounded-lg"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-primary/10 rounded-lg">
-                              <FileText className="h-4 w-4 text-primary" />
+                {displayedCourseGrades.map((courseGrade) => {
+                  const isExpanded = expandedCourse === courseGrade.course.id;
+                  return (
+                    <div
+                      key={courseGrade.course.id}
+                      className="bg-card border border-border rounded-xl overflow-hidden hover:shadow-lg transition-all duration-300"
+                    >
+                      <div
+                        className="p-6 cursor-pointer"
+                        onClick={() =>
+                          toggleCourseExpansion(courseGrade.course.id)
+                        }
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h4 className="text-xl font-semibold text-foreground">
+                                {courseGrade.course.title}
+                              </h4>
+                              {isExpanded ? (
+                                <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                              ) : (
+                                <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                              )}
                             </div>
-                            <div>
-                              <p className="font-medium text-foreground text-sm">
-                                {assignment.assignment.title}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                Max Score: {assignment.assignment.maxScore}
-                              </p>
-                            </div>
+                            <p className="text-muted-foreground">
+                              {courseGrade.course.code} •{" "}
+                              {courseGrade.course.credits} Credits
+                            </p>
                           </div>
                           <div className="text-right">
-                            {assignment.submission?.isGraded ? (
-                              <>
-                                <p className="font-semibold text-foreground">
-                                  {assignment.submission.score} /{" "}
-                                  {assignment.assignment.maxScore}
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                  {Math.round(assignment.percentage)}%
-                                </p>
-                              </>
-                            ) : assignment.submission ? (
-                              <p className="text-sm text-yellow-600">
-                                Pending Grade
-                              </p>
-                            ) : (
-                              <p className="text-sm text-gray-500">
-                                Not Submitted
-                              </p>
-                            )}
+                            <span
+                              className={`px-3 py-2 rounded-lg text-sm font-medium border flex items-center gap-1 ${getGradeColor(
+                                courseGrade.overallGrade
+                              )}`}
+                            >
+                              {getGradeIcon(courseGrade.overallGrade)}
+                              {courseGrade.overallGrade || "N/A"}
+                            </span>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {Math.round(courseGrade.overallPercentage)}%
+                            </p>
                           </div>
                         </div>
-                      ))}
+
+                        {/* Progress Bar */}
+                        <div className="mt-4">
+                          <div className="flex justify-between text-sm text-muted-foreground mb-2">
+                            <span>Course Progress</span>
+                            <span>
+                              {Math.round(courseGrade.enrollment.progress)}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-2">
+                            <div
+                              className="bg-primary h-2 rounded-full transition-all duration-300"
+                              style={{
+                                width: `${courseGrade.enrollment.progress}%`,
+                              }}
+                            ></div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Expanded Content */}
+                      {isExpanded && (
+                        <div className="px-6 pb-6 border-t border-border">
+                          <div className="pt-4">
+                            <h5 className="font-medium text-foreground mb-3">
+                              Assignment Grades
+                            </h5>
+                            <div className="space-y-3">
+                              {courseGrade.assignments.map((assignment) => (
+                                <div
+                                  key={assignment.assignment.id}
+                                  className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/50 transition-colors"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-primary/10 rounded-lg">
+                                      <FileText className="h-4 w-4 text-primary" />
+                                    </div>
+                                    <div>
+                                      <p className="font-medium text-foreground text-sm">
+                                        {assignment.assignment.title}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        Max Score:{" "}
+                                        {assignment.assignment.maxScore}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    {assignment.submission?.isGraded ? (
+                                      <>
+                                        <p className="font-semibold text-foreground">
+                                          {assignment.submission.score} /{" "}
+                                          {assignment.assignment.maxScore}
+                                        </p>
+                                        <p className="text-sm text-muted-foreground">
+                                          {Math.round(assignment.percentage)}%
+                                        </p>
+                                      </>
+                                    ) : assignment.submission ? (
+                                      <div className="flex items-center gap-1 text-yellow-600">
+                                        <Clock className="h-3 w-3" />
+                                        <p className="text-sm">Pending Grade</p>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-1 text-gray-500">
+                                        <AlertCircle className="h-3 w-3" />
+                                        <p className="text-sm">Not Submitted</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -345,7 +605,7 @@ export default function GradesPage() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Overall Summary */}
-            <div className="bg-card border border-border rounded-2xl p-6">
+            <div className="bg-card border border-border rounded-xl p-6">
               <h3 className="text-xl font-semibold text-foreground mb-4">
                 Overall Summary
               </h3>
@@ -354,7 +614,7 @@ export default function GradesPage() {
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">GPA</span>
                   <span className="text-2xl font-bold text-foreground">
-                    {gradeSummary?.gpa || 0.0}
+                    {gradeSummary?.gpa?.toFixed(2) || "0.00"}
                   </span>
                 </div>
 
@@ -378,22 +638,25 @@ export default function GradesPage() {
             </div>
 
             {/* Recently Graded */}
-            <div className="bg-card border border-border rounded-2xl p-6">
-              <h3 className="text-xl font-semibold text-foreground mb-4">
-                Recently Graded
-              </h3>
+            <div className="bg-card border border-border rounded-xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-semibold text-foreground">
+                  Recently Graded
+                </h3>
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+              </div>
 
               {recentGraded.length === 0 ? (
                 <div className="text-center py-4 text-muted-foreground">
                   <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>No recently graded assignments</p>
+                  <p className="text-sm">No recently graded assignments</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-3 max-h-[400px] overflow-y-auto">
                   {recentGraded.map((item) => (
                     <div
                       key={item.id}
-                      className="p-3 border border-border rounded-lg"
+                      className="p-3 border border-border rounded-lg hover:bg-muted/50 transition-colors"
                     >
                       <div className="flex items-center justify-between mb-2">
                         <h5 className="font-medium text-foreground text-sm">
@@ -419,9 +682,14 @@ export default function GradesPage() {
                         </span>
                       </div>
                       {item.feedback && (
-                        <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
-                          {item.feedback}
-                        </p>
+                        <div className="mt-2 pt-2 border-t border-border">
+                          <div className="flex items-start gap-1">
+                            <Info className="h-3 w-3 text-muted-foreground mt-0.5" />
+                            <p className="text-xs text-muted-foreground line-clamp-2">
+                              {item.feedback}
+                            </p>
+                          </div>
+                        </div>
                       )}
                     </div>
                   ))}
@@ -430,7 +698,7 @@ export default function GradesPage() {
             </div>
 
             {/* Grade Legend */}
-            <div className="bg-card border border-border rounded-2xl p-6">
+            <div className="bg-card border border-border rounded-xl p-6">
               <h3 className="text-xl font-semibold text-foreground mb-4">
                 Grade Scale
               </h3>
