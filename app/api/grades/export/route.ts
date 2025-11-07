@@ -5,6 +5,8 @@ import { UserServiceServer } from "@/lib/services/userService.server";
 import { Grade, AuditAction } from "@prisma/client";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
+import fs from "fs";
+import path from "path";
 
 export async function GET(request: NextRequest) {
   try {
@@ -134,11 +136,11 @@ export async function GET(request: NextRequest) {
 
     const gpa = totalCredits > 0 ? totalGradePoints / totalCredits : 0;
 
-    // Create audit log for the export - Use existing SYSTEM_CONFIG_UPDATED action
+    // Create audit log for the export
     await prisma.auditLog.create({
       data: {
         userId: currentUser.id,
-        action: AuditAction.SYSTEM_CONFIG_UPDATED, // Using existing action
+        action: AuditAction.SYSTEM_CONFIG_UPDATED,
         resourceType: "STUDENT",
         resourceId: student.id,
         details: {
@@ -147,7 +149,7 @@ export async function GET(request: NextRequest) {
           totalCourses: enrollments.length,
           generatedAt: new Date().toISOString(),
           note: "Transcript exported successfully",
-          actionType: "EXPORT_TRANSCRIPT", // Custom field to distinguish
+          actionType: "EXPORT_TRANSCRIPT",
         },
         ipAddress:
           request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
@@ -164,19 +166,19 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Error exporting transcript:", error);
 
-    // Log the error in audit log - Use existing USER_LOGIN_ERROR action
+    // Log the error in audit log
     const currentUser = await UserServiceServer.getCurrentUserFromSession();
     if (currentUser) {
       await prisma.auditLog.create({
         data: {
           userId: currentUser.id,
-          action: AuditAction.USER_LOGIN_ERROR, // Using existing action
+          action: AuditAction.USER_LOGIN_ERROR,
           resourceType: "STUDENT",
           details: {
             error: error instanceof Error ? error.message : "Unknown error",
             timestamp: new Date().toISOString(),
             note: "Transcript export failed",
-            actionType: "EXPORT_TRANSCRIPT_FAILED", // Custom field to distinguish
+            actionType: "EXPORT_TRANSCRIPT_FAILED",
           },
           ipAddress:
             request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
@@ -193,7 +195,37 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Simple PDF generation without autoTable
+// Helper function to load and convert logo to base64
+function getLogoBase64(): string | null {
+  try {
+    // Try mouau_logo.webp first, then favicon.ico
+    const logoPath = path.join(process.cwd(), "public", "mouau_logo.webp");
+    const faviconPath = path.join(process.cwd(), "public", "favicon.ico");
+
+    let imagePath = logoPath;
+    let imageFormat = "WEBP";
+
+    if (fs.existsSync(logoPath)) {
+      imagePath = logoPath;
+      imageFormat = "WEBP";
+    } else if (fs.existsSync(faviconPath)) {
+      imagePath = faviconPath;
+      imageFormat = "PNG"; // ICO files are typically PNG format
+    } else {
+      console.warn("Logo file not found in public directory");
+      return null;
+    }
+
+    const imageBuffer = fs.readFileSync(imagePath);
+    const base64Image = imageBuffer.toString("base64");
+    return `data:image/${imageFormat.toLowerCase()};base64,${base64Image}`;
+  } catch (error) {
+    console.error("Error loading logo:", error);
+    return null;
+  }
+}
+
+// PDF generation with logo
 async function generatePdfTranscript(
   student: any,
   enrollments: any[],
@@ -209,21 +241,41 @@ async function generatePdfTranscript(
     creator: "MOUAU ClassMate",
   });
 
-  // University Header
+  // Add logo at the top
+  const logoData = getLogoBase64();
+  if (logoData) {
+    try {
+      // Add logo centered at the top (adjust size and position as needed)
+      doc.addImage(logoData, "PNG", 90, 5, 30, 30);
+    } catch (error) {
+      console.error("Error adding logo to PDF:", error);
+    }
+  }
+
+  // University Header (moved down to accommodate logo)
+  const headerYStart = logoData ? 40 : 20;
+
   doc.setFontSize(16);
   doc.setTextColor(40, 40, 40);
-  doc.text("MICHAEL OKPARA UNIVERSITY OF AGRICULTURE, UMUDIKE", 105, 20, {
-    align: "center",
-  });
+  doc.text(
+    "MICHAEL OKPARA UNIVERSITY OF AGRICULTURE, UMUDIKE",
+    105,
+    headerYStart,
+    {
+      align: "center",
+    }
+  );
 
   doc.setFontSize(14);
   doc.setTextColor(80, 80, 80);
-  doc.text("OFFICIAL ACADEMIC TRANSCRIPT", 105, 30, { align: "center" });
+  doc.text("OFFICIAL ACADEMIC TRANSCRIPT", 105, headerYStart + 10, {
+    align: "center",
+  });
 
   // Student information section
   doc.setFontSize(12);
   doc.setTextColor(40, 40, 40);
-  doc.text("STUDENT INFORMATION", 20, 50);
+  doc.text("STUDENT INFORMATION", 20, headerYStart + 30);
 
   doc.setFontSize(10);
   doc.setTextColor(60, 60, 60);
@@ -246,7 +298,7 @@ async function generatePdfTranscript(
     ],
   ];
 
-  let yPos = 60;
+  let yPos = headerYStart + 40;
   studentInfo.forEach(([label, value]) => {
     doc.text(label, 20, yPos);
     doc.text(value, 60, yPos);
@@ -412,16 +464,6 @@ async function generatePdfTranscript(
       285,
       { align: "center" }
     );
-
-    // Confidential watermark on first page
-    if (i === 1) {
-      doc.setFontSize(40);
-      doc.setTextColor(240, 240, 240);
-      doc.text("CONFIDENTIAL", 105, 150, {
-        align: "center",
-        angle: 45,
-      });
-    }
   }
 
   // Generate PDF buffer
@@ -437,16 +479,14 @@ async function generatePdfTranscript(
   });
 }
 
-// Update the generateExcelTranscript function to work with your data structure
+// Excel generation function (unchanged)
 async function generateExcelTranscript(
   student: any,
   enrollments: any[],
   gpa: number
 ) {
-  // Create workbook
   const workbook = XLSX.utils.book_new();
 
-  // Summary sheet
   const summaryData = [
     ["OFFICIAL ACADEMIC TRANSCRIPT"],
     ["Michael Okpara University of Agriculture, Umudike"],
@@ -505,7 +545,6 @@ async function generateExcelTranscript(
   const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
   XLSX.utils.book_append_sheet(workbook, summarySheet, "Transcript Summary");
 
-  // Course grades sheet
   const courseGradesData = [
     ["COURSE PERFORMANCE"],
     [],
@@ -526,7 +565,6 @@ async function generateExcelTranscript(
   enrollments.forEach((enrollment) => {
     const course = enrollment.course;
 
-    // Calculate course performance from assignment submissions
     const gradedSubmissions = course.assignments.flatMap((assignment: any) =>
       assignment.submissions.filter(
         (submission: any) => submission.isGraded && submission.score !== null
@@ -550,11 +588,8 @@ async function generateExcelTranscript(
 
     const overallPercentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
     const calculatedGrade = calculateGradeFromPercentage(overallPercentage);
-
-    // Use enrollment grade if available, otherwise calculated grade
     const finalGrade = enrollment.grade || calculatedGrade;
 
-    // Determine course status
     let status = "Not Started";
     if (enrollment.isCompleted) {
       status = "Completed";
@@ -579,7 +614,6 @@ async function generateExcelTranscript(
   const gradesSheet = XLSX.utils.aoa_to_sheet(courseGradesData);
   XLSX.utils.book_append_sheet(workbook, gradesSheet, "Course Grades");
 
-  // Detailed assignments sheet
   const assignmentsData = [
     ["DETAILED ASSIGNMENT GRADES"],
     [],
@@ -637,7 +671,6 @@ async function generateExcelTranscript(
     "Assignment Details"
   );
 
-  // Grade legend sheet
   const legendData = [
     ["GRADE SCALE AND INTERPRETATION"],
     [],
@@ -657,7 +690,6 @@ async function generateExcelTranscript(
   const legendSheet = XLSX.utils.aoa_to_sheet(legendData);
   XLSX.utils.book_append_sheet(workbook, legendSheet, "Grade Scale");
 
-  // Generate Excel file
   const excelBuffer = XLSX.write(workbook, {
     bookType: "xlsx",
     type: "array",
@@ -682,3 +714,4 @@ function calculateGradeFromPercentage(percentage: number): Grade {
   if (percentage >= 50) return Grade.E;
   return Grade.F;
 }
+
