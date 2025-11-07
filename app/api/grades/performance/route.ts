@@ -31,10 +31,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log(
-      "📊 Fetching performance metrics for student:",
-      correctStudentId
-    );
+    // console.log(
+    //   "📊 Fetching performance metrics for student:",
+    //   correctStudentId
+    // );
 
     // Get enrollments with grades
     const enrollments = await prisma.enrollment.findMany({
@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
       },
     ];
 
-    console.log("✅ Performance metrics calculated");
+    // console.log("✅ Performance metrics calculated");
     return NextResponse.json(metrics);
   } catch (error) {
     console.error("Error fetching performance metrics:", error);

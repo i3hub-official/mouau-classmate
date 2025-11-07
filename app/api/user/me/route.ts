@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    console.log("Returning user data for:", user.email);
+    // console.log("Returning user data for:", user.email);
     return NextResponse.json(userData);
   } catch (error) {
     console.error("Error fetching user data:", error);

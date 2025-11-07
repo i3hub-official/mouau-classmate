@@ -78,7 +78,7 @@ export class UserServiceServer {
         };
       }
 
-      console.log("✅ User data retrieved successfully");
+      // console.log("✅ User data retrieved successfully");
       return userData;
     } catch (error) {
       console.error("Error fetching user from session:", error);

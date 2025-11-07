@@ -9,6 +9,7 @@ export const PUBLIC_PATHS = [
 
 export const PRIVATE_PATHS = [
   "/dashboard",
+  "/dashboard/*",
   "/profile",
   "/courses",
   "/grades",

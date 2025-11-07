@@ -36,6 +36,26 @@ export class StudentAlreadyExistsError extends StudentRegistrationError {
   }
 }
 
+function maskEmail(email: string) {
+  if (!email || !email.includes("@")) return "unknown";
+
+  const [user, domain] = email.split("@");
+  const maskedUser =
+    user.length <= 2
+      ? user[0] + "*"
+      : user[0] + "*".repeat(Math.max(1, user.length - 2)) + user.slice(-1);
+
+  const domainParts = domain.split(".");
+  const maskedDomain =
+    domainParts[0].length > 2
+      ? domainParts[0][0] +
+        "*".repeat(domainParts[0].length - 2) +
+        domainParts[0].slice(-1)
+      : domainParts[0][0] + "*";
+
+  return `${maskedUser}@${maskedDomain}.${domainParts.slice(1).join(".")}`;
+}
+
 // ===========================================================
 // INTERFACES
 // ===========================================================
@@ -464,11 +484,11 @@ export class StudentRegistrationService {
             },
           });
 
-          console.log("👤 User created:", {
-            id: newUser.id,
-            email: newUser.email,
-            name: newUser.name,
-          });
+          // console.log("👤 User created:", {
+          //   id: newUser.id,
+          //   email: newUser.email,
+          //   name: newUser.name,
+          // });
 
           // Create student record
           const newStudent = await tx.student.create({
@@ -497,11 +517,11 @@ export class StudentRegistrationService {
             },
           });
 
-          console.log("🎓 Student created:", {
-            id: newStudent.id,
-            matricNumber: newStudent.matricNumber,
-            userId: newStudent.userId,
-          });
+          // console.log("🎓 Student created:", {
+          //   id: newStudent.id,
+          //   matricNumber: newStudent.matricNumber,
+          //   userId: newStudent.userId,
+          // });
 
           // Create account for NextAuth
           await tx.account.create({
@@ -597,11 +617,11 @@ export class StudentRegistrationService {
     userId: string,
     name: string
   ): Promise<string> {
-    console.log("📧 sendVerificationEmail called with:", {
-      email: email || "UNDEFINED",
-      userId: userId || "UNDEFINED",
-      name: name || "UNDEFINED",
-    });
+    // console.log("📧 sendVerificationEmail called with:", {
+    //   email: email || "UNDEFINED",
+    //   userId: userId || "UNDEFINED",
+    //   name: name || "UNDEFINED",
+    // });
 
     if (!email || !userId || !name) {
       console.error("❌ Missing required parameters for verification email");
@@ -627,7 +647,7 @@ export class StudentRegistrationService {
     });
 
     if (existingToken) {
-      console.log(`⏭️ Verification email already sent recently to: ${email}`);
+      // console.log(`⏭️ Verification email already sent recently to: ${maskEmail(email)}`);
       return existingToken.token;
     }
 
@@ -641,7 +661,7 @@ export class StudentRegistrationService {
       },
     });
 
-    console.log("🔒 Deleted any old verification tokens for:", email);
+    // console.log("🔒 Deleted any old verification tokens for:", maskEmail(email));
 
     // Generate NEW verification code using nanoid (48 chars for high security)
     const verificationCode = SecurityUtils.generateVerificationCode(48);
@@ -668,11 +688,11 @@ export class StudentRegistrationService {
       );
       const verificationLink = `${baseUrl}/auth/verify-email/verify?${verificationParams}`;
 
-      console.log(`🔗 Preparing secure verification email for ${email}`);
-      console.log(`🌐 Using base URL: ${baseUrl}`);
-      console.log(
-        `🔐 Verification link structure: /auth/verify-email/verify?e=[encoded]&t=[code]&h=[hash]`
-      );
+      // console.log(`🔗 Preparing secure verification email for ${maskEmail(email)}`);
+      // console.log(`🌐 Using base URL: ${baseUrl}`);
+      // console.log(
+      //   `🔐 Verification link structure: /auth/verify-email/verify?e=[encoded]&t=[code]&h=[hash]`
+      // );
 
       const emailSent = await emailService.sendEmail({
         to: email,
@@ -695,10 +715,10 @@ export class StudentRegistrationService {
         throw new StudentRegistrationError("Failed to send verification email");
       }
 
-      console.log(`✅ Verification email successfully sent to: ${email}`);
-      console.log(
-        `🔒 Security: Using nanoid code + encoded email + timestamp hash`
-      );
+      // console.log(`✅ Verification email successfully sent to: ${maskEmail(email)}`);
+      // console.log(
+      //   `🔒 Security: Using nanoid code + encoded email + timestamp hash`
+      // );
 
       return verificationCode;
     } catch (error) {
@@ -708,7 +728,7 @@ export class StudentRegistrationService {
         await prisma.verificationToken.deleteMany({
           where: { identifier: email },
         });
-        console.log(`🧹 Cleaned up verification token for: ${email}`);
+        // console.log(`🧹 Cleaned up verification token for: ${maskEmail(email)}`);
       } catch (cleanupError) {
         console.error(
           "❌ Failed to clean up verification token:",
@@ -728,10 +748,10 @@ export class StudentRegistrationService {
    * Sends welcome email after successful verification
    */
   static async sendWelcomeEmail(email: string, name: string): Promise<boolean> {
-    console.log("🎉 sendWelcomeEmail called with:", {
-      email: email || "UNDEFINED",
-      name: name || "UNDEFINED",
-    });
+    // console.log("🎉 sendWelcomeEmail called with:", {
+    //   email: email || "UNDEFINED",
+    //   name: name || "UNDEFINED",
+    // });
 
     if (!email || !name) {
       console.error("❌ Missing required parameters for welcome email");
@@ -753,9 +773,9 @@ export class StudentRegistrationService {
       });
 
       if (emailSent) {
-        console.log(`✅ Welcome email sent to: ${email}`);
+        // console.log(`✅ Welcome email sent to: ${maskEmail(email)}`);
       } else {
-        console.error(`❌ Failed to send welcome email to: ${email}`);
+        // console.error(`❌ Failed to send welcome email to: ${maskEmail(email)}`);
       }
 
       return emailSent;
@@ -782,7 +802,7 @@ export class StudentRegistrationService {
       if (encodedEmail) {
         try {
           emailFromParam = SecurityUtils.decodeEmail(encodedEmail);
-          console.log("📧 Decoded email from parameter");
+          // console.log("📧 Decoded email from parameter");
         } catch (decodeError) {
           console.error("❌ Failed to decode email parameter:", decodeError);
           throw new ValidationError("Invalid verification link");
@@ -834,7 +854,7 @@ export class StudentRegistrationService {
         where: { token: code },
       });
 
-      console.log("✅ Email verified successfully for:", user.email);
+      // console.log("✅ Email verified successfully for:", user.email);
 
       // Send welcome email
       try {
@@ -908,9 +928,9 @@ export class StudentRegistrationService {
       );
       const resetLink = `${baseUrl}/auth/reset-password?${resetParams}`;
 
-      console.log(
-        "🔐 Password reset link structure: /auth/reset-password?e=[encoded]&t=[code]&h=[hash]"
-      );
+      // console.log(
+      //   "🔐 Password reset link structure: /auth/reset-password?e=[encoded]&t=[code]&h=[hash]"
+      // );
 
       const emailSent = await emailService.sendEmail({
         to: email,
@@ -931,10 +951,10 @@ export class StudentRegistrationService {
         );
       }
 
-      console.log(`✅ Password reset email sent to: ${email}`);
-      console.log(
-        `🔒 Security: Using nanoid code + encoded email + timestamp hash`
-      );
+      // console.log(`✅ Password reset email sent to: ${maskEmail(email)}`);
+      // console.log(
+      //   `🔒 Security: Using nanoid code + encoded email + timestamp hash`
+      // );
 
       return resetCode;
     } catch (error) {
@@ -959,7 +979,7 @@ export class StudentRegistrationService {
    * Resends verification email
    */
   static async resendVerificationEmail(email: string): Promise<string> {
-    console.log("🔄 Resending verification email for:", email);
+    // console.log("🔄 Resending verification email for:", maskEmail(email));
 
     if (!email) {
       throw new ValidationError("Email is required");
@@ -991,10 +1011,10 @@ export class StudentRegistrationService {
     });
 
     if (!user) {
-      console.log(
-        "⚠️ Resend verification requested for non-existent email:",
-        email
-      );
+      // console.log(
+      //   "⚠️ Resend verification requested for non-existent email:",
+      //   maskEmail(email)
+      // );
       return "email_sent";
     }
 

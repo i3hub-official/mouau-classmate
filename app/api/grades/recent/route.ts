@@ -6,7 +6,7 @@ import { Grade } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("🔍 Starting recent grades request");
+    // console.log("🔍 Starting recent grades request");
     const currentUser = await UserServiceServer.getCurrentUserFromSession();
 
     if (!currentUser) {
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log("📊 Fetching recent grades for student:", correctStudentId);
+    // console.log("📊 Fetching recent grades for student:", correctStudentId);
 
     // Get recent graded submissions
     const submissions = await prisma.assignmentSubmission.findMany({
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    console.log("✅ Found recent grades:", recentGraded.length);
+    // console.log("✅ Found recent grades:", recentGraded.length);
     return NextResponse.json(recentGraded);
   } catch (error) {
     console.error("Error fetching recent graded assignments:", error);

@@ -6,11 +6,11 @@ import { Grade } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('🔍 Starting grade summary request');
+    // console.log('🔍 Starting grade summary request');
     const currentUser = await UserServiceServer.getCurrentUserFromSession();
-    
+
     if (!currentUser) {
-      console.log('❌ Unauthorized access attempt');
+      console.log("❌ Unauthorized access attempt");
       return NextResponse.json(
         { error: "Unauthorized - Please sign in" },
         { status: 401 }
@@ -21,8 +21,10 @@ export async function GET(request: NextRequest) {
     const requestedId = searchParams.get("studentId");
 
     // Get the correct student ID
-    const correctStudentId = await UserServiceServer.getCorrectStudentId(requestedId || undefined);
-    
+    const correctStudentId = await UserServiceServer.getCorrectStudentId(
+      requestedId || undefined
+    );
+
     if (!correctStudentId) {
       return NextResponse.json(
         { error: "Student profile not found" },
@@ -30,7 +32,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log('📊 Fetching grade summary for student:', correctStudentId);
+    // console.log('📊 Fetching grade summary for student:', correctStudentId);
 
     // Get all enrollments with course and assignment data
     const enrollments = await prisma.enrollment.findMany({
@@ -149,7 +151,7 @@ export async function GET(request: NextRequest) {
       earnedCredits,
     };
 
-    console.log("✅ Grade summary calculated");
+    // console.log("✅ Grade summary calculated");
     return NextResponse.json(summary);
   } catch (error) {
     console.error("Error fetching grade summary:", error);
