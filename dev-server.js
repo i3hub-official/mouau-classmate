@@ -47,18 +47,50 @@ function getLanIPs() {
 let httpServer = null;
 let httpsServer = null;
 let currentIPs = getLanIPs();
+let isRestarting = false;
+
+// ===== Helper: Graceful Restart =====
+async function restartServers() {
+  if (isRestarting) return;
+  isRestarting = true;
+
+  console.log('🔄 Restarting servers due to network change...');
+
+  // Close servers gracefully
+  if (httpServer) {
+    await new Promise(res => httpServer.close(res));
+    httpServer = null;
+  }
+  if (httpsServer) {
+    await new Promise(res => httpsServer.close(res));
+    httpsServer = null;
+  }
+
+  // Wait a moment to release Next.js dev lock
+  await new Promise(res => setTimeout(res, 1500));
+
+  // Remove stale Next.js lock file (only in dev mode)
+  if (dev) {
+    const lockFile = path.join(process.cwd(), '.next', 'dev', 'lock');
+    if (fs.existsSync(lockFile)) {
+      try {
+        fs.unlinkSync(lockFile);
+        console.log('🧹 Removed stale Next.js lock file.');
+      } catch (err) {
+        console.warn('⚠️ Could not remove .next/dev/lock:', err.message);
+      }
+    }
+  }
+
+  // Restart servers
+  await startServers().catch(err => console.error('Error restarting servers:', err));
+
+  isRestarting = false;
+}
 
 // ===== Start servers =====
 async function startServers() {
   await app.prepare();
-
-  // Close any existing servers before restarting
-  if (httpServer) {
-    httpServer.close(() => console.log('🔄 Restarting HTTP server...'));
-  }
-  if (httpsServer) {
-    httpsServer.close(() => console.log('🔄 Restarting HTTPS server...'));
-  }
 
   httpServer = createHttpServer((req, res) => handle(req, res))
     .listen(httpPort, '0.0.0.0', () => {
@@ -93,6 +125,12 @@ function watchNetworkChanges(interval = 5000) {
   setInterval(() => {
     const newIPs = getLanIPs();
 
+    // Skip restart if temporarily offline
+    if (newIPs.length === 0) {
+      console.log('⚠️ Network temporarily lost, skipping restart.');
+      return;
+    }
+
     if (JSON.stringify(newIPs) !== JSON.stringify(currentIPs)) {
       console.log(`⚠️ Detected network change:`);
       console.log(`Old IPs: ${currentIPs.join(', ') || 'none'}`);
@@ -102,7 +140,7 @@ function watchNetworkChanges(interval = 5000) {
       // Debounce restart
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        startServers().catch(err => console.error('Error restarting servers:', err));
+        restartServers().catch(err => console.error('Error restarting servers:', err));
       }, 1000);
     }
   }, interval);
@@ -112,7 +150,6 @@ function watchNetworkChanges(interval = 5000) {
 startServers().then(() => {
   watchNetworkChanges(5000); // check every 5 seconds
 });
-
 
 
 
