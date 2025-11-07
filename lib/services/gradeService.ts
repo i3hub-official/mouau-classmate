@@ -170,7 +170,7 @@ export class GradeService {
 
       if (!response.ok) {
         if (response.status === 404) {
-          console.warn("No performance metrics found");
+          // console.warn("No performance metrics found");
           return this.getDefaultPerformanceMetrics();
         }
         throw new Error(
