@@ -19,14 +19,10 @@ export const metadata: Metadata = {
     "A modern learning management platform connecting students and lecturers at MOUAU. Streamline coursework, materials, and collaboration securely and efficiently.",
   icons: {
     icon: [
-      { url: "/favicon.ico", type: "image/x-icon" },
-      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
-      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
-      {
-        url: "/android-icon-192x192.png",
-        sizes: "192x192",
-        type: "image/png",
-      },
+      { url: "/favicon.ico" },
+      { url: "/favicon-16x16.png", sizes: "16x16" },
+      { url: "/favicon-32x32.png", sizes: "32x32" },
+      { url: "/android-chrome-192x192.png", sizes: "192x192" },
     ],
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
   },
