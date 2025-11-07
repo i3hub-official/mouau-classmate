@@ -595,6 +595,9 @@ export class GradeService {
         if (response.status === 401) {
           throw new Error("Authentication required. Please sign in again.");
         }
+        if (response.status === 404) {
+          throw new Error("Student record not found.");
+        }
         throw new Error(`Failed to export transcript: ${response.statusText}`);
       }
 
