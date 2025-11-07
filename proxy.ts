@@ -10,7 +10,7 @@ import { Orchestrator } from "@/lib/middleware/orchestrator";
 // Matcher Config - Define what gets processed
 export const config = {
   matcher: [
-    "/((?!auth|auth|security-block|_next/static|_next/image|favicon.ico|robots.txt|health).*)",
+    "/((?!auth|auth|security-block|_next/static|_next/image|favicon.ico|manifest.json|robots.txt|health).*)",
   ],
 };
 
