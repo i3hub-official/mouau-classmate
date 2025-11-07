@@ -3,7 +3,7 @@ import { Poppins } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/app/components/theme-provider";
 
-// 🆒 Cool academic font (modern + legible)
+// 🆒 Academic + modern font
 const poppins = Poppins({
   variable: "--font-poppins",
   subsets: ["latin"],
@@ -16,23 +16,29 @@ const poppins = Poppins({
 export const metadata: Metadata = {
   title: "MOUAU Classmate - Learning Management System",
   description:
-    "A modern learning management platform connecting students and lecturers at MOUAU. Streamline coursework, materials, and collaboration securely and efficiently.",
+    "A modern academic management platform connecting students and lecturers at MOUAU. Streamline coursework, materials, and collaboration seamlessly.",
+  manifest: "/manifest.json",
   icons: {
     icon: [
       { url: "/favicon.ico" },
       { url: "/favicon-16x16.png", sizes: "16x16" },
       { url: "/favicon-32x32.png", sizes: "32x32" },
-      { url: "/android-chrome-192x192.png", sizes: "192x192" },
+      { url: "/android/android-launchericon-192-192.png", sizes: "192x192" },
+      { url: "/android/android-launchericon-512-512.png", sizes: "512x512" },
     ],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+    apple: [
+      { url: "/ios/ios-icon-180.png", sizes: "180x180" },
+      { url: "/ios/ios-icon-167.png", sizes: "167x167" },
+      { url: "/ios/ios-icon-152.png", sizes: "152x152" },
+    ],
+    other: [{ rel: "mask-icon", url: "/favicon-32x32.png", color: "#FFF600" }],
   },
-  manifest: "/manifest.json",
 
   openGraph: {
     title: "MOUAU Classmate - Learning Management System",
     description:
-      "Your digital classroom for Physics and beyond. Stay connected, organized, and engaged at MOUAU.",
-    url: "https://mouau-classmate.vercel.app",
+      "Your digital classroom for MOUAU. Learn, collaborate, and stay organized anywhere.",
+    url: "https://mouaucm.vercel.app",
     siteName: "MOUAU Classmate",
     images: [
       {
@@ -50,20 +56,20 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "MOUAU Classmate - Learning Management System",
     description:
-      "A seamless platform connecting students and lecturers for physics education and academic collaboration.",
+      "A seamless platform for MOUAU students and lecturers — modern, fast, and collaborative.",
     images: ["/og-image.png"],
   },
 
   keywords: [
     "MOUAU",
-    "learning management system",
+    "Learning Management System",
     "LMS",
     "student portal",
-    "academic resources",
     "university education",
     "classroom collaboration",
-    "physics education",
-  ].join(", "),
+    "academic resources",
+    "MOUAU Classmate",
+  ],
 
   authors: [{ name: "MOUAU Classmate Team" }],
   category: "education",
@@ -77,7 +83,7 @@ export const metadata: Metadata = {
 
 // 🖼️ Theme Color (used by browsers + PWA UI)
 export const viewport: Viewport = {
-  themeColor: "#FFF600", // main MOUAU accent color
+  themeColor: "#FFF600",
 };
 
 // =========================
@@ -91,16 +97,19 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Apple touch icons */}
+        {/* Apple Touch Icons */}
         <link
           rel="apple-touch-icon-precomposed"
           sizes="180x180"
-          href="/apple-touch-icon.png"
+          href="/ios/ios-icon-180.png"
         />
 
         {/* Microsoft-specific */}
         <meta name="msapplication-TileColor" content="#FFF600" />
-        <meta name="msapplication-TileImage" content="/ms-icon-144x144.png" />
+        <meta
+          name="msapplication-TileImage"
+          content="/windows11/Square150x150Logo.scale-100.png"
+        />
         <meta name="msapplication-config" content="/browserconfig.xml" />
 
         {/* PWA Meta */}
@@ -140,7 +149,6 @@ export default function RootLayout({
           storageKey="mouau-cm-theme"
           disableTransitionOnChange={false}
         >
-          {/* Main Content */}
           <main>{children}</main>
         </ThemeProvider>
       </body>
