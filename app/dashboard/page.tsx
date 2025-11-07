@@ -77,14 +77,14 @@ const getPersistentGreeting = async (surname: string): Promise<string> => {
         "Burning midnight oil, {surname}?",
         "Late night studying session, {surname}?",
         "Night owl mode activated, {surname}!",
-        "Pushing through night, {surname}!",
+        "Pushing through the night, {surname}!",
         "Dedication knows no time, {surname}!",
         "The quiet hours are perfect for focus, {surname}!",
       ],
       morning: [
         "Rise and shine, {surname}! Ready to conquer today?",
         "Good morning, {surname}! Let's make today count!",
-        "Early bird catches knowledge, {surname}!",
+        "Early bird catches the knowledge, {surname}!",
         "Morning motivation, {surname}! Time to excel!",
         "Fresh start to a productive day, {surname}!",
         "Hello {surname}! Ready to learn something new?",
@@ -134,6 +134,14 @@ const getPersistentGreeting = async (surname: string): Promise<string> => {
   }
 };
 
+// Calculate next hourly check time (at the top of the next hour)
+const getNextHourlyCheck = (): Date => {
+  const now = new Date();
+  const nextHour = new Date(now);
+  nextHour.setHours(now.getHours() + 1, 0, 0, 0);
+  return nextHour;
+};
+
 // Stat Cards Component
 function StatCard({
   icon: Icon,
@@ -176,6 +184,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [greeting, setGreeting] = useState<string>("");
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+  const [nextCheckTime, setNextCheckTime] = useState<Date | null>(null);
 
   // Fetch user data and greeting on component mount
   useEffect(() => {
@@ -191,7 +200,7 @@ export default function DashboardPage() {
           if (userData.greeting) {
             setGreeting(userData.greeting.replace("{surname}", surname));
           } else {
-            // Otherwise fetch a new greeting
+            // Otherwise, fetch a new greeting
             const newGreeting = await getPersistentGreeting(surname);
             setGreeting(newGreeting);
           }
@@ -231,12 +240,25 @@ export default function DashboardPage() {
 
     const surname = getSurname(dashboardData.userInfo.name);
 
+    // Calculate when to check next (at the top of the next hour)
+    const nextHour = getNextHourlyCheck();
+    setNextCheckTime(nextHour);
+
     const checkInterval = setInterval(async () => {
-      const updatedGreeting = await getPersistentGreeting(surname);
-      if (updatedGreeting !== greeting) {
-        setGreeting(updatedGreeting);
+      const now = new Date();
+
+      // Only check if we've reached the next check time
+      if (now >= nextHour) {
+        const updatedGreeting = await getPersistentGreeting(surname);
+        if (updatedGreeting !== greeting) {
+          setGreeting(updatedGreeting);
+
+          // Calculate the next check time
+          const newNextHour = getNextHourlyCheck();
+          setNextCheckTime(newNextHour);
+        }
       }
-    }, 60000); // Check every minute
+    }, 60000); // Check every minute but only update at the top of the hour
 
     return () => clearInterval(checkInterval);
   }, [initialLoadComplete, dashboardData?.userInfo?.name, greeting]);
