@@ -83,7 +83,7 @@ enum AuditAction {
   USER_LOGIN_ERROR
   EXPORT_TRANSCRIPT
   EXPORT_TRANSCRIPT_FAILED
-  EXPORT_TRANSCRIPT_SUCCESS
+  // Add any other missing actions you need
 }
 
 enum ResourceType {
