@@ -99,6 +99,52 @@ export interface RegistrationResult {
 }
 
 // ===========================================================
+// CASE FORMATTING UTILITIES
+// ===========================================================
+
+class CaseFormattingUtils {
+  /**
+   * Convert string to sentence case (first letter uppercase, rest lowercase)
+   */
+  static toSentenceCase(str: string): string {
+    if (!str || str.trim() === "") return str;
+    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+  }
+
+  /**
+   * Format name fields (surname, firstName, otherName) to sentence case
+   */
+  static formatNameField(name: string): string {
+    if (!name || name.trim() === "") return name;
+    return this.toSentenceCase(name.trim());
+  }
+
+  /**
+   * Format department and course to sentence case
+   */
+  static formatDepartmentCourse(field: string): string {
+    if (!field || field.trim() === "") return field;
+    return this.toSentenceCase(field.trim());
+  }
+
+  /**
+   * Format college and matric number to uppercase
+   */
+  static formatUpperCase(field: string): string {
+    if (!field || field.trim() === "") return field;
+    return field.trim().toUpperCase();
+  }
+
+  /**
+   * Format gender and marital status to uppercase
+   */
+  static formatGenderStatus(field: string): string {
+    if (!field || field.trim() === "") return field;
+    return field.trim().toUpperCase();
+  }
+}
+
+// ===========================================================
 // VALIDATION UTILITIES
 // ===========================================================
 
@@ -134,7 +180,7 @@ class ValidationUtils {
   }
 
   static normalizeGender(gender: string): "MALE" | "FEMALE" | "OTHER" {
-    const upperGender = gender.toUpperCase();
+    const upperGender = CaseFormattingUtils.formatGenderStatus(gender);
     if (
       upperGender === "MALE" ||
       upperGender === "FEMALE" ||
@@ -148,7 +194,7 @@ class ValidationUtils {
   static normalizeMaritalStatus(
     status: string
   ): "SINGLE" | "MARRIED" | "DIVORCED" | "WIDOWED" {
-    const upperStatus = status.toUpperCase();
+    const upperStatus = CaseFormattingUtils.formatGenderStatus(status);
     if (
       upperStatus === "SINGLE" ||
       upperStatus === "MARRIED" ||
@@ -342,16 +388,23 @@ export class StudentRegistrationService {
         unprotectData(studentRecord.lga, "location"),
       ]);
 
+      // Apply case formatting to the decrypted data
       return {
-        surname: decryptedSurname,
-        firstName: decryptedFirstName,
-        otherName: decryptedOtherName || undefined,
+        surname: CaseFormattingUtils.formatNameField(decryptedSurname),
+        firstName: CaseFormattingUtils.formatNameField(decryptedFirstName),
+        otherName: decryptedOtherName
+          ? CaseFormattingUtils.formatNameField(decryptedOtherName)
+          : undefined,
         gender: studentRecord.gender || "",
         jambReg: decryptedJambReg,
         photo: studentRecord.passportUrl || undefined,
-        college: studentRecord.college,
-        department: studentRecord.department,
-        course: studentRecord.course,
+        college: CaseFormattingUtils.formatUpperCase(studentRecord.college),
+        department: CaseFormattingUtils.formatDepartmentCourse(
+          studentRecord.department
+        ),
+        course: CaseFormattingUtils.formatDepartmentCourse(
+          studentRecord.course
+        ),
         state: decryptedState,
         lga: decryptedLga,
         maritalStatus: studentRecord.maritalStatus || "",
@@ -397,12 +450,31 @@ export class StudentRegistrationService {
       throw new ValidationError("Please provide a valid email address");
     }
 
+    // Apply case formatting to the student data
+    const formattedStudentData = {
+      ...studentData,
+      surname: CaseFormattingUtils.formatNameField(studentData.surname),
+      firstName: CaseFormattingUtils.formatNameField(studentData.firstName),
+      otherName: studentData.otherName
+        ? CaseFormattingUtils.formatNameField(studentData.otherName)
+        : undefined,
+      gender: CaseFormattingUtils.formatGenderStatus(studentData.gender),
+      college: CaseFormattingUtils.formatUpperCase(studentData.college),
+      department: CaseFormattingUtils.formatDepartmentCourse(
+        studentData.department
+      ),
+      course: CaseFormattingUtils.formatDepartmentCourse(studentData.course),
+      maritalStatus: CaseFormattingUtils.formatGenderStatus(
+        studentData.maritalStatus
+      ),
+    };
+
     // Normalize gender and marital status
     const normalizedGender = ValidationUtils.normalizeGender(
-      studentData.gender
+      formattedStudentData.gender
     );
     const normalizedMaritalStatus = ValidationUtils.normalizeMaritalStatus(
-      studentData.maritalStatus
+      formattedStudentData.maritalStatus
     );
 
     // Protect sensitive data using the new dataProtection system
@@ -418,15 +490,15 @@ export class StudentRegistrationService {
       protectedLga,
       hashedPassword,
     ] = await Promise.all([
-      protectData(studentData.email, "email"),
-      protectData(studentData.phone, "phone"),
+      protectData(formattedStudentData.email, "email"),
+      protectData(formattedStudentData.phone, "phone"),
       protectData(matricNumber, "nin"),
       protectData(jambReg, "nin"),
-      protectData(studentData.surname.toUpperCase(), "name"),
-      protectData(studentData.firstName.toUpperCase(), "name"),
-      protectData(studentData.otherName?.toUpperCase() || "", "name"),
-      protectData(studentData.state, "location"),
-      protectData(studentData.lga, "location"),
+      protectData(formattedStudentData.surname, "name"),
+      protectData(formattedStudentData.firstName, "name"),
+      protectData(formattedStudentData.otherName || "", "name"),
+      protectData(formattedStudentData.state, "location"),
+      protectData(formattedStudentData.lga, "location"),
       protectData(password, "password"), // Use the new password protection tier
     ]);
 
@@ -436,8 +508,8 @@ export class StudentRegistrationService {
         OR: [
           { matricNumber: matricNumber },
           { jambRegNumber: jambReg },
-          { email: studentData.email },
-          { phone: studentData.phone },
+          { email: formattedStudentData.email },
+          { phone: formattedStudentData.phone },
         ],
       },
     });
@@ -451,7 +523,7 @@ export class StudentRegistrationService {
     // Check if user already exists
     const existingUser = await prisma.user.findFirst({
       where: {
-        email: studentData.email,
+        email: formattedStudentData.email,
       },
     });
 
@@ -468,13 +540,13 @@ export class StudentRegistrationService {
       // Database transaction
       const result = await prisma.$transaction(
         async (tx) => {
-          // Create user
+          // Create user with formatted name
           const newUser = await tx.user.create({
             data: {
-              name: `${studentData.surname.toUpperCase()} ${studentData.firstName.toUpperCase()} ${
-                studentData.otherName?.toUpperCase() || ""
-              }`.trim(),
-              email: studentData.email,
+              name: `${formattedStudentData.surname} ${
+                formattedStudentData.firstName
+              } ${formattedStudentData.otherName || ""}`.trim(),
+              email: formattedStudentData.email,
               role: "STUDENT",
               isActive: false,
               passwordHash: hashedPassword.encrypted, // Use the encrypted password from dataProtection
@@ -493,7 +565,7 @@ export class StudentRegistrationService {
           // Create student record
           const newStudent = await tx.student.create({
             data: {
-              matricNumber: matricNumber,
+              matricNumber: CaseFormattingUtils.formatUpperCase(matricNumber),
               jambRegNumber: protectedJambReg.encrypted,
               nin: protectedNin.encrypted,
               lastName: protectedSurname.encrypted,
@@ -501,11 +573,11 @@ export class StudentRegistrationService {
               otherName: protectedOtherName.encrypted,
               gender: normalizedGender,
               phone: protectedPhone.encrypted,
-              passportUrl: studentData.photo,
+              passportUrl: formattedStudentData.photo,
               email: protectedEmail.encrypted,
-              department: studentData.department,
-              course: studentData.course,
-              college: studentData.college,
+              department: formattedStudentData.department,
+              course: formattedStudentData.course,
+              college: formattedStudentData.college,
               state: protectedState.encrypted,
               lga: protectedLga.encrypted,
               maritalStatus: normalizedMaritalStatus,
@@ -564,9 +636,9 @@ export class StudentRegistrationService {
     // Send verification email OUTSIDE transaction - ONLY ONCE
     try {
       const verificationToken = await this.sendVerificationEmail(
-        studentData.email,
+        formattedStudentData.email,
         user.id,
-        `${studentData.surname.toUpperCase()}`.trim()
+        formattedStudentData.surname
       );
 
       console.log("✅ Verification email process completed with NEW token");
@@ -585,8 +657,8 @@ export class StudentRegistrationService {
           details: {
             matricNumber,
             jambReg,
-            college: studentData.college,
-            department: studentData.department,
+            college: formattedStudentData.college,
+            department: formattedStudentData.department,
             gender: normalizedGender,
             maritalStatus: normalizedMaritalStatus,
             emailSent: true,

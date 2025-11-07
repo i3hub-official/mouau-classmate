@@ -1,7 +1,8 @@
-// app/page.tsx
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { useRouter } from "next/navigation";
 import {
   BookOpen,
   Users,
@@ -18,50 +19,50 @@ import {
   Linkedin,
 } from "lucide-react";
 import { ThemeToggle } from "@/app/components/theme-toggle";
-import { prisma } from "@/lib/server/prisma";
+import { UserService } from "@/lib/services/userService"; // Assuming this is the correct path
 
-async function checkAuth() {
-  try {
-    const cookieStore = await cookies();
-    const sessionToken = cookieStore.get("session-token")?.value;
+export default function HomePage() {
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
-    if (!sessionToken) {
-      return null;
-    }
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      try {
+        // Attempt to get the current user
+        const user = await UserService.getCurrentUser();
 
-    // Check if session exists and is valid
-    const session = await prisma.session.findUnique({
-      where: { sessionToken },
-      include: {
-        user: {
-          select: {
-            id: true,
-            role: true,
-          },
-        },
-      },
-    });
+        if (user && user.id) {
+          // User is authenticated, redirect to the dashboard
+          // Use replace so the user can't click "back" to the landing page
+          router.replace("/dashboard");
+        } else {
+          // User is not authenticated, show the landing page
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error("Error checking auth status:", error);
+        // If there's an error, assume user is not logged in
+        setLoading(false);
+      }
+    };
 
-    if (!session || session.expires < new Date()) {
-      return null;
-    }
+    checkAuthStatus();
+  }, [router]); // Add router as a dependency
 
-    return session.user;
-  } catch (error) {
-    console.error("Auth check error:", error);
-    return null;
+  if (loading) {
+    // Show a full-page loader while we check authentication
+    // This prevents the landing page from flashing before redirect
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
   }
-}
 
-export default async function HomePage() {
-  // Check if user is authenticated
-  const user = await checkAuth();
-
-  // If user is authenticated, redirect to dashboard
-  if (user) {
-    redirect("/dashboard");
-  }
-
+  // If not loading and not redirected, render the landing page
   return (
     <div className="min-h-screen bg-linear-to-br from-background via-accent/5 to-primary/5 flex flex-col">
       {/* Header */}
@@ -76,6 +77,12 @@ export default async function HomePage() {
                 src="/mouau_logo.webp"
                 alt="MOUAU Logo"
                 className="h-6 w-6 sm:h-7 sm:w-7 object-contain"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.onerror = null;
+                  target.src =
+                    "https://placehold.co/40x40/10b981/ffffff?text=M";
+                }}
               />
             </div>
             <div>

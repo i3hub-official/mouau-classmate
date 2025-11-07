@@ -2,7 +2,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { BookOpen, Calendar, FileText, Users } from "lucide-react";
-import { SignOutModal } from "@/app/components/SignOutModal";
 import { RecentActivities } from "@/app/components/RecentActivities";
 import { UpcomingDeadlines } from "@/app/components/UpcomingDeadlines";
 import { AcademicProgress } from "@/app/components/AcademicProgress";
@@ -36,6 +35,110 @@ interface DashboardStats {
     averageScore: number;
   };
 }
+
+// Array of 60 random greetings
+const greetings = [
+  "Happy {day}!",
+  "Wonderful {day}!",
+  "Great to see you this {day}!",
+  "Hope you're having a fantastic {day}!",
+  "Welcome back! It's a beautiful {day}!",
+  "Good {day}! Ready to learn?",
+  "Hello! Let's make this {day} count!",
+  "Greetings! What a lovely {day}!",
+  "Hi there! Hope your {day} is amazing!",
+  "Welcome! Let's conquer this {day} together!",
+  "Rise and shine! It's {day}!",
+  "Hello scholar! Happy {day}!",
+  "Good to see you this {day}!",
+  "Welcome back! Let's make today productive!",
+  "Greetings! Ready for academic excellence?",
+  "Hello! Time to shine this {day}!",
+  "Welcome! Your journey continues today!",
+  "Hi! Let's achieve greatness this {day}!",
+  "Greetings! Another day to learn and grow!",
+  "Welcome back! Your future starts now!",
+
+  // Additional 40 greetings
+  "Awesome {day} ahead!",
+  "Welcome! Knowledge awaits you this {day}!",
+  "Hello! Let's embrace this {day} with enthusiasm!",
+  "Greetings! Make this {day} remarkable!",
+  "Welcome back! Success starts today!",
+  "Hi there! Ready to expand your mind this {day}?",
+  "Hello scholar! Let's make this {day} unforgettable!",
+  "Welcome! Your potential is limitless this {day}!",
+  "Greetings! Another opportunity to excel!",
+  "Happy {day}! Let the learning begin!",
+  "Welcome back! Your dedication inspires us!",
+  "Hello! Today is yours to conquer!",
+  "Greetings! Let's create magic this {day}!",
+  "Welcome! The classroom awaits your brilliance!",
+  "Hi! This {day} holds endless possibilities!",
+  "Hello scholar! Your journey to greatness continues!",
+  "Welcome back! Let's write your success story today!",
+  "Greetings! Academic adventures await this {day}!",
+  "Happy {day}! Your mind is your superpower!",
+  "Welcome! Let's turn dreams into reality today!",
+  "Hello! This {day} is your canvas - paint it bright!",
+  "Greetings! Ready to unlock new knowledge?",
+  "Welcome back! Your curiosity leads to discovery!",
+  "Hi there! Let's make this {day} extraordinary!",
+  "Hello scholar! Wisdom awaits your arrival!",
+  "Welcome! Today's lesson: you are capable!",
+  "Greetings! Let's build your future this {day}!",
+  "Happy {day}! Your education is your passport!",
+  "Welcome back! The world needs your brilliance!",
+  "Hello! Let's make today's chapter amazing!",
+  "Greetings! Your potential shines bright this {day}!",
+  "Welcome! Ready to be inspired this {day}?",
+  "Hi! Today is perfect for breakthroughs!",
+  "Hello scholar! Let's create academic wonders!",
+  "Welcome back! Your success story continues!",
+  "Greetings! This {day} is full of promise!",
+  "Happy {day}! Learning never looked so good!",
+  "Welcome! Let's make today count together!",
+  "Hello! Your academic journey continues!",
+  "Greetings! Ready to master new challenges?",
+  "Welcome back! Today's the day to shine!",
+];
+
+// Helper function to convert text to sentence case
+const toSentenceCase = (text: string): string => {
+  if (!text) return text;
+  return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+};
+
+// Helper function to get day of week
+const getDayOfWeek = () => {
+  const days = [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+  ];
+  return days[new Date().getDay()];
+};
+
+// Helper function to get random greeting
+const getRandomGreeting = () => {
+  const day = getDayOfWeek();
+  const randomIndex = Math.floor(Math.random() * greetings.length);
+  return greetings[randomIndex].replace("{day}", day);
+};
+
+// Helper function to extract surname from full name and convert to sentence case
+const getSurname = (fullName?: string) => {
+  if (!fullName) return "Student";
+
+  const nameParts = fullName.trim().split(" ");
+  // Return the last part as surname in sentence case
+  const surname = nameParts[nameParts.length - 1];
+  return toSentenceCase(surname);
+};
 
 // Stat Cards Component
 function StatCard({
@@ -150,6 +253,8 @@ export default function DashboardPage() {
   }
 
   const userData = dashboardData?.userInfo;
+  const randomGreeting = getRandomGreeting();
+  const userSurname = getSurname(userData?.name);
 
   return (
     <div className="min-h-screen bg-background">
@@ -161,7 +266,7 @@ export default function DashboardPage() {
         {/* Welcome Section */}
         <div>
           <h2 className="text-3xl font-bold text-foreground mb-2">
-            Welcome back, {userData?.name?.split(" ")[0] || "Student"}!
+            {randomGreeting} {userSurname}!
           </h2>
           <p className="text-lg text-muted-foreground">
             Here's what's happening with your academic journey today.
