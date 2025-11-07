@@ -581,20 +581,20 @@ export class GradeService {
   /**
    * Export grade data (for transcript generation)
    */
-  static async exportTranscript(
-    studentId: string,
-    format: "pdf" | "excel"
-  ): Promise<Blob> {
+  /**
+   * Export grade data (for transcript generation)
+   */
+  static async exportTranscript(format: "pdf" | "excel"): Promise<Blob> {
     try {
-      const response = await fetch(
-        `/api/grades/export?studentId=${studentId}&format=${format}`,
-        {
-          method: "GET",
-          credentials: "include",
-        }
-      );
+      const response = await fetch(`/api/grades/export?format=${format}`, {
+        method: "GET",
+        credentials: "include",
+      });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Authentication required. Please sign in again.");
+        }
         throw new Error(`Failed to export transcript: ${response.statusText}`);
       }
 
