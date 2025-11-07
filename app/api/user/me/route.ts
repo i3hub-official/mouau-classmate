@@ -234,14 +234,22 @@ export async function GET(request: NextRequest) {
       } catch (error) {
         console.error(`[USER_ME] Failed to update greeting:`, error);
         // Fall back to generating a new greeting without persisting
-        greetingData = generateNewGreeting();
+        const tempGreeting = generateNewGreeting();
+        greetingData = {
+          greeting: tempGreeting.greeting,
+          greetingNextChange: tempGreeting.nextChange,
+        };
       }
     } else if (!greetingFieldsExist) {
       console.log(
         `[USER_ME] Greeting fields don't exist, generating temporary greeting`
       );
       // Generate a temporary greeting without persisting
-      greetingData = generateNewGreeting();
+      const tempGreeting = generateNewGreeting();
+      greetingData = {
+        greeting: tempGreeting.greeting,
+        greetingNextChange: tempGreeting.nextChange,
+      };
     } else {
       console.log(`[USER_ME] Using existing greeting for user ${user.id}`);
     }
