@@ -79,21 +79,6 @@ export async function GET(request: NextRequest) {
                         studentId: correctStudentId,
                       },
                       orderBy: { submittedAt: "desc" },
-                      take: 1,
-                      select: {
-                        id: true,
-                        isGraded: true,
-                        studentId: true,
-                        submittedAt: true,
-                        score: true,
-                        submissionUrl: true,
-                        content: true,
-                        feedback: true,
-                        isLate: true,
-                        attemptNumber: true,
-                        assignmentId: true,
-                        grade: true
-                      },
                     },
                   },
                 },
@@ -133,9 +118,13 @@ export async function GET(request: NextRequest) {
     const allGradedSubmissions = enrollments.flatMap((enrollment) => {
       return enrollment.course.assignments.flatMap((assignment) => {
         return assignment.submissions
-          .filter((submission) => submission.isGraded && submission.grade)
+          .filter(
+            (submission) => submission.isGraded && submission.score !== null
+          )
           .map((submission) => ({
-            grade: submission.grade as Grade,
+            grade: calculateGradeFromPercentage(
+              (submission.score! / assignment.maxScore) * 100
+            ),
             credits: enrollment.course.credits,
           }));
       });
@@ -221,12 +210,15 @@ async function generateExcelTranscript(
     ["Michael Okpara University of Agriculture, Umudike"],
     [],
     ["STUDENT INFORMATION"],
-    ["Full Name:", student.user?.name || "N/A"],
+    [
+      "Full Name:",
+      student.user?.name || `${student.firstName} ${student.lastName}`,
+    ],
     ["Matric Number:", student.matricNumber],
     ["Department:", student.department],
     ["Course of Study:", student.course],
     ["College:", student.college],
-    ["Email:", student.user?.email || "N/A"],
+    ["Email:", student.user?.email || student.email],
     [
       "Date Enrolled:",
       student.dateEnrolled
@@ -283,7 +275,7 @@ async function generateExcelTranscript(
       "Semester",
       "Progress %",
       "Status",
-      "Grade",
+      "Course Grade",
       "Graded Assignments",
       "Overall %",
     ],
@@ -292,9 +284,11 @@ async function generateExcelTranscript(
   enrollments.forEach((enrollment) => {
     const course = enrollment.course;
 
-    // Calculate course performance
+    // Calculate course performance from assignment submissions
     const gradedSubmissions = course.assignments.flatMap((assignment: any) =>
-      assignment.submissions.filter((submission: any) => submission.isGraded)
+      assignment.submissions.filter(
+        (submission: any) => submission.isGraded && submission.score !== null
+      )
     );
 
     const totalScore = gradedSubmissions.reduce(
@@ -313,7 +307,10 @@ async function generateExcelTranscript(
     );
 
     const overallPercentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
-    const overallGrade = calculateGradeFromPercentage(overallPercentage);
+    const calculatedGrade = calculateGradeFromPercentage(overallPercentage);
+
+    // Use enrollment grade if available, otherwise calculated grade
+    const finalGrade = enrollment.grade || calculatedGrade;
 
     // Determine course status
     let status = "Not Started";
@@ -331,7 +328,7 @@ async function generateExcelTranscript(
       `Semester ${course.semester}`,
       `${enrollment.progress}%`,
       status,
-      enrollment.grade || overallGrade,
+      finalGrade,
       gradedSubmissions.length.toString(),
       `${overallPercentage.toFixed(1)}%`,
     ]);
@@ -363,9 +360,14 @@ async function generateExcelTranscript(
     enrollment.course.assignments.forEach((assignment: any) => {
       assignment.submissions.forEach((submission: any) => {
         const percentage =
-          assignment.maxScore > 0
+          assignment.maxScore > 0 && submission.score !== null
             ? ((submission.score || 0) / assignment.maxScore) * 100
             : 0;
+
+        const submissionGrade =
+          submission.isGraded && submission.score !== null
+            ? calculateGradeFromPercentage(percentage)
+            : "Pending";
 
         assignmentsData.push([
           enrollment.course.code,
@@ -375,7 +377,7 @@ async function generateExcelTranscript(
           assignment.maxScore.toString(),
           submission.isGraded ? submission.score?.toString() || "N/A" : "N/A",
           submission.isGraded ? `${percentage.toFixed(1)}%` : "N/A",
-          submission.isGraded ? submission.grade || "N/A" : "Pending",
+          submissionGrade,
           submission.submittedAt
             ? new Date(submission.submittedAt).toLocaleDateString()
             : "N/A",
@@ -466,12 +468,15 @@ async function generatePdfTranscript(
   doc.setTextColor(60, 60, 60);
 
   const studentInfo = [
-    ["Full Name:", student.user?.name || "N/A"],
+    [
+      "Full Name:",
+      student.user?.name || `${student.firstName} ${student.lastName}`,
+    ],
     ["Matric Number:", student.matricNumber],
     ["Department:", student.department],
     ["Course of Study:", student.course],
     ["College:", student.college],
-    ["Email Address:", student.user?.email || "N/A"],
+    ["Email Address:", student.user?.email || student.email],
     [
       "Date Enrolled:",
       student.dateEnrolled
@@ -530,7 +535,9 @@ async function generatePdfTranscript(
   const tableData = enrollments.map((enrollment) => {
     const course = enrollment.course;
     const gradedSubmissions = course.assignments.flatMap((assignment: any) =>
-      assignment.submissions.filter((submission: any) => submission.isGraded)
+      assignment.submissions.filter(
+        (submission: any) => submission.isGraded && submission.score !== null
+      )
     );
 
     const totalScore = gradedSubmissions.reduce(
@@ -549,7 +556,8 @@ async function generatePdfTranscript(
     );
 
     const overallPercentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
-    const overallGrade = calculateGradeFromPercentage(overallPercentage);
+    const calculatedGrade = calculateGradeFromPercentage(overallPercentage);
+    const finalGrade = enrollment.grade || calculatedGrade;
 
     // Determine status
     let status = "Not Started";
@@ -564,7 +572,7 @@ async function generatePdfTranscript(
       `S${course.semester}`,
       `${enrollment.progress}%`,
       status,
-      enrollment.grade || overallGrade,
+      finalGrade,
       `${overallPercentage.toFixed(1)}%`,
     ];
   });

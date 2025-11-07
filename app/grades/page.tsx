@@ -204,32 +204,33 @@ export default function GradesPage() {
   };
 
   const handleExport = async (format: "pdf" | "excel") => {
-  try {
-    const blob = await GradeService.exportTranscript(format);
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `transcript-${userData?.matricNumber}.${
-      format === "pdf" ? "pdf" : "xlsx"
-    }`;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-    setShowExportModal(false);
-  } catch (error) {
-    console.error("Error exporting transcript:", error);
-    const errorMessage = error instanceof Error 
-      ? error.message 
-      : "Failed to export transcript. Please try again.";
-    setError(errorMessage);
-    
-    // If it's an auth error, suggest signing in again
-    if (errorMessage.includes("Authentication required")) {
-      setError("Session expired. Please refresh the page and try again.");
+    try {
+      const blob = await GradeService.exportTranscript(format);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `transcript-${userData?.matricNumber}.${
+        format === "pdf" ? "pdf" : "xlsx"
+      }`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setShowExportModal(false);
+    } catch (error) {
+      console.error("Error exporting transcript:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Failed to export transcript. Please try again.";
+      setError(errorMessage);
+
+      // If it's an auth error, suggest signing in again
+      if (errorMessage.includes("Authentication required")) {
+        setError("Session expired. Please refresh the page and try again.");
+      }
     }
-  }
-};
+  };
 
   if (loading) {
     return (
