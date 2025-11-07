@@ -74,17 +74,17 @@ const getPersistentGreeting = async (surname: string): Promise<string> => {
     // Fallback to client-side generation
     const timeBasedGreetings = {
       night: [
-        "Burning the midnight oil, {surname}?",
+        "Burning midnight oil, {surname}?",
         "Late night studying session, {surname}?",
         "Night owl mode activated, {surname}!",
-        "Pushing through the night, {surname}!",
+        "Pushing through night, {surname}!",
         "Dedication knows no time, {surname}!",
         "The quiet hours are perfect for focus, {surname}!",
       ],
       morning: [
         "Rise and shine, {surname}! Ready to conquer today?",
         "Good morning, {surname}! Let's make today count!",
-        "Early bird catches the knowledge, {surname}!",
+        "Early bird catches knowledge, {surname}!",
         "Morning motivation, {surname}! Time to excel!",
         "Fresh start to a productive day, {surname}!",
         "Hello {surname}! Ready to learn something new?",
@@ -175,75 +175,71 @@ export default function DashboardPage() {
   );
   const [loading, setLoading] = useState(true);
   const [greeting, setGreeting] = useState<string>("");
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
+  // Fetch user data and greeting on component mount
   useEffect(() => {
-    fetchDashboardData();
+    const fetchInitialData = async () => {
+      try {
+        // First fetch user data to get greeting
+        const userResponse = await fetch("/api/user/me");
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          const surname = getSurname(userData.name);
+
+          // Set greeting immediately if available
+          if (userData.greeting) {
+            setGreeting(userData.greeting.replace("{surname}", surname));
+          } else {
+            // Otherwise fetch a new greeting
+            const newGreeting = await getPersistentGreeting(surname);
+            setGreeting(newGreeting);
+          }
+
+          // Then fetch dashboard data
+          const dashboardResponse = await fetch("/api/dashboard");
+          if (dashboardResponse.ok) {
+            const dashboardInfo = await dashboardResponse.json();
+            setDashboardData(dashboardInfo);
+          } else {
+            console.error("Failed to fetch dashboard data");
+            // Set minimal dashboard data with user info
+            setDashboardData({
+              activeCourses: 0,
+              pendingAssignments: 0,
+              upcomingDeadlines: 0,
+              classmatesCount: 0,
+              recentActivities: [],
+              userInfo: userData,
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching initial data:", error);
+      } finally {
+        setLoading(false);
+        setInitialLoadComplete(true);
+      }
+    };
+
+    fetchInitialData();
   }, []);
 
+  // Set up timer to check for greeting updates after initial load
   useEffect(() => {
-    if (dashboardData?.userInfo?.name) {
-      const surname = getSurname(dashboardData.userInfo.name);
+    if (!initialLoadComplete || !dashboardData?.userInfo?.name) return;
 
-      // First, try to use the greeting from user data if available
-      if (dashboardData.userInfo.greeting) {
-        setGreeting(
-          dashboardData.userInfo.greeting.replace("{surname}", surname)
-        );
-      } else {
-        // Otherwise, fetch a new greeting
-        getPersistentGreeting(surname).then((newGreeting) => {
-          setGreeting(newGreeting);
-        });
+    const surname = getSurname(dashboardData.userInfo.name);
+
+    const checkInterval = setInterval(async () => {
+      const updatedGreeting = await getPersistentGreeting(surname);
+      if (updatedGreeting !== greeting) {
+        setGreeting(updatedGreeting);
       }
+    }, 60000); // Check every minute
 
-      // Set up timer to check for greeting updates
-      const checkInterval = setInterval(async () => {
-        const updatedGreeting = await getPersistentGreeting(surname);
-        if (updatedGreeting !== greeting) {
-          setGreeting(updatedGreeting);
-        }
-      }, 60000); // Check every minute
-
-      return () => clearInterval(checkInterval);
-    }
-  }, [dashboardData?.userInfo?.name, dashboardData?.userInfo?.greeting]);
-
-  const fetchDashboardData = async () => {
-    try {
-      const response = await fetch("/api/dashboard");
-      if (response.ok) {
-        const data = await response.json();
-        setDashboardData(data);
-      } else {
-        console.error("Failed to fetch dashboard data");
-        await fetchUserData();
-      }
-    } catch (error) {
-      console.error("Error fetching dashboard data:", error);
-      await fetchUserData();
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchUserData = async () => {
-    try {
-      const response = await fetch("/api/user/me");
-      if (response.ok) {
-        const user = await response.json();
-        setDashboardData({
-          activeCourses: 0,
-          pendingAssignments: 0,
-          upcomingDeadlines: 0,
-          classmatesCount: 0,
-          recentActivities: [],
-          userInfo: user,
-        });
-      }
-    } catch (error) {
-      console.error("Error fetching user data:", error);
-    }
-  };
+    return () => clearInterval(checkInterval);
+  }, [initialLoadComplete, dashboardData?.userInfo?.name, greeting]);
 
   const handleSignOut = async () => {
     try {
@@ -264,7 +260,7 @@ export default function DashboardPage() {
     }
   };
 
-  if (loading) {
+  if (loading && !initialLoadComplete) {
     return (
       <div className="min-h-screen bg-background">
         <DashboardHeader />

@@ -104,28 +104,6 @@ const generateNewGreeting = (): { greeting: string; nextChange: Date } => {
   };
 };
 
-// Check if greeting fields exist in the database
-const checkGreetingFieldsExist = async (): Promise<boolean> => {
-  try {
-    // Try to query with greeting fields to see if they exist
-    await prisma.user.findFirst({
-      select: {
-        greeting: true,
-        greetingNextChange: true,
-      },
-      where: {
-        id: "non-existent-id-just-for-schema-check",
-      },
-    });
-    return true;
-  } catch (error) {
-    console.log(
-      `[USER_ME] Greeting fields check: Fields don't exist in schema`
-    );
-    return false;
-  }
-};
-
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
   console.log(`[USER_ME] GET request started at ${new Date().toISOString()}`);
@@ -180,35 +158,31 @@ export async function GET(request: NextRequest) {
 
     const user = session.user;
     const now = new Date();
-    console.log(
-      `[USER_ME] User authenticated: ${user.email} (${user.id}) | Role: ${user.role}`
-    );
-
-    // Check if greeting fields exist in the database
-    const greetingFieldsExist = await checkGreetingFieldsExist();
+    // console.log(
+    //   `[USER_ME] User authenticated: ${user.email} (${user.id}) | Role: ${user.role}`
+    // );
 
     // Initialize greeting data
     let greetingData = {
-      greeting: greetingFieldsExist ? user.greeting : null,
-      greetingNextChange: greetingFieldsExist ? user.greetingNextChange : null,
+      greeting: user.greeting,
+      greetingNextChange: user.greetingNextChange,
     };
 
-    console.log(
-      `[USER_ME] Current greeting: ${
-        greetingData.greeting || "None"
-      } | Next change: ${
-        greetingData.greetingNextChange?.toISOString() || "None"
-      }`
-    );
+    // console.log(
+    //   `[USER_ME] Current greeting: ${
+    //     greetingData.greeting || "None"
+    //   } | Next change: ${
+    //     greetingData.greetingNextChange?.toISOString() || "None"
+    //   }`
+    // );
 
-    // Generate new greeting if needed and fields exist
+    // Generate new greeting if needed
     if (
-      greetingFieldsExist &&
-      (!user.greeting ||
-        !user.greetingNextChange ||
-        new Date(user.greetingNextChange) <= now)
+      !user.greeting ||
+      !user.greetingNextChange ||
+      new Date(user.greetingNextChange) <= now
     ) {
-      console.log(`[USER_ME] Generating new greeting for user ${user.id}`);
+      // console.log(`[USER_ME] Generating new greeting for user ${user.id}`);
 
       // Generate new greeting
       const newGreetingData = generateNewGreeting();
@@ -228,9 +202,9 @@ export async function GET(request: NextRequest) {
           greetingNextChange: newGreetingData.nextChange,
         };
 
-        console.log(
-          `[USER_ME] Updated greeting for user ${user.id}: "${newGreetingData.greeting}"`
-        );
+        // console.log(
+        //   `[USER_ME] Updated greeting for user ${user.id}: "${newGreetingData.greeting}"`
+        // );
       } catch (error) {
         console.error(`[USER_ME] Failed to update greeting:`, error);
         // Fall back to generating a new greeting without persisting
@@ -240,18 +214,15 @@ export async function GET(request: NextRequest) {
           greetingNextChange: tempGreeting.nextChange,
         };
       }
-    } else if (!greetingFieldsExist) {
-      console.log(
-        `[USER_ME] Greeting fields don't exist, generating temporary greeting`
-      );
-      // Generate a temporary greeting without persisting
-      const tempGreeting = generateNewGreeting();
-      greetingData = {
-        greeting: tempGreeting.greeting,
-        greetingNextChange: tempGreeting.nextChange,
-      };
     } else {
-      console.log(`[USER_ME] Using existing greeting for user ${user.id}`);
+      // console.log(
+      //   `[USER_ME] Using existing greeting for user ${user.id.slice(
+      //     0,
+      //     8
+      //   )}...: "${
+      //     greetingData.greeting
+      //   }", next change at ${greetingData.greetingNextChange?.toISOString()}`
+      // );
     }
 
     type UserData = {
@@ -285,9 +256,12 @@ export async function GET(request: NextRequest) {
         college: user.student.college,
         course: user.student.course,
       };
-      console.log(
-        `[USER_ME] Added student data for ${user.email}: Matric ${user.student.matricNumber}`
-      );
+      // console.log(
+      //   `[USER_ME] Added student data for ${user.email.slice(
+      //     0,
+      //     3
+      //   )}...: Matric ${user.student.matricNumber.slice(0, 3)}...`
+      // );
     } else if (user.role === "TEACHER" && user.teacher) {
       userData = {
         ...userData,
@@ -295,15 +269,21 @@ export async function GET(request: NextRequest) {
         department: user.teacher.department,
         course: "Lecturer",
       };
-      console.log(
-        `[USER_ME] Added teacher data for ${user.email}: Employee ID ${user.teacher.employeeId}`
-      );
+      // console.log(
+      //   `[USER_ME] Added teacher data for ${user.email.slice(
+      //     0,
+      //     3
+      //   )}...: Employee ID ${user.teacher.employeeId.slice(0, 3)}...`
+      // );
     }
 
     const duration = Date.now() - startTime;
-    console.log(
-      `[USER_ME] Successfully returned user data for ${user.email} in ${duration}ms`
-    );
+    // console.log(
+    //   `[USER_ME] Successfully returned user data for ${user.email.slice(
+    //     0,
+    //     3
+    //   )}... in ${duration}ms`
+    // );
 
     return NextResponse.json(userData);
   } catch (error) {
@@ -328,7 +308,7 @@ export async function GET(request: NextRequest) {
 // POST handler to update greeting
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
-  console.log(`[USER_ME] POST request started at ${new Date().toISOString()}`);
+  // console.log(`[USER_ME] POST request started at ${new Date().toISOString()}`);
 
   try {
     // Get session token from cookies
@@ -353,7 +333,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log(`[USER_ME] Session found: ${!!session}`);
+    // console.log(`[USER_ME] Session found: ${!!session}`);
 
     if (!session) {
       console.log(`[USER_ME] Authentication failed: Session not found`);
@@ -364,33 +344,19 @@ export async function POST(request: NextRequest) {
     }
 
     if (session.expires < new Date()) {
-      console.log(
-        `[USER_ME] Authentication failed: Session expired at ${session.expires.toISOString()}`
-      );
+      // console.log(
+      //   `[USER_ME] Authentication failed: Session expired at ${session.expires.toISOString()}`
+      // );
       return NextResponse.json(
         { error: "Session expired", code: "SESSION_EXPIRED" },
         { status: 401 }
       );
     }
 
-    // Check if greeting fields exist in the database
-    const greetingFieldsExist = await checkGreetingFieldsExist();
-
-    if (!greetingFieldsExist) {
-      console.log(`[USER_ME] Greeting fields don't exist, cannot update`);
-      return NextResponse.json(
-        {
-          error: "Greeting fields not available in database",
-          code: "FIELDS_NOT_AVAILABLE",
-        },
-        { status: 400 }
-      );
-    }
-
     const { greeting, nextChange } = await request.json();
-    console.log(
-      `[USER_ME] Updating greeting for user ${session.user.id}: "${greeting}" | Next change: ${nextChange}`
-    );
+    // console.log(
+    //   `[USER_ME] Updating greeting for user ${session.user.id.slice(0, 3)}...: "${greeting}" | Next change: ${nextChange}`
+    // );
 
     // Update user's greeting in database
     await prisma.user.update({
@@ -402,9 +368,9 @@ export async function POST(request: NextRequest) {
     });
 
     const duration = Date.now() - startTime;
-    console.log(
-      `[USER_ME] Successfully updated greeting for user ${session.user.email} in ${duration}ms`
-    );
+    // console.log(
+    //   `[USER_ME] Successfully updated greeting for user ${session.user.email.slice(0, 3)}... in ${duration}ms`
+    // );
 
     return NextResponse.json({ success: true });
   } catch (error) {

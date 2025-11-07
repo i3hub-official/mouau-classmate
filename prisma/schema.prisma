@@ -123,7 +123,7 @@ model User {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   passwordHash        String?
-  greeting            String?
+  greeting            String?   @default("Welcome back!")
   greetingNextChange  DateTime?
 
   // Authentication (NextAuth)
