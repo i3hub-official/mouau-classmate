@@ -16,7 +16,7 @@ const timeBasedGreetings = {
   morning: [
     "Rise and shine, {surname}! Ready to conquer today?",
     "Good morning, {surname}! Let's make today count!",
-    "Early bird catches knowledge, {surname}!",
+    "Early bird catches the knowledge, {surname}!",
     "Morning motivation, {surname}! Time to excel!",
     "Fresh start to a productive day, {surname}!",
     "Hello {surname}! Ready to learn something new?",
@@ -104,28 +104,6 @@ const generateNewGreeting = (): { greeting: string; nextChange: Date } => {
   };
 };
 
-// Check if greeting fields exist in the database
-const checkGreetingFieldsExist = async (): Promise<boolean> => {
-  try {
-    // Try to query with greeting fields to see if they exist
-    await prisma.user.findFirst({
-      select: {
-        greeting: true,
-        greetingNextChange: true,
-      },
-      where: {
-        id: "non-existent-id-just-for-schema-check",
-      },
-    });
-    return true;
-  } catch (error) {
-    console.log(
-      `[USER_ME] Greeting fields check: Fields don't exist in schema`
-    );
-    return false;
-  }
-};
-
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
   console.log(`[USER_ME] GET request started at ${new Date().toISOString()}`);
@@ -184,64 +162,45 @@ export async function GET(request: NextRequest) {
       `[USER_ME] User authenticated: ${user.email} (${user.id}) | Role: ${user.role}`
     );
 
-    // Check if greeting fields exist in the database
-    const greetingFieldsExist = await checkGreetingFieldsExist();
-
-    // Initialize greeting data
+    // Check if we need to generate a new greeting
     let greetingData = {
-      greeting: greetingFieldsExist ? user.greeting : null,
-      greetingNextChange: greetingFieldsExist ? user.greetingNextChange : null,
+      greeting: user.greeting,
+      greetingNextChange: user.greetingNextChange,
     };
 
     console.log(
-      `[USER_ME] Current greeting: ${
-        greetingData.greeting || "None"
-      } | Next change: ${
-        greetingData.greetingNextChange?.toISOString() || "None"
+      `[USER_ME] Current greeting: ${user.greeting || "None"} | Next change: ${
+        user.greetingNextChange?.toISOString() || "None"
       }`
     );
 
-    // Generate new greeting if needed and fields exist
     if (
-      greetingFieldsExist &&
-      (!user.greeting ||
-        !user.greetingNextChange ||
-        new Date(user.greetingNextChange) <= now)
+      !user.greeting ||
+      !user.greetingNextChange ||
+      new Date(user.greetingNextChange) <= now
     ) {
       console.log(`[USER_ME] Generating new greeting for user ${user.id}`);
 
       // Generate new greeting
       const newGreetingData = generateNewGreeting();
 
-      try {
-        // Update user with new greeting
-        await prisma.user.update({
-          where: { id: user.id },
-          data: {
-            greeting: newGreetingData.greeting,
-            greetingNextChange: newGreetingData.nextChange,
-          },
-        });
-
-        greetingData = {
+      // Update user with new greeting
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
           greeting: newGreetingData.greeting,
           greetingNextChange: newGreetingData.nextChange,
-        };
+        },
+      });
 
-        console.log(
-          `[USER_ME] Updated greeting for user ${user.id}: "${newGreetingData.greeting}"`
-        );
-      } catch (error) {
-        console.error(`[USER_ME] Failed to update greeting:`, error);
-        // Fall back to generating a new greeting without persisting
-        greetingData = generateNewGreeting();
-      }
-    } else if (!greetingFieldsExist) {
+      greetingData = {
+        greeting: newGreetingData.greeting,
+        greetingNextChange: newGreetingData.nextChange,
+      };
+
       console.log(
-        `[USER_ME] Greeting fields don't exist, generating temporary greeting`
+        `[USER_ME] Updated greeting for user ${user.id}: "${newGreetingData.greeting}"`
       );
-      // Generate a temporary greeting without persisting
-      greetingData = generateNewGreeting();
     } else {
       console.log(`[USER_ME] Using existing greeting for user ${user.id}`);
     }
@@ -362,20 +321,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Session expired", code: "SESSION_EXPIRED" },
         { status: 401 }
-      );
-    }
-
-    // Check if greeting fields exist in the database
-    const greetingFieldsExist = await checkGreetingFieldsExist();
-
-    if (!greetingFieldsExist) {
-      console.log(`[USER_ME] Greeting fields don't exist, cannot update`);
-      return NextResponse.json(
-        {
-          error: "Greeting fields not available in database",
-          code: "FIELDS_NOT_AVAILABLE",
-        },
-        { status: 400 }
       );
     }
 

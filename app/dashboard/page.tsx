@@ -14,10 +14,12 @@ interface UserData {
   email: string;
   name: string;
   role: string;
-  matricNumber: string;
-  department: string;
-  college: string;
-  course: string;
+  matricNumber?: string;
+  department?: string;
+  college?: string;
+  course?: string;
+  greeting?: string;
+  greetingNextChange?: string;
 }
 
 interface DashboardStats {
@@ -36,98 +38,10 @@ interface DashboardStats {
   };
 }
 
-// Array of 60 random greetings
-const greetings = [
-  "Happy {day}!",
-  "Wonderful {day}!",
-  "Great to see you this {day}!",
-  "Hope you're having a fantastic {day}!",
-  "Welcome back! It's a beautiful {day}!",
-  "Good {day}! Ready to learn?",
-  "Hello! Let's make this {day} count!",
-  "Greetings! What a lovely {day}!",
-  "Hi there! Hope your {day} is amazing!",
-  "Welcome! Let's conquer this {day} together!",
-  "Rise and shine! It's {day}!",
-  "Hello scholar! Happy {day}!",
-  "Good to see you this {day}!",
-  "Welcome back! Let's make today productive!",
-  "Greetings! Ready for academic excellence?",
-  "Hello! Time to shine this {day}!",
-  "Welcome! Your journey continues today!",
-  "Hi! Let's achieve greatness this {day}!",
-  "Greetings! Another day to learn and grow!",
-  "Welcome back! Your future starts now!",
-
-  // Additional 40 greetings
-  "Awesome {day} ahead!",
-  "Welcome! Knowledge awaits you this {day}!",
-  "Hello! Let's embrace this {day} with enthusiasm!",
-  "Greetings! Make this {day} remarkable!",
-  "Welcome back! Success starts today!",
-  "Hi there! Ready to expand your mind this {day}?",
-  "Hello scholar! Let's make this {day} unforgettable!",
-  "Welcome! Your potential is limitless this {day}!",
-  "Greetings! Another opportunity to excel!",
-  "Happy {day}! Let the learning begin!",
-  "Welcome back! Your dedication inspires us!",
-  "Hello! Today is yours to conquer!",
-  "Greetings! Let's create magic this {day}!",
-  "Welcome! The classroom awaits your brilliance!",
-  "Hi! This {day} holds endless possibilities!",
-  "Hello scholar! Your journey to greatness continues!",
-  "Welcome back! Let's write your success story today!",
-  "Greetings! Academic adventures await this {day}!",
-  "Happy {day}! Your mind is your superpower!",
-  "Welcome! Let's turn dreams into reality today!",
-  "Hello! This {day} is your canvas - paint it bright!",
-  "Greetings! Ready to unlock new knowledge?",
-  "Welcome back! Your curiosity leads to discovery!",
-  "Hi there! Let's make this {day} extraordinary!",
-  "Hello scholar! Wisdom awaits your arrival!",
-  "Welcome! Today's lesson: you are capable!",
-  "Greetings! Let's build your future this {day}!",
-  "Happy {day}! Your education is your passport!",
-  "Welcome back! The world needs your brilliance!",
-  "Hello! Let's make today's chapter amazing!",
-  "Greetings! Your potential shines bright this {day}!",
-  "Welcome! Ready to be inspired this {day}?",
-  "Hi! Today is perfect for breakthroughs!",
-  "Hello scholar! Let's create academic wonders!",
-  "Welcome back! Your success story continues!",
-  "Greetings! This {day} is full of promise!",
-  "Happy {day}! Learning never looked so good!",
-  "Welcome! Let's make today count together!",
-  "Hello! Your academic journey continues!",
-  "Greetings! Ready to master new challenges?",
-  "Welcome back! Today's the day to shine!",
-];
-
 // Helper function to convert text to sentence case
 const toSentenceCase = (text: string): string => {
   if (!text) return text;
   return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
-};
-
-// Helper function to get day of week
-const getDayOfWeek = () => {
-  const days = [
-    "Sunday",
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-  ];
-  return days[new Date().getDay()];
-};
-
-// Helper function to get random greeting
-const getRandomGreeting = () => {
-  const day = getDayOfWeek();
-  const randomIndex = Math.floor(Math.random() * greetings.length);
-  return greetings[randomIndex].replace("{day}", day);
 };
 
 // Helper function to extract surname from full name and convert to sentence case
@@ -138,6 +52,86 @@ const getSurname = (fullName?: string) => {
   // Return the last part as surname in sentence case
   const surname = nameParts[nameParts.length - 1];
   return toSentenceCase(surname);
+};
+
+// Helper function to get or update persistent greeting
+const getPersistentGreeting = async (surname: string): Promise<string> => {
+  try {
+    const response = await fetch("/api/user/me", {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.greeting) {
+        return data.greeting.replace("{surname}", surname);
+      }
+    }
+
+    // Fallback to client-side generation
+    const timeBasedGreetings = {
+      night: [
+        "Burning the midnight oil, {surname}?",
+        "Late night studying session, {surname}?",
+        "Night owl mode activated, {surname}!",
+        "Pushing through the night, {surname}!",
+        "Dedication knows no time, {surname}!",
+        "The quiet hours are perfect for focus, {surname}!",
+      ],
+      morning: [
+        "Rise and shine, {surname}! Ready to conquer today?",
+        "Good morning, {surname}! Let's make today count!",
+        "Early bird catches the knowledge, {surname}!",
+        "Morning motivation, {surname}! Time to excel!",
+        "Fresh start to a productive day, {surname}!",
+        "Hello {surname}! Ready to learn something new?",
+      ],
+      afternoon: [
+        "Good afternoon, {surname}! Keeping up the great work!",
+        "Afternoon focus session, {surname}!",
+        "Halfway through the day, {surname}! Stay strong!",
+        "Afternoon productivity boost, {surname}!",
+        "Hello {surname}! How's your academic day going?",
+        "Afternoon vibes, {surname}! Time to tackle those assignments!",
+      ],
+      evening: [
+        "Good evening, {surname}! Time to review today's progress!",
+        "Evening study session, {surname}?",
+        "Winding down with some learning, {surname}?",
+        "Evening reflections, {surname}! What did you achieve today?",
+        "Hello {surname}! Ready for some evening studying?",
+        "Evening dedication, {surname}! Almost there!",
+      ],
+    };
+
+    const getTimePeriod = (): keyof typeof timeBasedGreetings => {
+      const now = new Date();
+      const hours = now.getHours();
+
+      if (hours >= 0 && hours < 6) {
+        return "night";
+      } else if (hours >= 6 && hours < 12) {
+        return "morning";
+      } else if (hours >= 12 && hours < 18) {
+        return "afternoon";
+      } else {
+        return "evening";
+      }
+    };
+
+    const timePeriod = getTimePeriod();
+    const greetings = timeBasedGreetings[timePeriod];
+    const randomIndex = Math.floor(Math.random() * greetings.length);
+    return greetings[randomIndex].replace("{surname}", surname);
+  } catch (error) {
+    console.error("Error fetching greeting:", error);
+
+    // Fallback to a simple greeting
+    return `Welcome back, ${surname}!`;
+  }
 };
 
 // Stat Cards Component
@@ -180,10 +174,39 @@ export default function DashboardPage() {
     null
   );
   const [loading, setLoading] = useState(true);
+  const [greeting, setGreeting] = useState<string>("");
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  useEffect(() => {
+    if (dashboardData?.userInfo?.name) {
+      const surname = getSurname(dashboardData.userInfo.name);
+
+      // First, try to use the greeting from user data if available
+      if (dashboardData.userInfo.greeting) {
+        setGreeting(
+          dashboardData.userInfo.greeting.replace("{surname}", surname)
+        );
+      } else {
+        // Otherwise, fetch a new greeting
+        getPersistentGreeting(surname).then((newGreeting) => {
+          setGreeting(newGreeting);
+        });
+      }
+
+      // Set up timer to check for greeting updates
+      const checkInterval = setInterval(async () => {
+        const updatedGreeting = await getPersistentGreeting(surname);
+        if (updatedGreeting !== greeting) {
+          setGreeting(updatedGreeting);
+        }
+      }, 60000); // Check every minute
+
+      return () => clearInterval(checkInterval);
+    }
+  }, [dashboardData?.userInfo?.name, dashboardData?.userInfo?.greeting]);
 
   const fetchDashboardData = async () => {
     try {
@@ -252,10 +275,6 @@ export default function DashboardPage() {
     );
   }
 
-  const userData = dashboardData?.userInfo;
-  const randomGreeting = getRandomGreeting();
-  const userSurname = getSurname(userData?.name);
-
   return (
     <div className="min-h-screen bg-background">
       {/* Use DashboardHeader component - properly integrated */}
@@ -266,7 +285,7 @@ export default function DashboardPage() {
         {/* Welcome Section */}
         <div>
           <h2 className="text-3xl font-bold text-foreground mb-2">
-            {randomGreeting} {userSurname}!
+            {greeting || "Welcome back!"}
           </h2>
           <p className="text-lg text-muted-foreground">
             Here's what's happening with your academic journey today.
@@ -286,7 +305,7 @@ export default function DashboardPage() {
                     Matric Number
                   </p>
                   <p className="font-semibold text-lg">
-                    {userData?.matricNumber || "N/A"}
+                    {dashboardData?.userInfo?.matricNumber || "N/A"}
                   </p>
                 </div>
                 <div>
@@ -294,7 +313,7 @@ export default function DashboardPage() {
                     Department
                   </p>
                   <p className="font-semibold text-lg">
-                    {userData?.department || "N/A"}
+                    {dashboardData?.userInfo?.department || "N/A"}
                   </p>
                 </div>
                 <div>
@@ -302,7 +321,7 @@ export default function DashboardPage() {
                     Course
                   </p>
                   <p className="font-semibold text-lg">
-                    {userData?.course || "N/A"}
+                    {dashboardData?.userInfo?.course || "N/A"}
                   </p>
                 </div>
                 <div>
@@ -310,7 +329,7 @@ export default function DashboardPage() {
                     College
                   </p>
                   <p className="font-semibold text-lg">
-                    {userData?.college || "N/A"}
+                    {dashboardData?.userInfo?.college || "N/A"}
                   </p>
                 </div>
               </div>
@@ -376,7 +395,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Quick Actions - Always at the bottom */}
+        {/* Quick Actions - Always at bottom */}
         <QuickActions />
       </main>
     </div>
