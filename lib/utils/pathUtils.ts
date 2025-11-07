@@ -5,6 +5,8 @@ export const PUBLIC_PATHS = [
   "/signin",
   "/signup",
   "/about",
+  "/contact",
+  "/public",
 ] as const;
 
 export const PRIVATE_PATHS = [
