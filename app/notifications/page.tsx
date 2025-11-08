@@ -262,7 +262,7 @@ export default function NotificationsPage() {
 
       <main className="w-full px-6 xl:px-8 py-8">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8">
+        <div className="flex col lg:row lg:items-center lg:justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-foreground mb-2">
               Notifications
@@ -335,9 +335,9 @@ export default function NotificationsPage() {
 
         {/* Controls */}
         <div className="bg-card border border-border rounded-xl p-6 mb-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="flex col lg:row lg:items-center lg:justify-between gap-4">
             {/* Search */}
-            <div className="relative flex-1 max-w-md">
+            <div className="relative 1 max-w-md">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 type="text"
@@ -349,7 +349,7 @@ export default function NotificationsPage() {
             </div>
 
             {/* Filters */}
-            <div className="flex flex-wrap gap-3">
+            <div className="flex wrap gap-3">
               <select
                 value={filter}
                 onChange={(e) => setFilter(e.target.value as FilterType)}
@@ -457,13 +457,13 @@ export default function NotificationsPage() {
                     />
 
                     {/* Notification Icon */}
-                    <div className="flex-shrink-0">
+                    <div className="shrink-0">
                       {getNotificationIcon(notification.type)}
                     </div>
 
                     {/* Notification Content */}
                     <div
-                      className="flex-1 min-w-0 cursor-pointer"
+                      className="1 min-w-0 cursor-pointer"
                       onClick={() => handleNotificationClick(notification)}
                     >
                       <div className="flex items-start justify-between mb-2">
@@ -501,7 +501,7 @@ export default function NotificationsPage() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
                       {!notification.isRead ? (
                         <button
                           onClick={(e) => {
