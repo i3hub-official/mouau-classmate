@@ -9,7 +9,10 @@ interface RouteParams {
   };
 }
 
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const currentUser = await UserServiceServer.getCurrentUserFromSession();
 
@@ -17,12 +20,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const notificationId = params.id;
+    const { id } = await params;
 
     // Verify the notification belongs to the current user and update
     const notification = await prisma.notification.updateMany({
       where: {
-        id: notificationId,
+        id: id,
         userId: currentUser.id,
         isRead: false, // Only update if not already read
       },

@@ -3,13 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { UserServiceServer } from "@/lib/services/userService.server";
 
-interface RouteContext {
-  params: Promise<{
-    id: string;
-  }>;
-}
-
-export async function DELETE(request: NextRequest, context: RouteContext) {
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const currentUser = await UserServiceServer.getCurrentUserFromSession();
 
@@ -17,7 +14,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = await context.params;
+    const { id } = await params;
 
     // Verify the notification belongs to the current user and delete
     const notification = await prisma.notification.deleteMany({
