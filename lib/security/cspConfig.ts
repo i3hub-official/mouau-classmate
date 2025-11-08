@@ -186,12 +186,14 @@ export const prodCspConfig = {
     "https://vercel.live",
     "https://*.vercel.app",
     "https://mouaucm.vercel.app",
+    "https://apinigeria.vercel.app",
   ],
   connectSrc: [
     ...cspConfig.connectSrc,
     "https://vercel.live",
     "wss://vercel.live",
     "https://mouaucm.vercel.app",
+    "https://apinigeria.vercel.app",
   ],
 };
 

@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   XCircle,
   Loader,
+  AlertCircle,
 } from "lucide-react";
 import { UserService } from "@/lib/services/userService";
 import { ProfileService } from "@/lib/services/profileService";
@@ -58,6 +59,35 @@ interface NotificationSettings {
   lectureReminders: boolean;
 }
 
+interface State {
+  id: number;
+  name: string;
+  capital: string;
+  zone: string;
+  region: string;
+  slogan: string;
+  landmass: string;
+  population: string;
+  dialect: string;
+  map: string;
+  latitude: string;
+  longitude: string;
+  website: string;
+  geo_politial_zone: string;
+  created: string;
+  established: string;
+  state_id: number;
+  local_government_areas: string[];
+}
+
+interface LGA {
+  id: number;
+  name: string;
+  state_id: number;
+  state: string;
+  region: string;
+}
+
 export default function ProfilePage() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [securitySettings, setSecuritySettings] = useState<SecuritySettings>({
@@ -85,9 +115,91 @@ export default function ProfilePage() {
     text: string;
   } | null>(null);
 
+  // State and LGA management
+  const [states, setStates] = useState<State[]>([]);
+  const [lgas, setLgas] = useState<LGA[]>([]);
+  const [isLoadingStates, setIsLoadingStates] = useState(false);
+  const [isLoadingLgas, setIsLoadingLgas] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const lgaCache = new Map<string, LGA[]>();
+
+  // Track which fields have been updated before
+  const [updatedFields, setUpdatedFields] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     fetchUserProfile();
+    fetchStatesData();
   }, []);
+
+  // Fetch states data
+  const fetchStatesData = async () => {
+    setIsLoadingStates(true);
+    setApiError(null);
+    try {
+      const cached = localStorage.getItem("cachedStates");
+      if (cached) {
+        setStates(JSON.parse(cached));
+        return;
+      }
+
+      const res = await fetch("https://apinigeria.vercel.app/api/v1/states");
+      if (!res.ok) {
+        throw new Error("Failed to fetch states");
+      }
+
+      const data = await res.json();
+      const statesList = data.states || [];
+      setStates(statesList);
+      localStorage.setItem("cachedStates", JSON.stringify(statesList));
+      localStorage.setItem("cachedTimestamp", Date.now().toString());
+    } catch (error) {
+      console.error("Failed to load states");
+      setApiError("Failed to load states data. Please try again later.");
+    } finally {
+      setIsLoadingStates(false);
+    }
+  };
+
+  // Fetch LGAs when state changes
+  useEffect(() => {
+    const fetchLgasData = async () => {
+      if (!userProfile?.state) {
+        setLgas([]);
+        return;
+      }
+
+      if (lgaCache.has(userProfile.state)) {
+        setLgas(lgaCache.get(userProfile.state) || []);
+        return;
+      }
+
+      setIsLoadingLgas(true);
+      setApiError(null);
+      try {
+        const res = await fetch(
+          `https://apinigeria.vercel.app/api/v1/lga?state=${encodeURIComponent(
+            userProfile.state
+          )}`
+        );
+
+        if (!res.ok) {
+          throw new Error("Failed to fetch LGAs");
+        }
+
+        const data = await res.json();
+        const lgasList = data.lgas || [];
+        setLgas(lgasList);
+        lgaCache.set(userProfile.state, lgasList);
+      } catch (error) {
+        console.error("Failed to load LGAs");
+        setApiError("Failed to load LGAs data. Please try again later.");
+      } finally {
+        setIsLoadingLgas(false);
+      }
+    };
+
+    fetchLgasData();
+  }, [userProfile?.state]);
 
   const fetchUserProfile = async () => {
     try {
@@ -106,6 +218,19 @@ export default function ProfilePage() {
       // Fetch notification settings
       const notificationData = await ProfileService.getNotificationSettings();
       setNotificationSettings(notificationData);
+
+      // Initialize updated fields based on current data
+      if (profileData) {
+        const fields = new Set<string>();
+        if (profileData.name) fields.add("name");
+        if (profileData.phone) fields.add("phone");
+        if (profileData.dateOfBirth) fields.add("dateOfBirth");
+        if (profileData.state) fields.add("state");
+        if (profileData.lga) fields.add("lga");
+        if (profileData.gender) fields.add("gender");
+        if (profileData.maritalStatus) fields.add("maritalStatus");
+        setUpdatedFields(fields);
+      }
     } catch (error) {
       console.error("Error fetching profile:", error);
       showMessage("error", "Failed to load profile data");
@@ -127,7 +252,6 @@ export default function ProfilePage() {
       }
 
       const updateData = {
-        id: currentUser.id,
         name: userProfile.name,
         phone: userProfile.phone,
         state: userProfile.state,
@@ -138,6 +262,17 @@ export default function ProfilePage() {
       };
 
       await ProfileService.updateProfile(updateData);
+
+      // Update the updatedFields set with newly filled fields
+      const newUpdatedFields = new Set(updatedFields);
+      if (userProfile.name) newUpdatedFields.add("name");
+      if (userProfile.phone) newUpdatedFields.add("phone");
+      if (userProfile.dateOfBirth) newUpdatedFields.add("dateOfBirth");
+      if (userProfile.state) newUpdatedFields.add("state");
+      if (userProfile.lga) newUpdatedFields.add("lga");
+      if (userProfile.gender) newUpdatedFields.add("gender");
+      if (userProfile.maritalStatus) newUpdatedFields.add("maritalStatus");
+      setUpdatedFields(newUpdatedFields);
 
       showMessage("success", "Profile updated successfully");
       setEditMode(false);
@@ -191,9 +326,7 @@ export default function ProfilePage() {
         throw new Error("User not authenticated");
       }
 
-      await ProfileService.updateNotificationSettings(
-        notificationSettings
-      );
+      await ProfileService.updateNotificationSettings(notificationSettings);
 
       showMessage("success", "Notification settings updated");
     } catch (error) {
@@ -203,9 +336,22 @@ export default function ProfilePage() {
       setSaving(false);
     }
   };
+
   const showMessage = (type: "success" | "error", text: string) => {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 5000);
+  };
+
+  // Check if a field can be edited
+  const canEditField = (fieldName: string): boolean => {
+    if (!editMode) return false;
+
+    // If field has never been updated (is empty), allow editing
+    const fieldValue = userProfile?.[fieldName as keyof UserProfile];
+    if (!fieldValue || fieldValue === "") return true;
+
+    // If field has been updated before, disallow editing
+    return !updatedFields.has(fieldName);
   };
 
   const tabs = [
@@ -248,8 +394,8 @@ export default function ProfilePage() {
               onClick={() => setEditMode(true)}
               className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors mt-4 lg:mt-0"
             >
-              <Edit3 size={16} />
-              Edit Profile
+              <Edit3 size={14} />
+              <span className="text-sm">Edit Profile</span>
             </button>
           )}
         </div>
@@ -312,6 +458,26 @@ export default function ProfilePage() {
                   </h2>
                 </div>
 
+                {/* Field Update Notice */}
+                {editMode && (
+                  <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+                      <div>
+                        <h3 className="font-medium text-amber-800 mb-1">
+                          Important Notice
+                        </h3>
+                        <p className="text-sm text-amber-700">
+                          You can only update empty fields. Once a field is
+                          updated, it cannot be changed again. Please contact
+                          administration for any corrections to previously
+                          updated fields.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <form onSubmit={handleProfileUpdate}>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Basic Information */}
@@ -332,9 +498,15 @@ export default function ProfilePage() {
                               prev ? { ...prev, name: e.target.value } : null
                             )
                           }
-                          disabled={!editMode}
+                          disabled={!canEditField("name")}
                           className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
+                          placeholder="Enter your full name"
                         />
+                        {!canEditField("name") && userProfile?.name && (
+                          <p className="text-xs text-amber-600 mt-1">
+                            Contact administration to change this field
+                          </p>
+                        )}
                       </div>
 
                       <div>
@@ -369,10 +541,16 @@ export default function ProfilePage() {
                                 prev ? { ...prev, phone: e.target.value } : null
                               )
                             }
-                            disabled={!editMode}
+                            disabled={!canEditField("phone")}
                             className="w-full pl-10 pr-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
+                            placeholder="Enter your phone number"
                           />
                         </div>
+                        {!canEditField("phone") && userProfile?.phone && (
+                          <p className="text-xs text-amber-600 mt-1">
+                            Contact administration to change this field
+                          </p>
+                        )}
                       </div>
 
                       <div>
@@ -391,10 +569,16 @@ export default function ProfilePage() {
                                   : null
                               )
                             }
-                            disabled={!editMode}
+                            disabled={!canEditField("dateOfBirth")}
                             className="w-full pl-10 pr-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
                           />
                         </div>
+                        {!canEditField("dateOfBirth") &&
+                          userProfile?.dateOfBirth && (
+                            <p className="text-xs text-amber-600 mt-1">
+                              Contact administration to change this field
+                            </p>
+                          )}
                       </div>
                     </div>
 
@@ -471,35 +655,113 @@ export default function ProfilePage() {
                       </label>
                       <div className="relative">
                         <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <input
-                          type="text"
+                        <select
                           value={userProfile?.state || ""}
                           onChange={(e) =>
                             setUserProfile((prev) =>
                               prev ? { ...prev, state: e.target.value } : null
                             )
                           }
-                          disabled={!editMode}
-                          className="w-full pl-10 pr-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
-                        />
+                          disabled={!canEditField("state")}
+                          className="w-full pl-10 pr-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 appearance-none"
+                        >
+                          <option value="">Select State</option>
+                          {states.map((state) => (
+                            <option key={state.id} value={state.name}>
+                              {state.name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
+                      {!canEditField("state") && userProfile?.state && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          Contact administration to change this field
+                        </p>
+                      )}
                     </div>
 
                     <div>
                       <label className="block text-sm font-medium text-foreground mb-2">
                         LGA
                       </label>
-                      <input
-                        type="text"
+                      <select
                         value={userProfile?.lga || ""}
                         onChange={(e) =>
                           setUserProfile((prev) =>
                             prev ? { ...prev, lga: e.target.value } : null
                           )
                         }
-                        disabled={!editMode}
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
-                      />
+                        disabled={!canEditField("lga") || !userProfile?.state}
+                        className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 appearance-none"
+                      >
+                        <option value="">Select LGA</option>
+                        {lgas.map((lga) => (
+                          <option key={lga.id} value={lga.name}>
+                            {lga.name}
+                          </option>
+                        ))}
+                      </select>
+                      {!canEditField("lga") && userProfile?.lga && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          Contact administration to change this field
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Gender
+                      </label>
+                      <select
+                        value={userProfile?.gender || ""}
+                        onChange={(e) =>
+                          setUserProfile((prev) =>
+                            prev ? { ...prev, gender: e.target.value } : null
+                          )
+                        }
+                        disabled={!canEditField("gender")}
+                        className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 appearance-none"
+                      >
+                        <option value="">Select Gender</option>
+                        <option value="MALE">Male</option>
+                        <option value="FEMALE">Female</option>
+                        <option value="OTHER">Other</option>
+                      </select>
+                      {!canEditField("gender") && userProfile?.gender && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          Contact administration to change this field
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Marital Status
+                      </label>
+                      <select
+                        value={userProfile?.maritalStatus || ""}
+                        onChange={(e) =>
+                          setUserProfile((prev) =>
+                            prev
+                              ? { ...prev, maritalStatus: e.target.value }
+                              : null
+                          )
+                        }
+                        disabled={!canEditField("maritalStatus")}
+                        className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 appearance-none"
+                      >
+                        <option value="">Select Marital Status</option>
+                        <option value="SINGLE">Single</option>
+                        <option value="MARRIED">Married</option>
+                        <option value="DIVORCED">Divorced</option>
+                        <option value="WIDOWED">Widowed</option>
+                      </select>
+                      {!canEditField("maritalStatus") &&
+                        userProfile?.maritalStatus && (
+                          <p className="text-xs text-amber-600 mt-1">
+                            Contact administration to change this field
+                          </p>
+                        )}
                     </div>
                   </div>
 
