@@ -13,6 +13,7 @@ import {
   Shield,
   AlertCircle,
   Clock,
+  Mail,
 } from "lucide-react";
 import { ThemeToggle } from "@/app/components/theme-toggle";
 
@@ -34,6 +35,7 @@ function ResetPasswordContent() {
     score: 0,
     feedback: [] as string[],
   });
+  const [userEmail, setUserEmail] = useState("");
 
   // Get URL parameters
   const encodedEmail = searchParams.get("e");
@@ -41,18 +43,16 @@ function ResetPasswordContent() {
   const hash = searchParams.get("h");
 
   useEffect(() => {
-    // Immediately redirect if required parameters are missing
-    if (!token || !encodedEmail) {
-      router.push("/auth/signin");
-      return;
-    }
     verifyToken();
-  }, [token, encodedEmail, router]);
+  }, []);
 
   const verifyToken = async () => {
-    // Double check parameters before making API call
+    // Check if required parameters are present
     if (!token || !encodedEmail) {
-      router.push("/auth/signin");
+      setError(
+        "Invalid reset link. The link appears to be incomplete or tampered with."
+      );
+      setIsVerifying(false);
       return;
     }
 
@@ -71,18 +71,23 @@ function ResetPasswordContent() {
       const data = await response.json();
 
       if (!data.success) {
-        // Token is invalid or expired - redirect to signin
-        console.log("Token verification failed:", data.message);
-        router.push("/auth/signin");
+        setError(
+          data.message || "This password reset link is invalid or has expired."
+        );
+        setIsVerifying(false);
         return;
       }
 
-      // Token is valid, proceed to show form
+      // Token is valid, store user email and proceed
+      if (data.data) {
+        setUserEmail(data.data.email);
+      }
       setIsVerifying(false);
     } catch (err) {
-      console.error("Token verification error:", err);
-      // On network error, redirect to signin for security
-      router.push("/auth/signin");
+      setError(
+        "Unable to verify reset link. Please check your connection and try again."
+      );
+      setIsVerifying(false);
     }
   };
 
@@ -165,14 +170,6 @@ function ResetPasswordContent() {
       return;
     }
 
-    // Final security check - should never happen if verification passed
-    if (!token || !encodedEmail) {
-      setError(
-        "Security error: Invalid reset session. Please request a new password reset link."
-      );
-      return;
-    }
-
     setIsLoading(true);
 
     try {
@@ -203,7 +200,7 @@ function ResetPasswordContent() {
     }
   };
 
-  // Loading state - only shown during brief verification period
+  // Loading state during token verification
   if (isVerifying) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-background via-accent/5 to-primary/5 p-4">
@@ -220,7 +217,7 @@ function ResetPasswordContent() {
     );
   }
 
-  // Success state - only shown after successful password reset
+  // Success state after password reset
   if (isSuccess) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-background via-accent/5 to-primary/5 p-4">
@@ -299,7 +296,117 @@ function ResetPasswordContent() {
     );
   }
 
-  // If we reach here, it means token is valid and we can show the reset form
+  // Error state - token verification failed, don't show password reset form
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-background via-accent/5 to-primary/5 p-4">
+        <div className="w-full max-w-md bg-card border border-border rounded-xl p-8 shadow-lg">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-8">
+            <Link
+              href="/auth/signin"
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft size={16} />
+              Back to Sign In
+            </Link>
+            <ThemeToggle />
+          </div>
+
+          {/* Error Content */}
+          <div className="text-center space-y-6">
+            <div className="flex flex-col items-center justify-center space-y-4">
+              {/* Error Icon */}
+              <div className="p-4 bg-red-500/10 rounded-full">
+                <XCircle className="h-12 w-12 text-red-500" />
+              </div>
+
+              {/* Error Message */}
+              <div>
+                <h2 className="text-2xl font-bold text-foreground mb-2">
+                  {error.includes("expired") || error.includes("expired")
+                    ? "Reset Link Expired"
+                    : "Invalid Reset Link"}
+                </h2>
+                <p className="text-muted-foreground mb-4">{error}</p>
+              </div>
+
+              {/* Additional info for expired tokens */}
+              {(error.includes("expired") || error.includes("expired")) && (
+                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 text-left w-full">
+                  <div className="flex items-start gap-3">
+                    <Clock className="h-5 w-5 text-yellow-500 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground mb-2">
+                        Why did this happen?
+                      </p>
+                      <ul className="text-xs text-muted-foreground space-y-1">
+                        <li>
+                          • Password reset links expire after 1 hour for
+                          security
+                        </li>
+                        <li>• The link was not used within the time limit</li>
+                        <li>• You can request a new reset link below</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Additional info for invalid tokens */}
+              {error.includes("invalid") && (
+                <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4 text-left w-full">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="h-5 w-5 text-orange-500 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground mb-2">
+                        Possible reasons:
+                      </p>
+                      <ul className="text-xs text-muted-foreground space-y-1">
+                        <li>• The link has already been used</li>
+                        <li>• The link was tampered with</li>
+                        <li>• The link is malformed or incomplete</li>
+                        <li>• You can request a new reset link below</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 w-full">
+                <Link
+                  href="/auth/forgot-password"
+                  className="flex-1 py-3 bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-colors text-center"
+                >
+                  Request New Link
+                </Link>
+                <Link
+                  href="/auth/signin"
+                  className="flex-1 py-3 border border-border text-foreground font-semibold rounded-lg hover:bg-muted transition-colors text-center"
+                >
+                  Back to Sign In
+                </Link>
+              </div>
+
+              {/* Help Text */}
+              <div className="text-xs text-muted-foreground">
+                <p>Still having issues? </p>
+                <Link
+                  href="/auth/help"
+                  className="text-primary hover:underline font-medium"
+                >
+                  Contact our support team
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Only show the reset form if token is valid and no errors
   return (
     <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-background via-accent/5 to-primary/5 p-4">
       <div className="w-full max-w-md bg-card border border-border rounded-xl p-8 shadow-lg">
@@ -333,6 +440,23 @@ function ResetPasswordContent() {
             </div>
           </div>
         </div>
+
+        {/* User Email Display */}
+        {userEmail && (
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-6">
+            <div className="flex items-center gap-3">
+              <Mail className="h-4 w-4 text-blue-500 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Reset password for:
+                </p>
+                <p className="text-sm text-muted-foreground font-mono">
+                  {userEmail}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="text-center mb-6">
           <div className="p-3 bg-primary/10 rounded-lg inline-flex mb-4">
