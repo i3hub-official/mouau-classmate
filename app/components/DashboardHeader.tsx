@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import {
-  BookOpen,
   Bell,
   LogOut,
   User,
@@ -14,7 +13,9 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/app/components/theme-toggle";
 import { SignOutModal } from "@/app/components/SignOutModal";
+import { NotificationDropdown } from "@/app/components/NotificationDropdown";
 import { UserService } from "@/lib/services/userService";
+import { NotificationService } from "@/lib/services/notificationService";
 
 interface DashboardHeaderProps {
   onSignOut?: () => Promise<void>;
@@ -31,9 +32,11 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
   const [userData, setUserData] = useState<HeaderUserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const pathname = usePathname();
 
   // Navigation items with their paths
@@ -49,6 +52,11 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
 
   useEffect(() => {
     fetchUserData();
+    fetchUnreadCount();
+
+    // Refresh unread count every 30 seconds
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchUserData = async () => {
@@ -61,6 +69,15 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
       setUserData(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchUnreadCount = async () => {
+    try {
+      const count = await NotificationService.getUnreadCount();
+      setUnreadCount(count);
+    } catch (error) {
+      console.error("Error fetching unread count:", error);
     }
   };
 
@@ -124,6 +141,16 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
     return result;
   };
 
+  const handleNotificationClick = () => {
+    setShowNotifications(!showNotifications);
+    setShowUserMenu(false);
+
+    // Refresh unread count when opening notifications
+    if (!showNotifications) {
+      fetchUnreadCount();
+    }
+  };
+
   return (
     <>
       <header className="border-b border-border bg-card/95 backdrop-blur-lg sticky top-0 z-50 w-full">
@@ -173,10 +200,26 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
 
               <div className="flex items-center gap-4">
                 <ThemeToggle />
-                <button className="p-2 hover:bg-muted rounded-lg transition-colors relative">
-                  <Bell size={20} className="text-muted-foreground" />
-                  <span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full border-2 border-card"></span>
-                </button>
+
+                {/* Notifications */}
+                <div className="relative">
+                  <button
+                    onClick={handleNotificationClick}
+                    className="p-2 hover:bg-muted rounded-lg transition-colors relative"
+                  >
+                    <Bell size={20} className="text-muted-foreground" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 h-5 w-5 bg-red-500 text-white text-xs rounded-full border-2 border-card flex items-center justify-center">
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </span>
+                    )}
+                  </button>
+
+                  <NotificationDropdown
+                    isOpen={showNotifications}
+                    onClose={() => setShowNotifications(false)}
+                  />
+                </div>
 
                 {/* User Menu */}
                 <div className="relative">
@@ -234,6 +277,19 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
                         <Settings size={16} />
                         Account Settings
                       </a>
+                      <a
+                        href="/notifications"
+                        className="flex items-center gap-3 px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                        onClick={() => setShowUserMenu(false)}
+                      >
+                        <Bell size={16} />
+                        Notifications
+                        {unreadCount > 0 && (
+                          <span className="ml-auto bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                            {unreadCount}
+                          </span>
+                        )}
+                      </a>
                       <div className="border-t border-border mt-2 pt-2">
                         <button
                           onClick={handleSignOutClick}
@@ -253,6 +309,15 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
             {/* Mobile Navigation */}
             <div className="flex items-center gap-2 md:hidden">
               <ThemeToggle />
+              <button
+                className="p-2 hover:bg-muted rounded-lg transition-colors relative"
+                onClick={handleNotificationClick}
+              >
+                <Bell size={20} className="text-muted-foreground" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 rounded-full border-2 border-card"></span>
+                )}
+              </button>
               <button
                 className="p-2 hover:bg-muted rounded-lg transition-colors"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -325,14 +390,26 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
                     >
                       Profile
                     </a>
-                    <button
-                      onClick={handleSignOutClick}
-                      disabled={signingOut}
-                      className="text-center text-sm text-red-600 py-2 px-3 bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                    <a
+                      href="/notifications"
+                      className="text-center text-sm text-foreground py-2 px-3 bg-muted rounded-lg transition-colors relative"
+                      onClick={() => setMobileMenuOpen(false)}
                     >
-                      {signingOut ? "Signing Out..." : "Sign Out"}
-                    </button>
+                      Notifications
+                      {unreadCount > 0 && (
+                        <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 rounded-full text-white text-xs flex items-center justify-center">
+                          {unreadCount}
+                        </span>
+                      )}
+                    </a>
                   </div>
+                  <button
+                    onClick={handleSignOutClick}
+                    disabled={signingOut}
+                    className="w-full mt-2 text-center text-sm text-red-600 py-2 px-3 bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {signingOut ? "Signing Out..." : "Sign Out"}
+                  </button>
                 </div>
               </nav>
             </div>
@@ -346,13 +423,22 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
         onSignOut={handleModalSignOut}
       />
 
-      {/* Close dropdown when clicking outside */}
-      {showUserMenu && (
+      {/* Close dropdowns when clicking outside */}
+      {(showUserMenu || showNotifications) && (
         <div
           className="fixed inset-0 z-40"
-          onClick={() => setShowUserMenu(false)}
+          onClick={() => {
+            setShowUserMenu(false);
+            setShowNotifications(false);
+          }}
         />
       )}
+
+      {/* Notification Dropdown */}
+      <NotificationDropdown
+        isOpen={showNotifications}
+        onClose={() => setShowNotifications(false)}
+      />
     </>
   );
 }
