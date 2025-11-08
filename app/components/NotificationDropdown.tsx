@@ -226,7 +226,7 @@ export function NotificationDropdown({
                   onClick={() => handleNotificationClick(notification)}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
+                    <div className="1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span
                           className={`text-sm font-medium ${
@@ -238,7 +238,7 @@ export function NotificationDropdown({
                           {notification.title}
                         </span>
                         {!notification.isRead && (
-                          <span className="h-2 w-2 bg-blue-500 rounded-full flex-shrink-0"></span>
+                          <span className="h-2 w-2 bg-blue-500 rounded-full shrink-0"></span>
                         )}
                       </div>
                       <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
@@ -253,13 +253,13 @@ export function NotificationDropdown({
                         {notification.actionUrl && (
                           <ExternalLink
                             size={12}
-                            className="text-muted-foreground flex-shrink-0"
+                            className="text-muted-foreground shrink-0"
                           />
                         )}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1 flex-shrink-0">
+                    <div className="flex items-center gap-1 shrink-0">
                       {!notification.isRead && (
                         <button
                           onClick={(e) => {
