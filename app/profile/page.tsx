@@ -444,7 +444,7 @@ export default function ProfilePage() {
             {/* Profile Information Tab */}
             {activeTab === "profile" && (
               <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-                <div className="bg-gradient-to-r from-primary/10 to-primary/5 px-6 py-4 border-b border-border">
+                <div className="bg-linear-to-r from-primary/10 to-primary/5 px-6 py-4 border-b border-border">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-primary/20 rounded-lg">
                       <User className="h-5 w-5 text-primary" />
@@ -961,7 +961,7 @@ export default function ProfilePage() {
             {/* Security Tab */}
             {activeTab === "security" && (
               <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-                <div className="bg-gradient-to-r from-primary/10 to-primary/5 px-6 py-4 border-b border-border">
+                <div className="bg-linear-to-r from-primary/10 to-primary/5 px-6 py-4 border-b border-border">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-primary/20 rounded-lg">
                       <Shield className="h-5 w-5 text-primary" />
@@ -1133,7 +1133,7 @@ export default function ProfilePage() {
             {/* Notifications Tab */}
             {activeTab === "notifications" && (
               <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-                <div className="bg-gradient-to-r from-primary/10 to-primary/5 px-6 py-4 border-b border-border">
+                <div className="bg-linear-to-r from-primary/10 to-primary/5 px-6 py-4 border-b border-border">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-primary/20 rounded-lg">
                       <Bell className="h-5 w-5 text-primary" />
