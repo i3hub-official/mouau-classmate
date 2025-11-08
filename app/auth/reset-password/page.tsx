@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Lock,
@@ -12,12 +12,14 @@ import {
   Key,
   Shield,
   AlertCircle,
+  Clock,
 } from "lucide-react";
 import { ThemeToggle } from "@/app/components/theme-toggle";
 
 // Client component that uses search params
 function ResetPasswordContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [formData, setFormData] = useState({
     password: "",
     confirmPassword: "",
@@ -39,13 +41,18 @@ function ResetPasswordContent() {
   const hash = searchParams.get("h");
 
   useEffect(() => {
+    // Immediately redirect if required parameters are missing
+    if (!token || !encodedEmail) {
+      router.push("/auth/signin");
+      return;
+    }
     verifyToken();
-  }, []);
+  }, [token, encodedEmail, router]);
 
   const verifyToken = async () => {
-    if (!token) {
-      setError("Invalid reset link. Please request a new password reset link.");
-      setIsVerifying(false);
+    // Double check parameters before making API call
+    if (!token || !encodedEmail) {
+      router.push("/auth/signin");
       return;
     }
 
@@ -64,17 +71,18 @@ function ResetPasswordContent() {
       const data = await response.json();
 
       if (!data.success) {
-        setError(
-          data.message ||
-            "Invalid or expired reset link. Please request a new one."
-        );
+        // Token is invalid or expired - redirect to signin
+        console.log("Token verification failed:", data.message);
+        router.push("/auth/signin");
+        return;
       }
-    } catch (err) {
-      setError(
-        "Failed to verify reset link. Please check your connection and try again."
-      );
-    } finally {
+
+      // Token is valid, proceed to show form
       setIsVerifying(false);
+    } catch (err) {
+      console.error("Token verification error:", err);
+      // On network error, redirect to signin for security
+      router.push("/auth/signin");
     }
   };
 
@@ -157,8 +165,11 @@ function ResetPasswordContent() {
       return;
     }
 
+    // Final security check - should never happen if verification passed
     if (!token || !encodedEmail) {
-      setError("Invalid reset link. Please request a new password reset link.");
+      setError(
+        "Security error: Invalid reset session. Please request a new password reset link."
+      );
       return;
     }
 
@@ -192,14 +203,7 @@ function ResetPasswordContent() {
     }
   };
 
-  const handleResetForm = () => {
-    setFormData({ password: "", confirmPassword: "" });
-    setError("");
-    setIsSuccess(false);
-    setPasswordStrength({ score: 0, feedback: [] });
-  };
-
-  // Loading state
+  // Loading state - only shown during brief verification period
   if (isVerifying) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-background via-accent/5 to-primary/5 p-4">
@@ -216,7 +220,7 @@ function ResetPasswordContent() {
     );
   }
 
-  // Success state
+  // Success state - only shown after successful password reset
   if (isSuccess) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-background via-accent/5 to-primary/5 p-4">
@@ -295,62 +299,7 @@ function ResetPasswordContent() {
     );
   }
 
-  // Error state for invalid token
-  if (error && !token) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-background via-accent/5 to-primary/5 p-4">
-        <div className="w-full max-w-md bg-card border border-border rounded-xl p-8 shadow-lg">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <Link
-              href="/auth/signin"
-              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeft size={16} />
-              Back to Sign In
-            </Link>
-            <ThemeToggle />
-          </div>
-
-          {/* Error Content */}
-          <div className="text-center space-y-6">
-            <div className="flex flex-col items-center justify-center space-y-4">
-              {/* Error Icon */}
-              <div className="p-4 bg-red-500/10 rounded-full">
-                <XCircle className="h-12 w-12 text-red-500" />
-              </div>
-
-              {/* Error Message */}
-              <div>
-                <h2 className="text-2xl font-bold text-foreground mb-2">
-                  Invalid Reset Link
-                </h2>
-                <p className="text-muted-foreground mb-4">{error}</p>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-3 w-full">
-                <Link
-                  href="/auth/forgot-password"
-                  className="flex-1 py-3 bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-colors text-center"
-                >
-                  Request New Link
-                </Link>
-                <Link
-                  href="/auth/signin"
-                  className="flex-1 py-3 border border-border text-foreground font-semibold rounded-lg hover:bg-muted transition-colors text-center"
-                >
-                  Back to Sign In
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Main reset form
+  // If we reach here, it means token is valid and we can show the reset form
   return (
     <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-background via-accent/5 to-primary/5 p-4">
       <div className="w-full max-w-md bg-card border border-border rounded-xl p-8 shadow-lg">
@@ -398,7 +347,7 @@ function ResetPasswordContent() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Error Message */}
+          {/* Error Message - Only for form validation errors, not token errors */}
           {error && (
             <div className="p-3 bg-error/10 border border-error/20 rounded-lg">
               <p className="text-error text-sm flex items-center gap-2">
