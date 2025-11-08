@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/app/components/theme-toggle";
 import { UserService } from "@/lib/services/userService";
-import { TeacherRegistrationService } from "@/lib/services/teachers/authService";
+import { TeacherAuthService } from "@/lib/services/teachers/authService";
 
 export default function TeacherSignInPage() {
   const [formData, setFormData] = useState({
@@ -44,8 +44,8 @@ export default function TeacherSignInPage() {
     // Check if user is already authenticated
     const checkAuth = async () => {
       try {
-        const user = await UserService.getCurrentUser();
-        if (user && (user.role === "TEACHER" || user.role === "LECTURER")) {
+        const user = await TeacherAuthService.getCurrentUser();
+        if (user && (user.role === "TEACHER")) {
           router.replace("/teacher/dashboard");
         }
       } catch (error) {
@@ -120,7 +120,7 @@ export default function TeacherSignInPage() {
     setShowSuccess(false);
 
     try {
-      const response = await TeacherRegistrationService.login({
+      const response = await TeacherAuthService.login({
         email: formData.email,
         password: formData.password,
         ipAddress: "", // You can get this from a service if needed
@@ -130,7 +130,12 @@ export default function TeacherSignInPage() {
       if (response.success) {
         // Store token if provided
         if (response.token) {
-          localStorage.setItem("auth_token", response.token);
+          // Store in localStorage for client-side access
+          localStorage.setItem("auth-token", response.token);
+          
+          // Also store in cookie for server-side access
+          document.cookie = `auth-token=${response.token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Strict; Secure`;
+          
           if (formData.rememberMe) {
             localStorage.setItem("remember_email", formData.email);
           } else {
@@ -188,7 +193,7 @@ export default function TeacherSignInPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-background via-accent/5 to-primary/5 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-background via-accent/5 to-primary/5 flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur-xl shadow-sm">
         <div className="w-full px-4 sm:px-6 lg:px-12 py-4 flex justify-between items-center">

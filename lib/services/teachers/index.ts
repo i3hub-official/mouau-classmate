@@ -1,23 +1,10 @@
   // Export services
-  export { TeacherAuthService } from "./authService";
-  export { TeacherAssignmentService } from "./assignmentService";
-  export { TeacherCourseService } from "./courseService";
-  export { TeacherGradeService } from "./gradeService";
-  export { TeacherDashboardService } from "./dashboardService";
-  export { TeacherProfileService } from "./profileService";
-  export { TeacherScheduleService } from "./scheduleService";
+export { TeacherAuthService } from "./authService";
+export { TeacherAssignmentService } from "./assignmentService";
+export { TeacherCourseService } from "./courseService";
+export { TeacherGradeService } from "./gradeService";
+export { TeacherDashboardService } from "./dashboardService";
+export { TeacherProfileService } from "./profileService";
+export { TeacherScheduleService } from "./scheduleService";
 
-  // Export types
-  export type {
-    TeacherLoginData,
-    AuthResponse,
-    CreateAssignmentData,
-    UpdateAssignmentData,
-    CreateCourseData,
-    GradeSubmissionData,
-    BulkGradeData,
-    DashboardStats,
-    UpdateProfileData,
-    ChangePasswordData,
-    CreateLectureData,
-  } from "./types";
+

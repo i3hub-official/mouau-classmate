@@ -20,7 +20,7 @@ export default function TeacherLayout({
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // Check if User is authenticated
+        // Get the current authenticated user
         const currentUser = await TeacherAuthService.getCurrentUser();
 
         if (!currentUser || !currentUser.id) {
@@ -30,7 +30,7 @@ export default function TeacherLayout({
         }
 
         // Check if User has teacher role
-        if (currentUser.role !== "TEACHER" && currentUser.role !== "LECTURER") {
+        if (currentUser.role !== "TEACHER") {
           // User is authenticated but not a teacher, redirect to appropriate page
           if (currentUser.role === "STUDENT") {
             router.push("/dashboard");

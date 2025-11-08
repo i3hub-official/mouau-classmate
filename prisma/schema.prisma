@@ -140,6 +140,8 @@ model User {
   passwordHash        String?
   greeting            String?   @default("Welcome back!")
   greetingNextChange  DateTime?
+  emailVerificationRequired Boolean  @default(true) 
+  emailVerificationAttempts Int      @default(0)
 
   // Authentication (NextAuth)
   accounts Account[]

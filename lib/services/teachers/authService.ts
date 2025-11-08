@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/server/prisma";
 import { hash, compare } from "bcryptjs";
-// Removed: import { sign } from "jsonwebtoken";
-import { JWTUtils } from "@/lib/server/jwt"; // Added: Import your custom JWT implementation
+import { JWTUtils } from "@/lib/server/jwt";
 import {
   protectData,
   unprotectData,
@@ -79,8 +78,18 @@ export interface VerificationResult {
 }
 
 export interface RegistrationResult {
-  user: any;
-  teacher: any;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    isActive: boolean;
+  };
+  teacher: {
+    id: string;
+    employeeId: string;
+    department: string;
+  };
   requiresVerification: boolean;
   isNewTeacher: boolean;
 }
@@ -110,7 +119,19 @@ export interface TeacherLoginData {
 export interface AuthResponse {
   success: boolean;
   message: string;
-  teacher?: any;
+  teacher?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    department: string;
+    employeeId: string;
+    user: {
+      id: string;
+      role: string;
+      isActive: boolean;
+    };
+  };
   token?: string;
 }
 
@@ -220,6 +241,13 @@ class SecurityUtils {
   }
 
   /**
+   * Generate a search hash for a field
+   */
+  static generateSearchHash(value: string): string {
+    return crypto.createHash('sha256').update(value.toLowerCase().trim()).digest('hex');
+  }
+
+  /**
    * Encode email for URL (Base64 URL-safe encoding)
    */
   static encodeEmail(email: string): string {
@@ -243,10 +271,14 @@ class SecurityUtils {
    * Generate timestamp hash for additional security
    */
   static generateTimestampHash(): string {
+    const encryptionKey = process.env.ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      throw new Error("ENCRYPTION_KEY environment variable is not set.");
+    }
     const timestamp = Date.now().toString();
     return crypto
       .createHash("sha256")
-      .update(timestamp + process.env.ENCRYPTION_KEY)
+      .update(timestamp + encryptionKey)
       .digest("hex")
       .substring(0, 16);
   }
@@ -313,32 +345,29 @@ class UrlUtils {
 }
 
 // ===========================================================
-// TEACHER REGISTRATION SERVICE CLASS
+// TEACHER AUTH SERVICE CLASS
 // ===========================================================
 
 export class TeacherAuthService {
   /**
-   * Verifies if a teacher identified by employeeId is already registered.
-   * Wrapper for TeacherRegistrationService.verifyTeacher
-   */
-  static async verifyTeacher(identifier: string): Promise<VerificationResult> {
-    return TeacherRegistrationService.verifyTeacher(identifier);
-  }
-}
-
-export class TeacherRegistrationService {
-  /**
-   * Verifies if a teacher identified by employeeId is already registered.
+   * Verifies if a teacher identified by identifier is already registered.
    */
   static async verifyTeacher(identifier: string): Promise<VerificationResult> {
     if (!identifier || identifier.trim() === "") {
-      throw new ValidationError("Employee ID is required");
+      throw new ValidationError("Identifier is required");
     }
 
-    // Check if teacher is already registered
+    // Generate search hash for the identifier
+    const searchHash = SecurityUtils.generateSearchHash(identifier);
+
+    // Check if teacher is already registered using search hash
     const existingTeacher = await prisma.teacher.findFirst({
       where: {
-        OR: [{ employeeId: identifier }, { email: identifier }],
+        OR: [
+          { employeeIdSearchHash: searchHash },
+          { emailSearchHash: searchHash },
+          { phoneSearchHash: searchHash }
+        ],
       },
       include: {
         user: true,
@@ -374,9 +403,16 @@ export class TeacherRegistrationService {
     identifier: string
   ): Promise<TeacherVerificationData | null> {
     try {
+      // Generate search hash for the identifier
+      const searchHash = SecurityUtils.generateSearchHash(identifier);
+      
       const teacherRecord = await prisma.teacher.findFirst({
         where: {
-          OR: [{ employeeId: identifier }, { email: identifier }],
+          OR: [
+            { employeeIdSearchHash: searchHash },
+            { emailSearchHash: searchHash },
+            { phoneSearchHash: searchHash }
+          ],
         },
       });
 
@@ -483,6 +519,9 @@ export class TeacherRegistrationService {
       formattedTeacherData.gender
     );
 
+    // Format employee ID
+    const formattedEmployeeId = CaseFormattingUtils.formatUpperCase(employeeId);
+
     // Protect sensitive data
     const [
       protectedEmail,
@@ -491,24 +530,30 @@ export class TeacherRegistrationService {
       protectedFirstName,
       protectedLastName,
       protectedOtherName,
-      hashedPassword,
     ] = await Promise.all([
       protectData(formattedTeacherData.email, "email"),
       protectData(formattedTeacherData.phone, "phone"),
-      protectData(employeeId, "nin"),
+      protectData(formattedEmployeeId, "nin"),
       protectData(formattedTeacherData.firstName, "name"),
       protectData(formattedTeacherData.lastName, "name"),
       protectData(formattedTeacherData.otherName || "", "name"),
-      protectData(password, "password"),
     ]);
 
-    // Check if teacher already exists
+    // Hash password using bcrypt
+    const passwordHash = await hash(password, 12);
+
+    // Generate search hashes
+    const emailSearchHash = SecurityUtils.generateSearchHash(formattedTeacherData.email);
+    const phoneSearchHash = SecurityUtils.generateSearchHash(formattedTeacherData.phone);
+    const employeeIdSearchHash = SecurityUtils.generateSearchHash(formattedEmployeeId);
+
+    // Check if teacher already exists using search hashes
     const existingTeacher = await prisma.teacher.findFirst({
       where: {
         OR: [
-          { employeeId: employeeId },
-          { email: formattedTeacherData.email },
-          { phone: formattedTeacherData.phone },
+          { employeeIdSearchHash: employeeIdSearchHash },
+          { emailSearchHash: emailSearchHash },
+          { phoneSearchHash: phoneSearchHash },
         ],
       },
     });
@@ -519,10 +564,10 @@ export class TeacherRegistrationService {
       );
     }
 
-    // Check if user already exists
+    // Check if user already exists using email search hash
     const existingUser = await prisma.user.findFirst({
       where: {
-        email: formattedTeacherData.email,
+        email: formattedTeacherData.email.toLowerCase().trim(),
       },
     });
 
@@ -534,6 +579,7 @@ export class TeacherRegistrationService {
 
     let user: any;
     let teacher: any;
+    let emailSent = false;
 
     try {
       // Database transaction
@@ -543,10 +589,10 @@ export class TeacherRegistrationService {
           const newUser = await tx.user.create({
             data: {
               name: `${formattedTeacherData.firstName} ${formattedTeacherData.lastName}`.trim(),
-              email: formattedTeacherData.email,
+              email: formattedTeacherData.email.toLowerCase().trim(),
               role: "TEACHER",
               isActive: false, // Requires admin approval
-              passwordHash: hashedPassword.encrypted,
+              passwordHash: passwordHash, // Use bcrypt hash directly
               failedLoginAttempts: 0,
               accountLocked: false,
               loginCount: 0,
@@ -556,7 +602,7 @@ export class TeacherRegistrationService {
           // Create teacher record
           const newTeacher = await tx.teacher.create({
             data: {
-              employeeId: CaseFormattingUtils.formatUpperCase(employeeId),
+              employeeId: formattedEmployeeId,
               firstName: protectedFirstName.encrypted,
               lastName: protectedLastName.encrypted,
               otherName: protectedOtherName.encrypted,
@@ -570,9 +616,9 @@ export class TeacherRegistrationService {
               experience: formattedTeacherData.experience,
               photo: formattedTeacherData.photo,
               userId: newUser.id,
-              emailSearchHash: protectedEmail.searchHash,
-              phoneSearchHash: protectedPhone.searchHash,
-              employeeIdSearchHash: protectedEmployeeId.searchHash,
+              emailSearchHash: emailSearchHash,
+              phoneSearchHash: phoneSearchHash,
+              employeeIdSearchHash: employeeIdSearchHash,
             },
           });
 
@@ -616,15 +662,30 @@ export class TeacherRegistrationService {
 
     // Send verification email OUTSIDE transaction
     try {
-      const verificationToken = await this.sendVerificationEmail(
+      await this.sendVerificationEmail(
         formattedTeacherData.email,
         user.id,
         formattedTeacherData.firstName
       );
-
-      console.log("✅ Verification email process completed with NEW token");
+      emailSent = true;
+      console.log("✅ Verification email process completed");
     } catch (emailError) {
       console.error("❌ Failed to send verification email:", emailError);
+      
+      // Mark user as needing email verification
+      try {
+        // If you want to track email verification status, add a valid field to your User model in Prisma schema (e.g., emailVerificationRequired)
+        // For now, just update a known field or skip this update if no such field exists
+        // Example: Uncomment and use if you have 'emailVerificationRequired' in your schema
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { emailVerificationRequired: true },
+        });
+
+        // If no such field exists, you can safely remove this update
+      } catch (updateError) {
+        console.error("❌ Failed to mark user for email verification:", updateError);
+      }
     }
 
     // Create audit log OUTSIDE transaction
@@ -632,16 +693,15 @@ export class TeacherRegistrationService {
       await prisma.auditLog.create({
         data: {
           userId: user.id,
-          action: "LECTURE_CREATED",
+          action: "TEACHER_REGISTERED",
           resourceType: "TEACHER",
           resourceId: teacher.id,
           details: {
-            employeeId,
+            employeeId: formattedEmployeeId,
             department: formattedTeacherData.department,
             qualification: formattedTeacherData.qualification,
             gender: normalizedGender,
-            emailSent: true,
-            verificationTokenGenerated: true,
+            emailSent: emailSent,
           },
           ipAddress: "registration_system",
           userAgent: "teacher_registration",
@@ -652,8 +712,18 @@ export class TeacherRegistrationService {
     }
 
     return {
-      user,
-      teacher,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isActive: user.isActive,
+      },
+      teacher: {
+        id: teacher.id,
+        employeeId: teacher.employeeId,
+        department: teacher.department,
+      },
       requiresVerification: true,
       isNewTeacher: true,
     };
@@ -664,9 +734,12 @@ export class TeacherRegistrationService {
    */
   static async login(loginData: TeacherLoginData): Promise<AuthResponse> {
     try {
-      // Find teacher with user relation
-      const teacher = await prisma.teacher.findUnique({
-        where: { email: loginData.email },
+      // Generate email search hash for lookup
+      const emailSearchHash = SecurityUtils.generateSearchHash(loginData.email);
+      
+      // Find teacher with user relation using email search hash
+      const teacher = await prisma.teacher.findFirst({
+        where: { emailSearchHash: emailSearchHash },
         include: {
           user: true,
         },
@@ -674,6 +747,16 @@ export class TeacherRegistrationService {
 
       if (!teacher) {
         await this.recordFailedLogin(loginData.email, loginData.ipAddress);
+        return {
+          success: false,
+          message: "Invalid email or password",
+        };
+      }
+
+      // Decrypt email to verify it matches (prevents hash collision issues)
+      const decryptedEmail = await unprotectData(teacher.email, "email");
+      if (decryptedEmail.toLowerCase() !== loginData.email.toLowerCase().trim()) {
+        await this.recordFailedLogin(loginData.email, loginData.ipAddress, teacher.user.id);
         return {
           success: false,
           message: "Invalid email or password",
@@ -700,11 +783,8 @@ export class TeacherRegistrationService {
         };
       }
 
-      // Verify password
-      const isValidPassword = await this.verifyPasswordForAuth(
-        loginData.password,
-        teacher.user.passwordHash!
-      );
+      // Verify password using bcrypt
+      const isValidPassword = await compare(loginData.password, teacher.user.passwordHash!);
 
       if (!isValidPassword) {
         await this.recordFailedLogin(
@@ -730,13 +810,17 @@ export class TeacherRegistrationService {
         },
       });
 
-      // Replace jsonwebtoken with custom JWT implementation
+      // Decrypt teacher data for response
+      const decryptedFirstName = await unprotectData(teacher.firstName, "name");
+      const decryptedLastName = await unprotectData(teacher.lastName, "name");
+
+      // Generate JWT token
       const token = await JWTUtils.generateAuthToken({
         userId: teacher.user.id,
-        email: teacher.email,
-        schoolId: teacher.id, // Using teacher.id as schoolId since there's no explicit schoolId in the teacher model
+        email: decryptedEmail,
+        schoolId: teacher.id,
         role: "TEACHER",
-        schoolNumber: teacher.employeeId, // Using employeeId as schoolNumber
+        schoolNumber: teacher.employeeId,
       });
 
       // Create audit log
@@ -760,9 +844,9 @@ export class TeacherRegistrationService {
         message: "Login successful",
         teacher: {
           id: teacher.id,
-          firstName: teacher.firstName,
-          lastName: teacher.lastName,
-          email: teacher.email,
+          firstName: decryptedFirstName,
+          lastName: decryptedLastName,
+          email: decryptedEmail,
           department: teacher.department,
           employeeId: teacher.employeeId,
           user: {
@@ -950,6 +1034,112 @@ export class TeacherRegistrationService {
     });
   }
 
+
+  static async getCurrentUser() {
+  try {
+    // Get the token from cookies or local storage
+    // This implementation assumes you're storing the JWT in a cookie named 'auth-token'
+    // You might need to adjust this based on your actual token storage strategy
+    
+    // For client-side usage:
+    const token = this.getTokenFromStorage();
+    
+    if (!token) {
+      return null;
+    }
+    
+    // Verify the token
+    const decodedToken = await JWTUtils.verifyAuthToken(token);
+    
+    if (!decodedToken || !decodedToken.userId) {
+      return null;
+    }
+    
+    // Fetch the user from the database
+    const user = await prisma.user.findUnique({
+      where: { id: decodedToken.userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+        lastLoginAt: true,
+      },
+    });
+    
+    if (!user || !user.isActive) {
+      return null;
+    }
+    
+    // If the user is a teacher, fetch teacher-specific data
+    if (user.role === "TEACHER") {
+      const teacher = await prisma.teacher.findUnique({
+        where: { userId: user.id },
+        select: {
+          id: true,
+          employeeId: true,
+          department: true,
+        },
+      });
+      
+      return {
+        ...user,
+        teacherId: teacher?.id,
+        employeeId: teacher?.employeeId,
+        department: teacher?.department,
+      };
+    }
+    
+    return user;
+  } catch (error) {
+    console.error("Error getting current user:", error);
+    return null;
+  }
+}
+
+/**
+ * Get token from storage (client-side)
+ */
+private static getTokenFromStorage(): string | null {
+  // Check if we're in a browser environment
+  if (typeof window === "undefined") {
+    return null;
+  }
+  
+  // Try to get token from localStorage
+  let token = localStorage.getItem("auth-token");
+  
+  // If not in localStorage, try cookies
+  if (!token) {
+    const cookies = document.cookie.split(";");
+    for (const cookie of cookies) {
+      const [name, value] = cookie.trim().split("=");
+      if (name === "auth-token") {
+        token = value;
+        break;
+      }
+    }
+  }
+  
+  return token;
+}
+
+/**
+ * Clear authentication token (for logout)
+ */
+static clearAuthToken(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  
+  // Remove from localStorage
+  localStorage.removeItem("auth-token");
+  
+  // Remove from cookies
+  document.cookie = "auth-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+}
+
   /**
    * Get teacher by user ID
    */
@@ -1015,11 +1205,11 @@ export class TeacherRegistrationService {
       },
     });
 
-    // Generate NEW verification code using nanoid
+    // Generate verification code using nanoid
     const verificationCode = SecurityUtils.generateVerificationCode(48);
 
     try {
-      // Store NEW verification token
+      // Store verification token
       await prisma.verificationToken.create({
         data: {
           identifier: email,
@@ -1028,7 +1218,7 @@ export class TeacherRegistrationService {
         },
       });
 
-      // Use the new base URL utility
+      // Use the base URL utility
       const baseUrl = UrlUtils.getBaseUrl();
 
       // Create secure verification URL with encoded parameters
@@ -1121,7 +1311,8 @@ export class TeacherRegistrationService {
     password: string,
     hashedPassword: string
   ): Promise<boolean> {
-    return verifyPassword(password, hashedPassword);
+    // Use bcrypt's compare function to securely check the password
+    return compare(password, hashedPassword);
   }
 
   /**
@@ -1149,14 +1340,21 @@ export class TeacherRegistrationService {
     if (!identifier || identifier.trim() === "") {
       return {
         canRegister: false,
-        reason: "Employee ID is required",
+        reason: "Identifier is required",
       };
     }
 
     try {
+      // Generate search hash for the identifier
+      const searchHash = SecurityUtils.generateSearchHash(identifier);
+      
       const existingTeacher = await prisma.teacher.findFirst({
         where: {
-          OR: [{ employeeId: identifier }, { email: identifier }],
+          OR: [
+            { employeeIdSearchHash: searchHash },
+            { emailSearchHash: searchHash },
+            { phoneSearchHash: searchHash }
+          ],
         },
         include: {
           user: true,
@@ -1187,7 +1385,7 @@ export class TeacherRegistrationService {
     identifier: string
   ): Promise<TeacherVerificationData | null> {
     if (!identifier || identifier.trim() === "") {
-      throw new ValidationError("Employee ID is required");
+      throw new ValidationError("Identifier is required");
     }
 
     return this.loadTeacherData(identifier);
@@ -1198,12 +1396,20 @@ export class TeacherRegistrationService {
       return false;
     }
 
+    // Generate search hash for the identifier
+    const searchHash = SecurityUtils.generateSearchHash(identifier);
+    
     const teacher = await prisma.teacher.findFirst({
       where: {
-        OR: [{ employeeId: identifier }, { email: identifier }],
+        OR: [
+          { employeeIdSearchHash: searchHash },
+          { emailSearchHash: searchHash },
+          { phoneSearchHash: searchHash }
+        ],
       },
     });
 
     return !!teacher;
   }
 }
+
