@@ -142,16 +142,10 @@ export default function ForgotPasswordPage() {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-3 w-full">
-                <button
-                  onClick={handleResetForm}
-                  className="flex-1 py-3 border border-border text-foreground font-semibold rounded-lg hover:bg-muted transition-colors"
-                >
-                  Reset Another Email
-                </button>
+              <div className="flex flex-col sm:flex-row gap-1 w-full">
                 <Link
                   href="/auth/signin"
-                  className="flex-1 py-3 bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-colors text-center flex items-center justify-center"
+                  className="flex-1 py-2 sm:py-2.5 bg-primary text-sm text-white font-medium rounded-md hover:bg-primary/90 transition-colors text-center flex items-center justify-center"
                 >
                   Back to Sign In
                 </Link>

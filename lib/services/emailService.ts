@@ -27,7 +27,7 @@ export class EmailService {
 
   constructor() {
     // Log configuration for debugging
-    this.logSmtpConfiguration();
+    // this.logSmtpConfiguration();
 
     this.transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || "smtp.gmail.com",
@@ -134,13 +134,13 @@ export class EmailService {
     }
 
     try {
-      console.log("🔍 Checking email server connection...");
+      // console.log("🔍 Checking email server connection...");
       const isConnected = await this.verifyConnection();
 
       if (isConnected) {
         this.connectionVerified = true;
         this.lastConnectionCheck = now;
-        console.log("✅ Email connection verified and cached");
+        // console.log("✅ Email connection verified and cached");
         return true;
       } else {
         this.connectionVerified = false;
@@ -156,18 +156,18 @@ export class EmailService {
 
   async sendEmail(options: EmailOptions): Promise<boolean> {
     try {
-      console.log("🚀 Starting email send process...");
-      console.log("📧 Environment:", process.env.NODE_ENV);
-      console.log("📬 Recipient:", options.to);
+      // console.log("🚀 Starting email send process...");
+      // console.log("📧 Environment:", process.env.NODE_ENV);
+      // console.log("📬 Recipient:", options.to);
       // console.log("📄 Template:", options.template);
 
       // Load and compile template first
-      console.log("📝 Loading email template...");
+      // console.log("📝 Loading email template...");
       const template = await this.loadTemplate(options.template);
       const compiled = this.compileTemplate(template, options.context);
 
-      console.log("✅ Template loaded and compiled successfully");
-      console.log("📧 Subject:", compiled.subject);
+      // console.log("✅ Template loaded and compiled successfully");
+      // console.log("📧 Subject:", compiled.subject);
 
       // Check if we should actually send or just simulate
       const shouldSimulate =
@@ -190,8 +190,8 @@ export class EmailService {
       }
 
       // ACTUALLY SEND THE EMAIL
-      console.log("📤 SENDING REAL EMAIL...");
-      console.log("🔄 Verifying connection before sending...");
+      // console.log("📤 SENDING REAL EMAIL...");
+      // console.log("🔄 Verifying connection before sending...");
 
       const isConnected = await this.ensureConnection();
 
@@ -200,7 +200,7 @@ export class EmailService {
         throw new Error("Email server connection failed");
       }
 
-      console.log("✅ Connection verified, preparing to send...");
+      // console.log("✅ Connection verified, preparing to send...");
 
       const mailOptions = {
         from: {
@@ -221,11 +221,11 @@ export class EmailService {
 
       const result = await this.transporter.sendMail(mailOptions);
 
-      console.log("✅ EMAIL SENT SUCCESSFULLY!");
-      console.log("📬 Message ID:", result.messageId);
-      console.log("📨 Response:", result.response);
-      console.log("✉️ Accepted:", result.accepted);
-      console.log("🚫 Rejected:", result.rejected);
+      // console.log("✅ EMAIL SENT SUCCESSFULLY!");
+      // console.log("📬 Message ID:", result.messageId);
+      // console.log("📨 Response:", result.response);
+      // console.log("✉️ Accepted:", result.accepted);
+      // console.log("🚫 Rejected:", result.rejected);
 
       if (result.rejected && result.rejected.length > 0) {
         console.error("⚠️ Some recipients were rejected:", result.rejected);
@@ -281,18 +281,18 @@ export class EmailService {
 
   async verifyConnection(): Promise<boolean> {
     try {
-      console.log("🔌 Testing email server connection...");
-      console.log("📧 Configuration:", {
-        host: process.env.SMTP_HOST,
-        port: process.env.SMTP_PORT,
-        user: process.env.SMTP_USER,
-        secure: process.env.SMTP_SECURE,
-      });
+      // console.log("🔌 Testing email server connection...");
+      // console.log("📧 Configuration:", {
+      //   host: process.env.SMTP_HOST,
+      //   port: process.env.SMTP_PORT,
+      //   user: process.env.SMTP_USER,
+      //   secure: process.env.SMTP_SECURE,
+      // });
 
       // Test the connection
       await this.transporter.verify();
 
-      console.log("✅ Email server connection verified successfully");
+      // console.log("✅ Email server connection verified successfully");
       this.connectionVerified = true;
       this.lastConnectionCheck = Date.now();
       return true;
@@ -474,7 +474,7 @@ export class EmailService {
         (process.env as any).NODE_ENV = "production";
       }
 
-      console.log("🚀 FORCE SENDING EMAIL (bypassing simulation)...");
+      // console.log("🚀 FORCE SENDING EMAIL (bypassing simulation)...");
       const result = await this.sendEmail(options);
 
       return result;
