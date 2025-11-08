@@ -162,15 +162,15 @@ function StatCard({
 
   return (
     <div
-      className={`bg-card border ${colorClasses[color]} rounded-2xl p-6 hover:shadow-lg transition-all duration-300`}
+      className={`bg-card border ${colorClasses[color]} rounded-xl p-4 hover:shadow-lg transition-all duration-300`}
     >
-      <div className="flex items-center gap-4">
-        <div className={`p-3 rounded-xl ${colorClasses[color]}`}>
-          <Icon className="h-7 w-7" />
+      <div className="flex items-center gap-3">
+        <div className={`p-2 rounded-lg ${colorClasses[color]}`}>
+          <Icon className="h-5 w-5" />
         </div>
         <div>
-          <p className="text-3xl font-bold text-foreground">{value}</p>
-          <p className="text-sm text-muted-foreground">{label}</p>
+          <p className="text-xl font-bold text-foreground">{value}</p>
+          <p className="text-xs text-muted-foreground">{label}</p>
         </div>
       </div>
     </div>
@@ -290,7 +290,9 @@ export default function DashboardPage() {
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading dashboard...</p>
+            <p className="text-sm text-muted-foreground">
+              Loading dashboard...
+            </p>
           </div>
         </div>
       </div>
@@ -303,30 +305,30 @@ export default function DashboardPage() {
       <DashboardHeader />
 
       {/* Dashboard Content */}
-      <main className="w-full px-6 xl:px-8 py-8 space-y-8">
+      <main className="w-full px-4 sm:px-6 xl:px-8 py-6 space-y-6">
         {/* Welcome Section */}
         <div>
-          <h2 className="text-3xl font-bold text-foreground mb-2">
+          <h2 className="text-2xl font-bold text-foreground mb-1">
             {greeting || "Welcome back!"}
           </h2>
-          <p className="text-lg text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Here's what's happening with your academic journey today.
           </p>
         </div>
 
         {/* User Info Card */}
-        <div className="bg-linear-to-br from-primary to-primary/80 rounded-2xl p-8 text-white shadow-lg w-full">
+        <div className="bg-linear-to-br from-primary to-primary/80 rounded-xl p-6 text-white shadow-lg w-full">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
             <div className="flex-1">
-              <h3 className="text-xl font-semibold mb-4">
+              <h3 className="text-lg font-semibold mb-3">
                 Student Information
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
                 <div>
                   <p className="text-primary-foreground/80 text-xs font-medium uppercase tracking-wide">
                     Matric Number
                   </p>
-                  <p className="font-semibold text-lg">
+                  <p className="font-semibold text-base">
                     {dashboardData?.userInfo?.matricNumber || "N/A"}
                   </p>
                 </div>
@@ -334,7 +336,7 @@ export default function DashboardPage() {
                   <p className="text-primary-foreground/80 text-xs font-medium uppercase tracking-wide">
                     Department
                   </p>
-                  <p className="font-semibold text-lg">
+                  <p className="font-semibold text-base">
                     {dashboardData?.userInfo?.department || "N/A"}
                   </p>
                 </div>
@@ -342,7 +344,7 @@ export default function DashboardPage() {
                   <p className="text-primary-foreground/80 text-xs font-medium uppercase tracking-wide">
                     Course
                   </p>
-                  <p className="font-semibold text-lg">
+                  <p className="font-semibold text-base">
                     {dashboardData?.userInfo?.course || "N/A"}
                   </p>
                 </div>
@@ -350,7 +352,7 @@ export default function DashboardPage() {
                   <p className="text-primary-foreground/80 text-xs font-medium uppercase tracking-wide">
                     College
                   </p>
-                  <p className="font-semibold text-lg">
+                  <p className="font-semibold text-base">
                     {dashboardData?.userInfo?.college || "N/A"}
                   </p>
                 </div>
@@ -360,7 +362,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <StatCard
             icon={BookOpen}
             value={dashboardData?.activeCourses || 0}
@@ -388,15 +390,15 @@ export default function DashboardPage() {
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           {/* Left Column - 2/3 width */}
-          <div className="xl:col-span-2 space-y-8">
+          <div className="xl:col-span-2 space-y-6">
             <RecentActivities
               activities={dashboardData?.recentActivities || []}
               loading={loading}
             />
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <UpcomingDeadlines
                 assignments={[]} // You'll need to fetch this data
                 loading={loading}
@@ -409,7 +411,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Right Column - 1/3 width */}
-          <div className="space-y-8">
+          <div className="space-y-6">
             <AcademicProgress
               progress={dashboardData?.academicProgress}
               loading={loading}
