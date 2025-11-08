@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { DashboardHeader } from "@/app/components/DashboardHeader";
+import { DashboardHeader } from "@/app/components/students/DashboardHeader";
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -27,7 +27,7 @@ import {
   ScheduleService,
   ScheduleItem,
   DailySchedule,
-} from "@/lib/services/scheduleService";
+} from "@/lib/services/students/scheduleService";
 import { UserService } from "@/lib/services/userService";
 
 interface UserData {

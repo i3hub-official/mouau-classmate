@@ -97,7 +97,7 @@ export default function HomePage() {
 
           <div className="flex items-center gap-3 sm:gap-4">
             <Link
-              href="/auth/signin"
+              href="/select-role"
               className="hidden md:block px-4 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
             >
               Sign In
@@ -132,16 +132,10 @@ export default function HomePage() {
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
               <Link
-                href="/auth/signup"
+                href="/select-role"
                 className="px-8 py-3.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30"
               >
-                Get Started Free
-              </Link>
-              <Link
-                href="/auth/signin"
-                className="px-8 py-3.5 border-2 border-border text-foreground font-semibold rounded-xl hover:bg-accent/10 hover:border-primary/50 transition-all"
-              >
-                Sign In
+                Get Started
               </Link>
             </div>
 
@@ -243,7 +237,7 @@ export default function HomePage() {
               academic excellence
             </p>
             <Link
-              href="/auth/signup"
+              href="/select-role"
               className="inline-block px-8 py-3.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
             >
               Get Started Today

@@ -1,7 +1,7 @@
 // app/profile/page.tsx
 "use client";
 import { useState, useEffect } from "react";
-import { DashboardHeader } from "@/app/components/DashboardHeader";
+import { DashboardHeader } from "@/app/components/students/DashboardHeader";
 import {
   User,
   Mail,
@@ -28,7 +28,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { UserService } from "@/lib/services/userService";
-import { ProfileService } from "@/lib/services/profileService";
+import { ProfileService } from "@/lib/services/students/profileService";
 
 interface UserProfile {
   id: string;
@@ -357,9 +357,7 @@ export default function ProfilePage() {
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-sm text-muted-foreground">
-              Loading profile...
-            </p>
+            <p className="text-sm text-muted-foreground">Loading profile...</p>
           </div>
         </div>
       </div>

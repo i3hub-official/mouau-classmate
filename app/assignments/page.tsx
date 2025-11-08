@@ -1,7 +1,7 @@
 // app/assignments/page.tsx
 "use client";
 import { useState, useEffect } from "react";
-import { DashboardHeader } from "@/app/components/DashboardHeader";
+import { DashboardHeader } from "@/app/components/students/DashboardHeader";
 import {
   Search,
   Filter,
@@ -20,7 +20,7 @@ import {
 import {
   AssignmentService,
   AssignmentWithRelations,
-} from "@/lib/services/assignmentService";
+} from "@/lib/services/students/assignmentService";
 
 interface UserData {
   id: string;
@@ -678,8 +678,8 @@ export default function AssignmentsPage() {
                       {isSubmitted && latestSubmission && (
                         <div className="mb-3 p-3 bg-muted rounded-lg">
                           <p className="text-sm font-medium text-foreground">
-                            Submitted {formatDate(latestSubmission.submittedAt)} at{" "}
-                            {formatTime(latestSubmission.submittedAt)}
+                            Submitted {formatDate(latestSubmission.submittedAt)}{" "}
+                            at {formatTime(latestSubmission.submittedAt)}
                             {latestSubmission.attemptNumber > 1 &&
                               ` (Attempt ${latestSubmission.attemptNumber})`}
                           </p>

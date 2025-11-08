@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { ProfileService } from "@/lib/services/profileService";
+import { ProfileService } from "@/lib/services/students/profileService";
 
 export async function POST(request: NextRequest) {
   try {

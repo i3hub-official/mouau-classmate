@@ -14,7 +14,7 @@ import {
   Plus,
   CheckCircle,
 } from "lucide-react";
-import { DashboardHeader } from "@/app/components/DashboardHeader";
+import { DashboardHeader } from "@/app/components/students/DashboardHeader";
 
 interface Course {
   id: string;
@@ -172,16 +172,14 @@ export default function CoursesPage() {
   };
 
   // Loading state
- if (loading) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <DashboardHeader />
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-sm text-muted-foreground">
-              Loading courses...
-            </p>
+            <p className="text-sm text-muted-foreground">Loading courses...</p>
           </div>
         </div>
       </div>

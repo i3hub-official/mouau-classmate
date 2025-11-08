@@ -1,6 +1,6 @@
 // app/api/courses/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { CourseService } from "@/lib/services/courseService";
+import { CourseService } from "@/lib/services/students/courseService";
 import { prisma } from "@/lib/server/prisma";
 
 export async function GET(request: NextRequest) {

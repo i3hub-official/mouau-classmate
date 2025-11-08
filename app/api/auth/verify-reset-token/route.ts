@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { StudentRegistrationService } from "@/lib/services/studentRegistrationService";
-import { ValidationError, StudentRegistrationError } from "@/lib/services/studentRegistrationService";
+import { StudentRegistrationService } from "@/lib/services/students/studentRegistrationService";
+import {
+  ValidationError,
+  StudentRegistrationError,
+} from "@/lib/services/students/studentRegistrationService";
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,10 +11,10 @@ export async function POST(request: NextRequest) {
 
     if (!token) {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           error: "TOKEN_REQUIRED",
-          message: "Reset token is required" 
+          message: "Reset token is required",
         },
         { status: 400 }
       );
@@ -26,33 +29,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(result);
     } else {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           error: "INVALID_TOKEN",
-          message: result.message 
+          message: result.message,
         },
         { status: 400 }
       );
     }
   } catch (error) {
     console.error("Token verification error:", error);
-    
+
     if (error instanceof ValidationError) {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           error: error.code,
-          message: error.message 
+          message: error.message,
         },
         { status: 400 }
       );
     }
 
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         error: "SERVER_ERROR",
-        message: "Failed to verify reset token" 
+        message: "Failed to verify reset token",
       },
       { status: 500 }
     );

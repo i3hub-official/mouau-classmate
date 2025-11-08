@@ -1,6 +1,6 @@
 // app/auth/verify-email/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { StudentRegistrationService } from "@/lib/services/studentRegistrationService";
+import { StudentRegistrationService } from "@/lib/services/students/studentRegistrationService";
 import { prisma } from "@/lib/server/prisma";
 
 export async function POST(request: NextRequest) {

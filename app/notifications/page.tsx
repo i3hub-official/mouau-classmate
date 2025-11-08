@@ -1,7 +1,7 @@
 // app/notifications/page.tsx
 "use client";
 import { useState, useEffect } from "react";
-import { DashboardHeader } from "@/app/components/DashboardHeader";
+import { DashboardHeader } from "@/app/components/students/DashboardHeader";
 import {
   Bell,
   Check,
@@ -18,7 +18,7 @@ import {
 import {
   NotificationService,
   Notification,
-} from "@/lib/services/notificationService";
+} from "@/lib/services/students/notificationService";
 
 type FilterType = "all" | "unread" | "read";
 type NotificationType = "all" | "info" | "success" | "warning" | "error";

@@ -2,8 +2,8 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { DashboardHeader } from "@/app/components/DashboardHeader";
-import { AssignmentService } from "@/lib/services/assignmentService";
+import { DashboardHeader } from "@/app/components/students/DashboardHeader";
+import { AssignmentService } from "@/lib/services/students/assignmentService";
 import {
   Upload,
   FileText,

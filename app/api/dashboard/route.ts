@@ -1,6 +1,6 @@
 // app/api/dashboard/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { DashboardService } from "@/lib/services/dashboardService";
+import { DashboardService } from "@/lib/services/students/dashboardService";
 import { prisma } from "@/lib/server/prisma";
 
 export async function GET(request: NextRequest) {

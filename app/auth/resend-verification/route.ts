@@ -2,9 +2,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { StudentRegistrationService } from "@/lib/services/studentRegistrationService";
+import { StudentRegistrationService } from "@/lib/services/students/studentRegistrationService";
 import { prisma } from "@/lib/server/prisma";
-import { RateLimitService } from "@/lib/services/rateLimitService";
+import { RateLimitService } from "@/lib/services/students/rateLimitService";
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();

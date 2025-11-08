@@ -714,4 +714,3 @@ function calculateGradeFromPercentage(percentage: number): Grade {
   if (percentage >= 50) return Grade.E;
   return Grade.F;
 }
-

@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { cookies } from "next/headers";
-import { ServerProfileService } from "@/lib/services/serverProfileService";
+import { ServerProfileService } from "@/lib/services/students/serverProfileService";
 
 export async function GET(request: NextRequest) {
   const startTime = Date.now();

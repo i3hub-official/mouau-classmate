@@ -1,6 +1,6 @@
 // app/api/admin/email-test/send/route.ts - FIXED
 import { NextRequest, NextResponse } from "next/server";
-import { emailService } from "@/lib/services/emailService";
+import { emailService } from "@/lib/services/students/emailService";
 
 export async function POST(request: NextRequest) {
   try {

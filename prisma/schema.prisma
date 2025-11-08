@@ -93,6 +93,8 @@ enum AuditAction {
   PORTFOLIO_UPDATED
   USER_PREFERENCES
   NOTIFICATION_SETTINGS_RESET
+  LECTURE_CREATED
+  TEACHER_REGISTERED
   // Add any other missing actions you need
 }
 
@@ -319,11 +321,15 @@ model Teacher {
   gender         Gender?
   phone          String   @unique(map: "teachers_phone_key")
   email          String   @unique(map: "teachers_email_key")
+  institution    String
   department     String
   qualification  String?
   specialization String?
+  experience     String?
   dateJoined     DateTime @default(now())
   isActive       Boolean  @default(true)
+  photo          String?
+  updatedAt      DateTime @updatedAt
 
   // Security fields
   lastActivityAt DateTime?
@@ -334,6 +340,10 @@ model Teacher {
   instructedCourses Course[]     @relation("CourseInstructor")
   createdCourses    Course[]     @relation("CourseCreator")
   assignments       Assignment[]
+   // Search hashes for encrypted field queries
+  emailSearchHash   String? @unique(map: "teachers_email_search_hash_key")
+  phoneSearchHash   String? @unique(map: "teachers_phone_search_hash_key")
+  employeeIdSearchHash String? @unique(map: "teachers_employee_id_search_hash_key")
 
   @@unique([userId], map: "teachers_user_id_key")
   @@unique([employeeId], map: "teachers_employee_id_alt_key")

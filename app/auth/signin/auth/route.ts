@@ -1,6 +1,6 @@
 // app/auth/signin/auth/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { StudentRegistrationService } from "@/lib/services/studentRegistrationService";
+import { StudentRegistrationService } from "@/lib/services/students/studentRegistrationService";
 import { prisma } from "@/lib/server/prisma";
 import { JWTUtils } from "@/lib/server/jwt";
 import { nanoid } from "nanoid";

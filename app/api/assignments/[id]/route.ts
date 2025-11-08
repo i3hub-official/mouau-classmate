@@ -1,6 +1,6 @@
 // app/api/assignments/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { AssignmentService } from "@/lib/services/assignmentService";
+import { AssignmentService } from "@/lib/services/students/assignmentService";
 
 interface RouteParams {
   params: {

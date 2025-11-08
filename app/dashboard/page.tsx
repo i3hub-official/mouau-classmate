@@ -2,12 +2,12 @@
 "use client";
 import { useEffect, useState } from "react";
 import { BookOpen, Calendar, FileText, Users, RefreshCw } from "lucide-react";
-import { RecentActivities } from "@/app/components/RecentActivities";
-import { UpcomingDeadlines } from "@/app/components/UpcomingDeadlines";
-import { AcademicProgress } from "@/app/components/AcademicProgress";
-import { PerformanceOverview } from "@/app/components/PerformanceOverview";
-import { QuickActions } from "@/app/components/QuickActions";
-import { DashboardHeader } from "@/app/components/DashboardHeader";
+import { RecentActivities } from "@/app/components/students/RecentActivities";
+import { UpcomingDeadlines } from "@/app/components/students/UpcomingDeadlines";
+import { AcademicProgress } from "@/app/components/students/AcademicProgress";
+import { PerformanceOverview } from "@/app/components/students/PerformanceOverview";
+import { QuickActions } from "@/app/components/students/QuickActions";
+import { DashboardHeader } from "@/app/components/students/DashboardHeader";
 
 // -----------------------------
 // Types
