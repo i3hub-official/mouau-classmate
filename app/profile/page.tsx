@@ -59,33 +59,19 @@ interface NotificationSettings {
   lectureReminders: boolean;
 }
 
-interface State {
-  id: number;
-  name: string;
-  capital: string;
-  zone: string;
-  region: string;
-  slogan: string;
-  landmass: string;
-  population: string;
-  dialect: string;
-  map: string;
-  latitude: string;
-  longitude: string;
-  website: string;
-  geo_politial_zone: string;
-  created: string;
-  established: string;
-  state_id: number;
-  local_government_areas: string[];
+interface StatesResponse {
+  type: string;
+  message: string;
+  count: number;
+  states: string[];
 }
 
-interface LGA {
-  id: number;
-  name: string;
-  state_id: number;
+interface LGAsResponse {
+  type: string;
+  message: string;
   state: string;
-  region: string;
+  count: number;
+  lgas: string[];
 }
 
 export default function ProfilePage() {
@@ -116,12 +102,12 @@ export default function ProfilePage() {
   } | null>(null);
 
   // State and LGA management
-  const [states, setStates] = useState<State[]>([]);
-  const [lgas, setLgas] = useState<LGA[]>([]);
+  const [states, setStates] = useState<string[]>([]);
+  const [lgas, setLgas] = useState<string[]>([]);
   const [isLoadingStates, setIsLoadingStates] = useState(false);
   const [isLoadingLgas, setIsLoadingLgas] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  const lgaCache = new Map<string, LGA[]>();
+  const lgaCache = new Map<string, string[]>();
 
   // Track which fields have been updated before
   const [updatedFields, setUpdatedFields] = useState<Set<string>>(new Set());
@@ -147,7 +133,7 @@ export default function ProfilePage() {
         throw new Error("Failed to fetch states");
       }
 
-      const data = await res.json();
+      const data: StatesResponse = await res.json();
       const statesList = data.states || [];
       setStates(statesList);
       localStorage.setItem("cachedStates", JSON.stringify(statesList));
@@ -186,7 +172,7 @@ export default function ProfilePage() {
           throw new Error("Failed to fetch LGAs");
         }
 
-        const data = await res.json();
+        const data: LGAsResponse = await res.json();
         const lgasList = data.lgas || [];
         setLgas(lgasList);
         lgaCache.set(userProfile.state, lgasList);
@@ -666,9 +652,9 @@ export default function ProfilePage() {
                           className="w-full pl-10 pr-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 appearance-none"
                         >
                           <option value="">Select State</option>
-                          {states.map((state) => (
-                            <option key={state.id} value={state.name}>
-                              {state.name}
+                          {states.map((state, index) => (
+                            <option key={`state-${index}`} value={state}>
+                              {state}
                             </option>
                           ))}
                         </select>
@@ -695,9 +681,9 @@ export default function ProfilePage() {
                         className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 appearance-none"
                       >
                         <option value="">Select LGA</option>
-                        {lgas.map((lga) => (
-                          <option key={lga.id} value={lga.name}>
-                            {lga.name}
+                        {lgas.map((lga, index) => (
+                          <option key={`lga-${index}`} value={lga}>
+                            {lga}
                           </option>
                         ))}
                       </select>
