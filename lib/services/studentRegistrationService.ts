@@ -36,6 +36,13 @@ export class StudentAlreadyExistsError extends StudentRegistrationError {
   }
 }
 
+export class AuthenticationError extends StudentRegistrationError {
+  constructor(message: string, details?: any) {
+    super(message, "AUTHENTICATION_ERROR", details);
+    this.name = "AuthenticationError";
+  }
+}
+
 function maskEmail(email: string) {
   if (!email || !email.includes("@")) return "unknown";
 
@@ -96,6 +103,21 @@ export interface RegistrationResult {
   student: any;
   requiresVerification: boolean;
   isNewStudent: boolean;
+}
+
+export interface PasswordResetResult {
+  success: boolean;
+  message: string;
+  token?: string;
+}
+
+export interface TokenVerificationResult {
+  success: boolean;
+  message: string;
+  data?: {
+    email: string;
+    name: string;
+  };
 }
 
 // ===========================================================
@@ -284,6 +306,18 @@ class SecurityUtils {
     } catch (error) {
       console.error("Error parsing verification params:", error);
       return { email: null, code: null, hash: null };
+    }
+  }
+
+  /**
+   * Validate timestamp hash
+   */
+  static validateTimestampHash(hash: string): boolean {
+    try {
+      const expectedHash = this.generateTimestampHash();
+      return hash === expectedHash;
+    } catch (error) {
+      return false;
     }
   }
 }
@@ -556,12 +590,6 @@ export class StudentRegistrationService {
             },
           });
 
-          // console.log("👤 User created:", {
-          //   id: newUser.id,
-          //   email: newUser.email,
-          //   name: newUser.name,
-          // });
-
           // Create student record
           const newStudent = await tx.student.create({
             data: {
@@ -588,12 +616,6 @@ export class StudentRegistrationService {
               ninSearchHash: protectedNin.searchHash,
             },
           });
-
-          // console.log("🎓 Student created:", {
-          //   id: newStudent.id,
-          //   matricNumber: newStudent.matricNumber,
-          //   userId: newStudent.userId,
-          // });
 
           // Create account for NextAuth
           await tx.account.create({
@@ -689,12 +711,6 @@ export class StudentRegistrationService {
     userId: string,
     name: string
   ): Promise<string> {
-    // console.log("📧 sendVerificationEmail called with:", {
-    //   email: email || "UNDEFINED",
-    //   userId: userId || "UNDEFINED",
-    //   name: name || "UNDEFINED",
-    // });
-
     if (!email || !userId || !name) {
       console.error("❌ Missing required parameters for verification email");
       throw new ValidationError("Email, userId, and name are required");
@@ -719,7 +735,6 @@ export class StudentRegistrationService {
     });
 
     if (existingToken) {
-      // console.log(`⏭️ Verification email already sent recently to: ${maskEmail(email)}`);
       return existingToken.token;
     }
 
@@ -733,12 +748,8 @@ export class StudentRegistrationService {
       },
     });
 
-    // console.log("🔒 Deleted any old verification tokens for:", maskEmail(email));
-
     // Generate NEW verification code using nanoid (48 chars for high security)
     const verificationCode = SecurityUtils.generateVerificationCode(48);
-
-    console.log("🔐 Generated new verification code using nanoid");
 
     try {
       // Store NEW verification token
@@ -759,12 +770,6 @@ export class StudentRegistrationService {
         verificationCode
       );
       const verificationLink = `${baseUrl}/auth/verify-email/verify?${verificationParams}`;
-
-      // console.log(`🔗 Preparing secure verification email for ${maskEmail(email)}`);
-      // console.log(`🌐 Using base URL: ${baseUrl}`);
-      // console.log(
-      //   `🔐 Verification link structure: /auth/verify-email/verify?e=[encoded]&t=[code]&h=[hash]`
-      // );
 
       const emailSent = await emailService.sendEmail({
         to: email,
@@ -787,11 +792,6 @@ export class StudentRegistrationService {
         throw new StudentRegistrationError("Failed to send verification email");
       }
 
-      // console.log(`✅ Verification email successfully sent to: ${maskEmail(email)}`);
-      // console.log(
-      //   `🔒 Security: Using nanoid code + encoded email + timestamp hash`
-      // );
-
       return verificationCode;
     } catch (error) {
       console.error("❌ Error in sendVerificationEmail:", error);
@@ -800,7 +800,6 @@ export class StudentRegistrationService {
         await prisma.verificationToken.deleteMany({
           where: { identifier: email },
         });
-        // console.log(`🧹 Cleaned up verification token for: ${maskEmail(email)}`);
       } catch (cleanupError) {
         console.error(
           "❌ Failed to clean up verification token:",
@@ -820,11 +819,6 @@ export class StudentRegistrationService {
    * Sends welcome email after successful verification
    */
   static async sendWelcomeEmail(email: string, name: string): Promise<boolean> {
-    // console.log("🎉 sendWelcomeEmail called with:", {
-    //   email: email || "UNDEFINED",
-    //   name: name || "UNDEFINED",
-    // });
-
     if (!email || !name) {
       console.error("❌ Missing required parameters for welcome email");
       return false;
@@ -843,12 +837,6 @@ export class StudentRegistrationService {
           loginLink: loginLink,
         },
       });
-
-      if (emailSent) {
-        // console.log(`✅ Welcome email sent to: ${maskEmail(email)}`);
-      } else {
-        // console.error(`❌ Failed to send welcome email to: ${maskEmail(email)}`);
-      }
 
       return emailSent;
     } catch (error) {
@@ -874,7 +862,6 @@ export class StudentRegistrationService {
       if (encodedEmail) {
         try {
           emailFromParam = SecurityUtils.decodeEmail(encodedEmail);
-          // console.log("📧 Decoded email from parameter");
         } catch (decodeError) {
           console.error("❌ Failed to decode email parameter:", decodeError);
           throw new ValidationError("Invalid verification link");
@@ -925,8 +912,6 @@ export class StudentRegistrationService {
       await prisma.verificationToken.delete({
         where: { token: code },
       });
-
-      // console.log("✅ Email verified successfully for:", user.email);
 
       // Send welcome email
       try {
@@ -979,10 +964,12 @@ export class StudentRegistrationService {
         throw new ValidationError("User not found");
       }
 
+      // Delete existing reset tokens for this user
       await prisma.passwordResetToken.deleteMany({
         where: { userId: user.id },
       });
 
+      // Create new reset token
       await prisma.passwordResetToken.create({
         data: {
           token: resetCode,
@@ -999,10 +986,6 @@ export class StudentRegistrationService {
         resetCode
       );
       const resetLink = `${baseUrl}/auth/reset-password?${resetParams}`;
-
-      // console.log(
-      //   "🔐 Password reset link structure: /auth/reset-password?e=[encoded]&t=[code]&h=[hash]"
-      // );
 
       const emailSent = await emailService.sendEmail({
         to: email,
@@ -1022,11 +1005,6 @@ export class StudentRegistrationService {
           "Failed to send password reset email"
         );
       }
-
-      // console.log(`✅ Password reset email sent to: ${maskEmail(email)}`);
-      // console.log(
-      //   `🔒 Security: Using nanoid code + encoded email + timestamp hash`
-      // );
 
       return resetCode;
     } catch (error) {
@@ -1048,11 +1026,354 @@ export class StudentRegistrationService {
   }
 
   /**
+   * Sends password reset confirmation email
+   */
+  static async sendPasswordResetConfirmationEmail(
+    email: string,
+    name: string
+  ): Promise<boolean> {
+    if (!email || !name) {
+      console.error(
+        "❌ Missing required parameters for password reset confirmation email"
+      );
+      return false;
+    }
+
+    try {
+      const baseUrl = UrlUtils.getBaseUrl();
+      const loginLink = `${baseUrl}/auth/signin`;
+
+      const emailSent = await emailService.sendEmail({
+        to: email,
+        subject: "Your MOUAU ClassMate Password Has Been Reset",
+        template: "password-reset-confirmation",
+        context: {
+          name: name.trim(),
+          loginLink: loginLink,
+          timestamp: new Date().toLocaleString("en-US", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZoneName: "short",
+          }),
+        },
+      });
+
+      return emailSent;
+    } catch (error) {
+      console.error(
+        "❌ Error sending password reset confirmation email:",
+        error
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Verify password reset token
+   */
+  static async verifyPasswordResetToken(
+    token: string,
+    encodedEmail?: string
+  ): Promise<TokenVerificationResult> {
+    if (!token) {
+      throw new ValidationError("Reset token is required");
+    }
+
+    try {
+      // Decode email if provided
+      let email: string | null = null;
+      if (encodedEmail) {
+        try {
+          email = SecurityUtils.decodeEmail(encodedEmail);
+        } catch (decodeError) {
+          return {
+            success: false,
+            message: "Invalid reset link",
+          };
+        }
+      }
+
+      // Find the reset token
+      const resetToken = await prisma.passwordResetToken.findFirst({
+        where: {
+          token: token,
+          expires: {
+            gt: new Date(),
+          },
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              isActive: true,
+            },
+          },
+        },
+      });
+
+      if (!resetToken) {
+        return {
+          success: false,
+          message: "Invalid or expired reset token",
+        };
+      }
+
+      // Validate email match if provided
+      if (email && email !== resetToken.user.email) {
+        return {
+          success: false,
+          message: "Email does not match reset token",
+        };
+      }
+
+      if (!resetToken.user.isActive) {
+        return {
+          success: false,
+          message: "Account is not active",
+        };
+      }
+
+      return {
+        success: true,
+        message: "Token is valid",
+        data: {
+          email: resetToken.user.email,
+          name: resetToken.user.name || "Student",
+        },
+      };
+    } catch (error) {
+      console.error("Token verification error:", error);
+      return {
+        success: false,
+        message: "Failed to verify reset token",
+      };
+    }
+  }
+
+  /**
+   * Reset password using token
+   */
+  static async resetPasswordWithToken(
+    token: string,
+    encodedEmail: string,
+    password: string,
+    confirmPassword: string
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      // Validate required fields
+      if (!token || !password || !confirmPassword) {
+        throw new ValidationError(
+          "Token, password, and confirm password are required"
+        );
+      }
+
+      // Validate password match
+      if (password !== confirmPassword) {
+        throw new ValidationError("Passwords do not match");
+      }
+
+      // Validate password strength
+      const passwordValidation = ValidationUtils.validatePassword(password);
+      if (!passwordValidation.isValid) {
+        throw new ValidationError(passwordValidation.error!);
+      }
+
+      // Decode email
+      let email: string;
+      try {
+        email = SecurityUtils.decodeEmail(encodedEmail);
+      } catch (decodeError) {
+        throw new ValidationError("Invalid reset link");
+      }
+
+      // Verify reset token
+      const resetToken = await prisma.passwordResetToken.findFirst({
+        where: {
+          token: token,
+          expires: {
+            gt: new Date(),
+          },
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              isActive: true,
+              passwordHash: true,
+            },
+          },
+        },
+      });
+
+      if (!resetToken) {
+        throw new ValidationError("Invalid or expired reset token");
+      }
+
+      // Validate email match
+      if (email !== resetToken.user.email) {
+        throw new ValidationError("Email does not match reset token");
+      }
+
+      if (!resetToken.user.isActive) {
+        throw new ValidationError("Account is not active");
+      }
+
+      // Check if new password is same as old password
+      if (!resetToken.user.passwordHash) {
+        throw new ValidationError("User does not have a password set");
+      }
+      const isSamePassword = await this.verifyPasswordForAuth(
+        password,
+        resetToken.user.passwordHash
+      );
+
+      if (isSamePassword) {
+        throw new ValidationError(
+          "New password cannot be the same as current password"
+        );
+      }
+
+      // Hash new password
+      const protectedPassword = await protectData(password, "password");
+
+      // Update user password
+      await prisma.$transaction(async (tx) => {
+        // Update password
+        await tx.user.update({
+          where: { id: resetToken.user.id },
+          data: {
+            passwordHash: protectedPassword.encrypted,
+            updatedAt: new Date(),
+          },
+        });
+
+        // Delete used reset token
+        await tx.passwordResetToken.delete({
+          where: { token: token },
+        });
+
+        // Delete all other reset tokens for this user
+        await tx.passwordResetToken.deleteMany({
+          where: { userId: resetToken.user.id },
+        });
+      });
+
+      // Send confirmation email
+      try {
+        await this.sendPasswordResetConfirmationEmail(
+          resetToken.user.email,
+          resetToken.user.name || "Student"
+        );
+      } catch (emailError) {
+        console.error(
+          "Failed to send password reset confirmation email:",
+          emailError
+        );
+      }
+
+      return {
+        success: true,
+        message: "Password has been reset successfully",
+      };
+    } catch (error) {
+      console.error("Password reset error:", error);
+
+      if (error instanceof StudentRegistrationError) {
+        throw error;
+      }
+
+      throw new StudentRegistrationError("Failed to reset password");
+    }
+  }
+
+  /**
+   * Request password reset
+   */
+  static async requestPasswordReset(
+    email: string
+  ): Promise<PasswordResetResult> {
+    try {
+      if (!email) {
+        throw new ValidationError("Email address is required");
+      }
+
+      // Validate email format
+      if (!ValidationUtils.validateEmail(email)) {
+        throw new ValidationError("Please provide a valid email address");
+      }
+
+      // Check if user exists
+      const user = await prisma.user.findFirst({
+        where: { email },
+        select: { id: true, email: true, name: true, isActive: true },
+      });
+
+      // Always return success to prevent email enumeration
+      if (!user) {
+        console.log(
+          `Password reset requested for non-existent email: ${email}`
+        );
+        return {
+          success: true,
+          message:
+            "If an account with that email exists, a password reset link has been sent",
+        };
+      }
+
+      if (!user.isActive) {
+        throw new ValidationError(
+          "Please verify your email address before resetting your password"
+        );
+      }
+
+      // Send password reset email
+      const resetToken = await this.sendPasswordResetEmail(
+        email,
+        user.name || "Student"
+      );
+
+      // Create audit log
+      await prisma.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "PASSWORD_RESET_REQUESTED",
+          resourceType: "USER",
+          resourceId: user.id,
+          ipAddress: "password_reset_system",
+          userAgent: "password_reset",
+        },
+      });
+
+      return {
+        success: true,
+        message: "Password reset link has been sent to your email",
+        token: resetToken,
+      };
+    } catch (error) {
+      console.error("Password reset request error:", error);
+
+      if (error instanceof StudentRegistrationError) {
+        throw error;
+      }
+
+      throw new StudentRegistrationError(
+        "Failed to process password reset request"
+      );
+    }
+  }
+
+  /**
    * Resends verification email
    */
   static async resendVerificationEmail(email: string): Promise<string> {
-    // console.log("🔄 Resending verification email for:", maskEmail(email));
-
     if (!email) {
       throw new ValidationError("Email is required");
     }
@@ -1083,10 +1404,6 @@ export class StudentRegistrationService {
     });
 
     if (!user) {
-      // console.log(
-      //   "⚠️ Resend verification requested for non-existent email:",
-      //   maskEmail(email)
-      // );
       return "email_sent";
     }
 

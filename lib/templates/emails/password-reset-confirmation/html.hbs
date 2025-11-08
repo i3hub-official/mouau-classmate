@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reset Your Password - MOUAU ClassMate</title>
+  <title>Password Changed Successfully - MOUAU ClassMate</title>
   <style>
     body { 
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
@@ -31,7 +31,7 @@
     }
     
     .header { 
-      background: linear-gradient(135deg, #1D9D21 0%, #15803d 100%);
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
       color: white; 
       padding: 50px 30px; 
       text-align: center;
@@ -46,7 +46,7 @@
       left: 0;
       right: 0;
       height: 4px;
-      background: linear-gradient(90deg, #1D9D21, #FFF600, #1D9D21);
+      background: linear-gradient(90deg, #10b981, #34d399, #10b981);
       animation: shimmer 3s ease-in-out infinite;
     }
     
@@ -95,39 +95,51 @@
       padding: 45px 35px; 
     }
     
-    .alert-card {
-      background: linear-gradient(135deg, #f8fafc 0%, #f0fdf4 100%);
-      padding: 25px;
+    .success-card {
+      background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+      padding: 30px;
       border-radius: 16px;
-      border: 1px solid #e5e7eb;
+      border: 1px solid #bbf7d0;
       margin-bottom: 25px;
       position: relative;
-      box-shadow: 0 4px 12px rgba(29, 157, 33, 0.08);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+      text-align: center;
     }
     
-    .alert-card::before {
+    .success-card::before {
       content: '';
       position: absolute;
       top: 0;
       left: 0;
       width: 4px;
       height: 100%;
-      background: linear-gradient(180deg, #1D9D21, #FFF600);
+      background: linear-gradient(180deg, #10b981, #34d399);
       border-radius: 4px 0 0 4px;
     }
     
+    .success-icon {
+      font-size: 48px;
+      margin-bottom: 20px;
+      animation: bounce 2s ease-in-out infinite;
+    }
+    
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    
     .user-name {
-      color: #1D9D21;
+      color: #10b981;
       font-weight: 700;
       font-size: 18px;
-      background: linear-gradient(135deg, #1D9D21, #15803d);
+      background: linear-gradient(135deg, #10b981, #059669);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
     }
     
     .security-badge {
-      background: linear-gradient(135deg, #1D9D21 0%, #15803d 100%);
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
       color: white;
       padding: 20px;
       border-radius: 12px;
@@ -137,7 +149,7 @@
       font-weight: 600;
       position: relative;
       overflow: hidden;
-      box-shadow: 0 8px 25px rgba(29, 157, 33, 0.25);
+      box-shadow: 0 8px 25px rgba(16, 185, 129, 0.25);
     }
     
     .security-badge::before {
@@ -147,7 +159,7 @@
       left: 0;
       width: 100%;
       height: 3px;
-      background: #FFF600;
+      background: #34d399;
       animation: slideIn 1s ease-out;
     }
     
@@ -157,29 +169,29 @@
     }
     
     .security-badge::after {
-      content: '🔒';
+      content: '✅';
       position: absolute;
       top: 10px;
       right: 20px;
       font-size: 20px;
-      animation: lockPulse 2s ease-in-out infinite;
+      animation: checkPulse 2s ease-in-out infinite;
     }
     
-    @keyframes lockPulse {
+    @keyframes checkPulse {
       0%, 100% { transform: scale(1); }
       50% { transform: scale(1.1); }
     }
     
     .button { 
       display: inline-block; 
-      background: linear-gradient(135deg, #1D9D21 0%, #16a34a 100%);
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
       color: white; 
       padding: 16px 40px; 
       text-decoration: none; 
       border-radius: 12px; 
       font-weight: 700;
       font-size: 16px;
-      box-shadow: 0 6px 20px rgba(29, 157, 33, 0.3);
+      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
       transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
       border: none;
       cursor: pointer;
@@ -205,27 +217,27 @@
     
     .button:hover {
       transform: translateY(-3px) scale(1.02);
-      box-shadow: 0 12px 30px rgba(29, 157, 33, 0.4);
-      background: linear-gradient(135deg, #16a34a 0%, #1D9D21 100%);
+      box-shadow: 0 12px 30px rgba(16, 185, 129, 0.4);
+      background: linear-gradient(135deg, #059669 0%, #10b981 100%);
     }
     
     .button:active {
       transform: translateY(-1px) scale(1.01);
     }
     
-    .security-note {
-      background: #fffef0;
+    .confirmation-note {
+      background: #f0fdf4;
       padding: 18px 20px;
       border-radius: 12px;
-      border-left: 4px solid #FFF600;
+      border-left: 4px solid #10b981;
       margin: 25px 0;
       font-size: 14px;
       position: relative;
-      box-shadow: 0 4px 12px rgba(255, 246, 0, 0.1);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.1);
     }
     
-    .security-note::before {
-      content: '⏰';
+    .confirmation-note::before {
+      content: '🕒';
       position: absolute;
       top: 15px;
       right: 20px;
@@ -233,7 +245,7 @@
       opacity: 0.7;
     }
     
-    .link-container {
+    .timestamp-section {
       background: #f8fafc;
       padding: 20px;
       border-radius: 12px;
@@ -242,20 +254,20 @@
       position: relative;
     }
     
-    .link-container::before {
+    .timestamp-section::before {
       content: '';
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 3px;
-      background: linear-gradient(90deg, #1D9D21, #FFF600);
+      background: linear-gradient(90deg, #10b981, #34d399);
       border-radius: 12px 12px 0 0;
     }
     
-    .reset-link {
+    .timestamp {
       background: #1f2937;
-      color: #10b981;
+      color: #34d399;
       padding: 15px;
       border-radius: 8px;
       font-family: 'Courier New', monospace;
@@ -265,16 +277,17 @@
       position: relative;
       word-break: break-all;
       line-height: 1.5;
+      text-align: center;
     }
     
-    .reset-link::before {
+    .timestamp::before {
       content: '';
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 3px;
-      background: #FFF600;
+      background: #34d399;
       border-radius: 8px 8px 0 0;
     }
     
@@ -294,7 +307,7 @@
       left: 0;
       width: 4px;
       height: 100%;
-      background: linear-gradient(180deg, #1D9D21, #FFF600);
+      background: linear-gradient(180deg, #10b981, #34d399);
       border-radius: 4px 0 0 4px;
     }
     
@@ -315,13 +328,13 @@
       justify-content: center;
       width: 28px;
       height: 28px;
-      background: #1D9D21;
+      background: #10b981;
       color: white;
       border-radius: 50%;
       font-weight: 700;
       font-size: 14px;
       margin-right: 12px;
-      box-shadow: 0 2px 8px rgba(29, 157, 33, 0.3);
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
       position: relative;
     }
     
@@ -332,7 +345,7 @@
       right: 2px;
       width: 6px;
       height: 6px;
-      background: #FFF600;
+      background: #34d399;
       border-radius: 50%;
     }
     
@@ -367,12 +380,12 @@
       transform: translateX(-50%);
       width: 80px;
       height: 3px;
-      background: linear-gradient(90deg, #1D9D21, #FFF600);
+      background: linear-gradient(90deg, #10b981, #34d399);
       border-radius: 3px;
     }
     
     .highlight {
-      color: #1D9D21;
+      color: #10b981;
       font-weight: 700;
       position: relative;
       display: inline-block;
@@ -385,7 +398,7 @@
       left: 0;
       width: 100%;
       height: 2px;
-      background: #FFF600;
+      background: #34d399;
       transform: scaleX(0.8);
       transition: transform 0.3s ease;
     }
@@ -404,9 +417,10 @@
       color: #4b5563;
       margin-bottom: 20px;
       line-height: 1.6;
+      text-align: center;
     }
     
-    .warning-note {
+    .security-note {
       background: #fff7ed;
       padding: 18px 20px;
       border-radius: 12px;
@@ -417,7 +431,7 @@
       box-shadow: 0 4px 12px rgba(245, 158, 11, 0.1);
     }
     
-    .warning-note::before {
+    .security-note::before {
       content: '⚠️';
       position: absolute;
       top: 15px;
@@ -429,7 +443,7 @@
     .section-title {
       font-size: 18px;
       font-weight: 700;
-      color: #1D9D21;
+      color: #10b981;
       margin-bottom: 20px;
       display: flex;
       align-items: center;
@@ -438,8 +452,28 @@
     }
     
     .section-title::before {
-      content: '🔄';
+      content: '🎉';
       font-size: 20px;
+    }
+    
+    .success-title {
+      font-size: 28px;
+      font-weight: 800;
+      color: #10b981;
+      margin: 0 0 15px 0;
+      text-align: center;
+      background: linear-gradient(135deg, #10b981, #059669);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .success-subtitle {
+      font-size: 16px;
+      color: #6b7280;
+      text-align: center;
+      margin: 0 0 25px 0;
+      line-height: 1.5;
     }
   </style>
 </head>
@@ -448,84 +482,90 @@
     <div class="header">
       <div class="logo">MOUAU ClassMate</div>
       <div class="logo-subtitle">YOUR ACADEMIC COMPANION</div>
-      <h1 style="margin: 25px 0 0 0; font-size: 26px; font-weight: 700; position: relative; z-index: 2;">Reset Your Password</h1>
     </div>
     
     <div class="content">
-      <div class="alert-card">
-        <p style="margin: 0; font-size: 17px; font-weight: 600;">Hello <span class="user-name">{{name}}</span>,</p>
-        <p style="margin: 12px 0 0 0; font-size: 15px; color: #6b7280; line-height: 1.6;">
-          We received a request to reset your <span class="highlight">MOUAU ClassMate</span> account password.
-        </p>
+      <div class="success-card">
+        <div class="success-icon">✅</div>
+        <h1 class="success-title">Password Changed Successfully!</h1>
+        <p class="success-subtitle">Your MOUAU ClassMate account password has been updated securely</p>
       </div>
       
       <div class="security-badge">
-        Password Reset Request
+        Password Update Confirmed
+      </div>
+      
+      <div class="alert-card">
+        <p style="margin: 0; font-size: 17px; font-weight: 600;">Hello <span class="user-name">{{name}}</span>,</p>
+        <p style="margin: 12px 0 0 0; font-size: 15px; color: #6b7280; line-height: 1.6;">
+          Your <span class="highlight">MOUAU ClassMate</span> account password was successfully changed.
+        </p>
       </div>
       
       <p class="instruction-text">
-        To reset your password and regain access to your academic resources, click the button below. You'll be taken to a secure page to create a new password.
+        Your account security has been updated. You can now sign in with your new password to access all your academic resources.
       </p>
       
       <div class="cta-section">
-        <a href="{{resetLink}}" class="button">
-          Reset My Password
+        <a href="{{loginLink}}" class="button">
+          Sign In to ClassMate
         </a>
       </div>
       
-      <div class="security-note">
-        <strong>Security Notice:</strong> This password reset link will expire in <strong>1 hour</strong> to protect your account security.
-      </div>
-      
-      <div class="link-container">
+      <div class="timestamp-section">
         <p style="margin: 0 0 15px 0; font-weight: 600; color: #1f2937;">
-          Alternative: Copy & Paste Method
+          Password Change Details
         </p>
         <p style="margin: 0 0 12px 0; font-size: 14px; color: #6b7280;">
-          If the button doesn't work, copy this full link and paste it in your browser:
+          Your password was successfully updated on:
         </p>
-        <div class="reset-link">
-          {{resetLink}}
+        <div class="timestamp">
+          {{timestamp}}
         </div>
+      </div>
+      
+      <div class="confirmation-note">
+        <strong>Confirmation:</strong> This change was completed successfully. Your new password is now active across all MOUAU ClassMate services.
       </div>
       
       <div class="steps-section">
         <div class="section-title">
-          Password Reset Process
+          What Happens Next
         </div>
         
         <div class="step-container">
           <div class="step-header">
             <span class="step-number">1</span>
-            <span class="step-title">Click the reset link above</span>
+            <span class="step-title">Sign in with your new password</span>
           </div>
-          <div class="step-desc">Use the button or copy-paste the link (expires in 1 hour)</div>
+          <div class="step-desc">Use your updated credentials to access your account</div>
         </div>
         
         <div class="step-container">
           <div class="step-header">
             <span class="step-number">2</span>
-            <span class="step-title">Create a strong new password</span>
+            <span class="step-title">Access your academic dashboard</span>
           </div>
-          <div class="step-desc">Choose a unique password with letters, numbers, and symbols</div>
+          <div class="step-desc">Continue with your studies and academic activities</div>
         </div>
         
         <div class="step-container">
           <div class="step-header">
             <span class="step-number">3</span>
-            <span class="step-title">Sign in with your new password</span>
+            <span class="step-title">Enjoy enhanced security</span>
           </div>
-          <div class="step-desc">Access your account immediately with the updated credentials</div>
+          <div class="step-desc">Your account is now protected with your new password</div>
         </div>
       </div>
       
-      <div class="warning-note">
-        <strong>Important:</strong> If you didn't request this password reset, please ignore this email. 
-        Your account remains secure, but we recommend reviewing your account security settings.
+      <div class="security-note">
+        <strong>Security Alert:</strong> If you did not make this password change, please 
+        <a href="{{supportLink}}" style="color: #f59e0b; font-weight: 600; text-decoration: none;">contact support immediately</a>. 
+        Your account security may have been compromised.
       </div>
           
       <p style="font-size: 14px; color: #6b7280; text-align: center; margin-top: 25px;">
-        For optimal security, choose a <span class="highlight">strong, unique password</span> that you haven't used on other platforms.
+        For your security, we recommend using a <span class="highlight">unique password</span> that you don't use on other platforms.
       </p>
       
       <div class="footer">
@@ -536,7 +576,7 @@
           Student Management System
         </p>
         <p style="margin: 0; font-size: 11px; opacity: 0.7;">
-          This is an automated security message. For assistance, contact support through the ClassMate portal.
+          This is an automated security confirmation. For assistance, contact support through the ClassMate portal.
         </p>
       </div>
     </div>

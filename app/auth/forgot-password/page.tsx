@@ -1,4 +1,3 @@
-// app/auth/forgot-password/page.tsx
 "use client";
 import { useState } from "react";
 import Link from "next/link";
@@ -11,7 +10,7 @@ import {
   ArrowLeft,
   Key,
 } from "lucide-react";
-// import { ThemeToggle } from "@/app/components/theme-toggle";
+import { ThemeToggle } from "@/app/components/theme-toggle";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -36,14 +35,26 @@ export default function ForgotPasswordPage() {
 
     setIsLoading(true);
 
-    // Simulate API call
     try {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const response = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
 
-      // Simulate successful request
-      setIsSuccess(true);
+      const data = await response.json();
+
+      if (data.success) {
+        setIsSuccess(true);
+      } else {
+        setError(
+          data.message || "Failed to send reset link. Please try again."
+        );
+      }
     } catch (err) {
-      setError("Failed to send reset link. Please try again.");
+      setError("Network error. Please check your connection and try again.");
     } finally {
       setIsLoading(false);
     }
@@ -67,7 +78,7 @@ export default function ForgotPasswordPage() {
             <ArrowLeft size={16} />
             Back to Sign In
           </Link>
-          {/* <ThemeToggle /> */}
+          <ThemeToggle />
         </div>
 
         {/* Logo */}
