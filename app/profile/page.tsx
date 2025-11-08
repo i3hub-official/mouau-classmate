@@ -357,7 +357,7 @@ export default function ProfilePage() {
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading profile...</p>
+            <p className="text-muted-foreground text-sm">Loading profile...</p>
           </div>
         </div>
       </div>
@@ -368,24 +368,24 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-background">
       <DashboardHeader />
 
-      <main className="w-full px-6 xl:px-8 py-8">
+      <main className="w-full px-4 sm:px-6 xl:px-8 py-6">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">
+            <h1 className="text-2xl font-bold text-foreground mb-1">
               Profile Settings
             </h1>
-            <p className="text-lg text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Manage your account information and preferences
             </p>
           </div>
           {activeTab === "profile" && !editMode && (
             <button
               onClick={() => setEditMode(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors mt-4 lg:mt-0 shadow-sm"
+              className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors mt-3 lg:mt-0 shadow-sm text-sm"
             >
-              <Edit3 size={14} />
-              <span className="text-sm">Edit Profile</span>
+              <Edit3 size={12} />
+              <span>Edit Profile</span>
             </button>
           )}
         </div>
@@ -393,7 +393,7 @@ export default function ProfilePage() {
         {/* Message Alert */}
         {message && (
           <div
-            className={`mb-6 p-4 rounded-lg border ${
+            className={`mb-4 p-3 rounded-lg border text-sm ${
               message.type === "success"
                 ? "bg-green-50 border-green-200 text-green-800"
                 : "bg-red-50 border-red-200 text-red-800"
@@ -401,19 +401,19 @@ export default function ProfilePage() {
           >
             <div className="flex items-center gap-2">
               {message.type === "success" ? (
-                <CheckCircle2 size={20} />
+                <CheckCircle2 size={16} />
               ) : (
-                <XCircle size={20} />
+                <XCircle size={16} />
               )}
               <span>{message.text}</span>
             </div>
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Sidebar Navigation */}
           <div className="lg:col-span-1">
-            <div className="bg-card border border-border rounded-xl p-2 sticky top-24 shadow-sm">
+            <div className="bg-card border border-border rounded-xl p-1 sticky top-20 shadow-sm">
               <nav className="space-y-1">
                 {tabs.map((tab) => {
                   const Icon = tab.icon;
@@ -421,16 +421,16 @@ export default function ProfilePage() {
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${
+                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-all text-sm ${
                         activeTab === tab.id
                           ? "bg-primary text-primary-foreground shadow-sm"
                           : "text-muted-foreground hover:text-foreground hover:bg-muted"
                       }`}
                     >
-                      <Icon size={18} />
+                      <Icon size={14} />
                       <span className="font-medium">{tab.label}</span>
                       {activeTab === tab.id && (
-                        <ChevronRight size={16} className="ml-auto" />
+                        <ChevronRight size={12} className="ml-auto" />
                       )}
                     </button>
                   );
@@ -444,28 +444,28 @@ export default function ProfilePage() {
             {/* Profile Information Tab */}
             {activeTab === "profile" && (
               <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-                <div className="bg-linear-to-r from-primary/10 to-primary/5 px-6 py-4 border-b border-border">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-primary/20 rounded-lg">
-                      <User className="h-5 w-5 text-primary" />
+                <div className="bg-linear-to-r from-primary/10 to-primary/5 px-4 py-3 border-b border-border">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-primary/20 rounded-lg">
+                      <User className="h-4 w-4 text-primary" />
                     </div>
-                    <h2 className="text-xl font-semibold text-foreground">
+                    <h2 className="text-lg font-semibold text-foreground">
                       Personal Information
                     </h2>
                   </div>
                 </div>
 
-                <div className="p-6">
+                <div className="p-4">
                   {/* Field Update Notice */}
                   {editMode && (
-                    <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                      <div className="flex items-start gap-3">
-                        <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+                    <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
                         <div>
                           <h3 className="font-medium text-amber-800 mb-1">
                             Important Notice
                           </h3>
-                          <p className="text-sm text-amber-700">
+                          <p className="text-xs text-amber-700">
                             You can only update empty fields. Once a field is
                             updated, it cannot be changed again. Please contact
                             administration for any corrections to previously
@@ -477,20 +477,20 @@ export default function ProfilePage() {
                   )}
 
                   <form onSubmit={handleProfileUpdate}>
-                    <div className="space-y-8">
+                    <div className="space-y-6">
                       {/* Basic Information Section */}
                       <div>
-                        <div className="flex items-center gap-2 mb-4">
+                        <div className="flex items-center gap-2 mb-3">
                           <div className="h-px bg-border flex-1"></div>
-                          <h3 className="text-sm font-medium text-muted-foreground px-2">
+                          <h3 className="text-xs font-medium text-muted-foreground px-2 uppercase tracking-wide">
                             Basic Information
                           </h3>
                           <div className="h-px bg-border flex-1"></div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">
+                            <label className="block text-xs font-medium text-foreground mb-1">
                               Full Name
                             </label>
                             <div className="relative">
@@ -505,7 +505,7 @@ export default function ProfilePage() {
                                   )
                                 }
                                 disabled={!canEditField("name")}
-                                className={`w-full px-4 py-2.5 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all ${
+                                className={`w-full px-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary transition-all ${
                                   canEditField("name")
                                     ? "border-border"
                                     : "border-muted-foreground/20 bg-muted/30"
@@ -513,9 +513,9 @@ export default function ProfilePage() {
                                 placeholder="Enter your full name"
                               />
                               {!canEditField("name") && userProfile?.name && (
-                                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                                <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
                                   <Lock
-                                    size={14}
+                                    size={12}
                                     className="text-muted-foreground"
                                   />
                                 </div>
@@ -523,23 +523,23 @@ export default function ProfilePage() {
                             </div>
                             {!canEditField("name") && userProfile?.name && (
                               <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                                <Info size={12} />
+                                <Info size={10} />
                                 Contact administration to change this field
                               </p>
                             )}
                           </div>
 
                           <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">
+                            <label className="block text-xs font-medium text-foreground mb-1">
                               Email Address
                             </label>
                             <div className="relative">
-                              <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <Mail className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                               <input
                                 type="email"
                                 value={userProfile?.email || ""}
                                 disabled
-                                className="w-full pl-10 pr-3 py-2.5 border border-muted-foreground/20 rounded-lg bg-muted/30 text-muted-foreground"
+                                className="w-full pl-7 pr-3 py-2 text-sm border border-muted-foreground/20 rounded-lg bg-muted/30 text-muted-foreground"
                               />
                             </div>
                             <p className="text-xs text-muted-foreground mt-1">
@@ -548,11 +548,11 @@ export default function ProfilePage() {
                           </div>
 
                           <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">
+                            <label className="block text-xs font-medium text-foreground mb-1">
                               Phone Number
                             </label>
                             <div className="relative">
-                              <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <Phone className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                               <input
                                 type="tel"
                                 value={userProfile?.phone || ""}
@@ -564,7 +564,7 @@ export default function ProfilePage() {
                                   )
                                 }
                                 disabled={!canEditField("phone")}
-                                className={`w-full pl-10 pr-3 py-2.5 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all ${
+                                className={`w-full pl-7 pr-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary transition-all ${
                                   canEditField("phone")
                                     ? "border-border"
                                     : "border-muted-foreground/20 bg-muted/30"
@@ -572,9 +572,9 @@ export default function ProfilePage() {
                                 placeholder="Enter your phone number"
                               />
                               {!canEditField("phone") && userProfile?.phone && (
-                                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                                <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
                                   <Lock
-                                    size={14}
+                                    size={12}
                                     className="text-muted-foreground"
                                   />
                                 </div>
@@ -582,18 +582,18 @@ export default function ProfilePage() {
                             </div>
                             {!canEditField("phone") && userProfile?.phone && (
                               <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                                <Info size={12} />
+                                <Info size={10} />
                                 Contact administration to change this field
                               </p>
                             )}
                           </div>
 
                           <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">
+                            <label className="block text-xs font-medium text-foreground mb-1">
                               Date of Birth
                             </label>
                             <div className="relative">
-                              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <Calendar className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                               <input
                                 type="date"
                                 value={userProfile?.dateOfBirth || ""}
@@ -605,7 +605,7 @@ export default function ProfilePage() {
                                   )
                                 }
                                 disabled={!canEditField("dateOfBirth")}
-                                className={`w-full pl-10 pr-3 py-2.5 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all ${
+                                className={`w-full pl-7 pr-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary transition-all ${
                                   canEditField("dateOfBirth")
                                     ? "border-border"
                                     : "border-muted-foreground/20 bg-muted/30"
@@ -613,9 +613,9 @@ export default function ProfilePage() {
                               />
                               {!canEditField("dateOfBirth") &&
                                 userProfile?.dateOfBirth && (
-                                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
                                     <Lock
-                                      size={14}
+                                      size={12}
                                       className="text-muted-foreground"
                                     />
                                   </div>
@@ -624,7 +624,7 @@ export default function ProfilePage() {
                             {!canEditField("dateOfBirth") &&
                               userProfile?.dateOfBirth && (
                                 <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                                  <Info size={12} />
+                                  <Info size={10} />
                                   Contact administration to change this field
                                 </p>
                               )}
@@ -634,68 +634,68 @@ export default function ProfilePage() {
 
                       {/* Academic Information Section */}
                       <div>
-                        <div className="flex items-center gap-2 mb-4">
+                        <div className="flex items-center gap-2 mb-3">
                           <div className="h-px bg-border flex-1"></div>
-                          <h3 className="text-sm font-medium text-muted-foreground px-2">
+                          <h3 className="text-xs font-medium text-muted-foreground px-2 uppercase tracking-wide">
                             Academic Information
                           </h3>
                           <div className="h-px bg-border flex-1"></div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">
+                            <label className="block text-xs font-medium text-foreground mb-1">
                               Matric Number
                             </label>
                             <input
                               type="text"
                               value={userProfile?.matricNumber || ""}
                               disabled
-                              className="w-full px-4 py-2.5 border border-muted-foreground/20 rounded-lg bg-muted/30 text-muted-foreground"
+                              className="w-full px-3 py-2 text-sm border border-muted-foreground/20 rounded-lg bg-muted/30 text-muted-foreground"
                             />
                           </div>
 
                           <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">
+                            <label className="block text-xs font-medium text-foreground mb-1">
                               Department
                             </label>
                             <div className="relative">
-                              <BookOpen className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <BookOpen className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                               <input
                                 type="text"
                                 value={userProfile?.department || ""}
                                 disabled
-                                className="w-full pl-10 pr-3 py-2.5 border border-muted-foreground/20 rounded-lg bg-muted/30 text-muted-foreground"
+                                className="w-full pl-7 pr-3 py-2 text-sm border border-muted-foreground/20 rounded-lg bg-muted/30 text-muted-foreground"
                               />
                             </div>
                           </div>
 
                           <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">
+                            <label className="block text-xs font-medium text-foreground mb-1">
                               Course of Study
                             </label>
                             <div className="relative">
-                              <GraduationCap className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <GraduationCap className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                               <input
                                 type="text"
                                 value={userProfile?.course || ""}
                                 disabled
-                                className="w-full pl-10 pr-3 py-2.5 border border-muted-foreground/20 rounded-lg bg-muted/30 text-muted-foreground"
+                                className="w-full pl-7 pr-3 py-2 text-sm border border-muted-foreground/20 rounded-lg bg-muted/30 text-muted-foreground"
                               />
                             </div>
                           </div>
 
                           <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">
+                            <label className="block text-xs font-medium text-foreground mb-1">
                               College
                             </label>
                             <div className="relative">
-                              <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <Building className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                               <input
                                 type="text"
                                 value={userProfile?.college || ""}
                                 disabled
-                                className="w-full pl-10 pr-3 py-2.5 border border-muted-foreground/20 rounded-lg bg-muted/30 text-muted-foreground"
+                                className="w-full pl-7 pr-3 py-2 text-sm border border-muted-foreground/20 rounded-lg bg-muted/30 text-muted-foreground"
                               />
                             </div>
                           </div>
@@ -704,21 +704,21 @@ export default function ProfilePage() {
 
                       {/* Additional Information Section */}
                       <div>
-                        <div className="flex items-center gap-2 mb-4">
+                        <div className="flex items-center gap-2 mb-3">
                           <div className="h-px bg-border flex-1"></div>
-                          <h3 className="text-sm font-medium text-muted-foreground px-2">
+                          <h3 className="text-xs font-medium text-muted-foreground px-2 uppercase tracking-wide">
                             Additional Information
                           </h3>
                           <div className="h-px bg-border flex-1"></div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">
+                            <label className="block text-xs font-medium text-foreground mb-1">
                               State of Origin
                             </label>
                             <div className="relative">
-                              <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <MapPin className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                               <select
                                 value={userProfile?.state || ""}
                                 onChange={(e) =>
@@ -729,7 +729,7 @@ export default function ProfilePage() {
                                   )
                                 }
                                 disabled={!canEditField("state")}
-                                className={`w-full pl-10 pr-10 py-2.5 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all appearance-none ${
+                                className={`w-full pl-7 pr-8 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary transition-all appearance-none ${
                                   canEditField("state")
                                     ? "border-border"
                                     : "border-muted-foreground/20 bg-muted/30"
@@ -742,16 +742,16 @@ export default function ProfilePage() {
                                   </option>
                                 ))}
                               </select>
-                              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
                                 <ChevronRight
-                                  size={16}
+                                  size={12}
                                   className="text-muted-foreground rotate-90"
                                 />
                               </div>
                               {!canEditField("state") && userProfile?.state && (
-                                <div className="absolute right-10 top-1/2 transform -translate-y-1/2">
+                                <div className="absolute right-8 top-1/2 transform -translate-y-1/2">
                                   <Lock
-                                    size={14}
+                                    size={12}
                                     className="text-muted-foreground"
                                   />
                                 </div>
@@ -759,14 +759,14 @@ export default function ProfilePage() {
                             </div>
                             {!canEditField("state") && userProfile?.state && (
                               <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                                <Info size={12} />
+                                <Info size={10} />
                                 Contact administration to change this field
                               </p>
                             )}
                           </div>
 
                           <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">
+                            <label className="block text-xs font-medium text-foreground mb-1">
                               LGA
                             </label>
                             <div className="relative">
@@ -782,7 +782,7 @@ export default function ProfilePage() {
                                 disabled={
                                   !canEditField("lga") || !userProfile?.state
                                 }
-                                className={`w-full px-4 pr-10 py-2.5 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all appearance-none ${
+                                className={`w-full px-3 pr-8 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary transition-all appearance-none ${
                                   canEditField("lga") && userProfile?.state
                                     ? "border-border"
                                     : "border-muted-foreground/20 bg-muted/30"
@@ -795,16 +795,16 @@ export default function ProfilePage() {
                                   </option>
                                 ))}
                               </select>
-                              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
                                 <ChevronRight
-                                  size={16}
+                                  size={12}
                                   className="text-muted-foreground rotate-90"
                                 />
                               </div>
                               {!canEditField("lga") && userProfile?.lga && (
-                                <div className="absolute right-10 top-1/2 transform -translate-y-1/2">
+                                <div className="absolute right-8 top-1/2 transform -translate-y-1/2">
                                   <Lock
-                                    size={14}
+                                    size={12}
                                     className="text-muted-foreground"
                                   />
                                 </div>
@@ -812,14 +812,14 @@ export default function ProfilePage() {
                             </div>
                             {!canEditField("lga") && userProfile?.lga && (
                               <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                                <Info size={12} />
+                                <Info size={10} />
                                 Contact administration to change this field
                               </p>
                             )}
                           </div>
 
                           <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">
+                            <label className="block text-xs font-medium text-foreground mb-1">
                               Gender
                             </label>
                             <div className="relative">
@@ -833,7 +833,7 @@ export default function ProfilePage() {
                                   )
                                 }
                                 disabled={!canEditField("gender")}
-                                className={`w-full px-4 pr-10 py-2.5 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all appearance-none ${
+                                className={`w-full px-3 pr-8 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary transition-all appearance-none ${
                                   canEditField("gender")
                                     ? "border-border"
                                     : "border-muted-foreground/20 bg-muted/30"
@@ -844,17 +844,17 @@ export default function ProfilePage() {
                                 <option value="FEMALE">Female</option>
                                 <option value="OTHER">Other</option>
                               </select>
-                              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
                                 <ChevronRight
-                                  size={16}
+                                  size={12}
                                   className="text-muted-foreground rotate-90"
                                 />
                               </div>
                               {!canEditField("gender") &&
                                 userProfile?.gender && (
-                                  <div className="absolute right-10 top-1/2 transform -translate-y-1/2">
+                                  <div className="absolute right-8 top-1/2 transform -translate-y-1/2">
                                     <Lock
-                                      size={14}
+                                      size={12}
                                       className="text-muted-foreground"
                                     />
                                   </div>
@@ -862,14 +862,14 @@ export default function ProfilePage() {
                             </div>
                             {!canEditField("gender") && userProfile?.gender && (
                               <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                                <Info size={12} />
+                                <Info size={10} />
                                 Contact administration to change this field
                               </p>
                             )}
                           </div>
 
                           <div>
-                            <label className="block text-sm font-medium text-foreground mb-2">
+                            <label className="block text-xs font-medium text-foreground mb-1">
                               Marital Status
                             </label>
                             <div className="relative">
@@ -886,7 +886,7 @@ export default function ProfilePage() {
                                   )
                                 }
                                 disabled={!canEditField("maritalStatus")}
-                                className={`w-full px-4 pr-10 py-2.5 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all appearance-none ${
+                                className={`w-full px-3 pr-8 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary transition-all appearance-none ${
                                   canEditField("maritalStatus")
                                     ? "border-border"
                                     : "border-muted-foreground/20 bg-muted/30"
@@ -898,17 +898,17 @@ export default function ProfilePage() {
                                 <option value="DIVORCED">Divorced</option>
                                 <option value="WIDOWED">Widowed</option>
                               </select>
-                              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
                                 <ChevronRight
-                                  size={16}
+                                  size={12}
                                   className="text-muted-foreground rotate-90"
                                 />
                               </div>
                               {!canEditField("maritalStatus") &&
                                 userProfile?.maritalStatus && (
-                                  <div className="absolute right-10 top-1/2 transform -translate-y-1/2">
+                                  <div className="absolute right-8 top-1/2 transform -translate-y-1/2">
                                     <Lock
-                                      size={14}
+                                      size={12}
                                       className="text-muted-foreground"
                                     />
                                   </div>
@@ -917,7 +917,7 @@ export default function ProfilePage() {
                             {!canEditField("maritalStatus") &&
                               userProfile?.maritalStatus && (
                                 <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                                  <Info size={12} />
+                                  <Info size={10} />
                                   Contact administration to change this field
                                 </p>
                               )}
@@ -928,16 +928,16 @@ export default function ProfilePage() {
 
                     {/* Action Buttons */}
                     {editMode && (
-                      <div className="flex gap-3 mt-8 pt-6 border-t border-border">
+                      <div className="flex gap-2 mt-6 pt-4 border-t border-border">
                         <button
                           type="submit"
                           disabled={saving}
-                          className="flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 shadow-sm"
+                          className="flex items-center gap-2 px-4 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 shadow-sm"
                         >
                           {saving ? (
-                            <Loader size={16} className="animate-spin" />
+                            <Loader size={12} className="animate-spin" />
                           ) : (
-                            <Save size={16} />
+                            <Save size={12} />
                           )}
                           {saving ? "Saving..." : "Save Changes"}
                         </button>
@@ -947,7 +947,7 @@ export default function ProfilePage() {
                             setEditMode(false);
                             fetchUserProfile(); // Reset changes
                           }}
-                          className="px-6 py-2.5 border border-border rounded-lg hover:bg-muted transition-colors"
+                          className="px-4 py-1.5 text-sm border border-border rounded-lg hover:bg-muted transition-colors"
                         >
                           Cancel
                         </button>
@@ -961,26 +961,26 @@ export default function ProfilePage() {
             {/* Security Tab */}
             {activeTab === "security" && (
               <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-                <div className="bg-linear-to-r from-primary/10 to-primary/5 px-6 py-4 border-b border-border">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-primary/20 rounded-lg">
-                      <Shield className="h-5 w-5 text-primary" />
+                <div className="bg-linear-to-r from-primary/10 to-primary/5 px-4 py-3 border-b border-border">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-primary/20 rounded-lg">
+                      <Shield className="h-4 w-4 text-primary" />
                     </div>
-                    <h2 className="text-xl font-semibold text-foreground">
+                    <h2 className="text-lg font-semibold text-foreground">
                       Security Settings
                     </h2>
                   </div>
                 </div>
 
-                <div className="p-6">
+                <div className="p-4">
                   <form onSubmit={handleSecurityUpdate}>
-                    <div className="space-y-6 max-w-2xl">
+                    <div className="space-y-4 max-w-2xl">
                       <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
+                        <label className="block text-xs font-medium text-foreground mb-1">
                           Current Password
                         </label>
                         <div className="relative">
-                          <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Key className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                           <input
                             type={showCurrentPassword ? "text" : "password"}
                             value={securitySettings.currentPassword}
@@ -990,7 +990,7 @@ export default function ProfilePage() {
                                 currentPassword: e.target.value,
                               }))
                             }
-                            className="w-full pl-10 pr-10 py-2.5 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                            className="w-full pl-7 pr-8 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary transition-all"
                             required
                           />
                           <button
@@ -998,23 +998,23 @@ export default function ProfilePage() {
                             onClick={() =>
                               setShowCurrentPassword(!showCurrentPassword)
                             }
-                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
                           >
                             {showCurrentPassword ? (
-                              <EyeOff size={16} />
+                              <EyeOff size={12} />
                             ) : (
-                              <Eye size={16} />
+                              <Eye size={12} />
                             )}
                           </button>
                         </div>
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
+                        <label className="block text-xs font-medium text-foreground mb-1">
                           New Password
                         </label>
                         <div className="relative">
-                          <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Key className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                           <input
                             type={showNewPassword ? "text" : "password"}
                             value={securitySettings.newPassword}
@@ -1024,18 +1024,18 @@ export default function ProfilePage() {
                                 newPassword: e.target.value,
                               }))
                             }
-                            className="w-full pl-10 pr-10 py-2.5 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                            className="w-full pl-7 pr-8 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary transition-all"
                             required
                           />
                           <button
                             type="button"
                             onClick={() => setShowNewPassword(!showNewPassword)}
-                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
                           >
                             {showNewPassword ? (
-                              <EyeOff size={16} />
+                              <EyeOff size={12} />
                             ) : (
-                              <Eye size={16} />
+                              <Eye size={12} />
                             )}
                           </button>
                         </div>
@@ -1045,11 +1045,11 @@ export default function ProfilePage() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
+                        <label className="block text-xs font-medium text-foreground mb-1">
                           Confirm New Password
                         </label>
                         <div className="relative">
-                          <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Key className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                           <input
                             type={showConfirmPassword ? "text" : "password"}
                             value={securitySettings.confirmPassword}
@@ -1059,7 +1059,7 @@ export default function ProfilePage() {
                                 confirmPassword: e.target.value,
                               }))
                             }
-                            className="w-full pl-10 pr-10 py-2.5 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                            className="w-full pl-7 pr-8 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary transition-all"
                             required
                           />
                           <button
@@ -1067,27 +1067,27 @@ export default function ProfilePage() {
                             onClick={() =>
                               setShowConfirmPassword(!showConfirmPassword)
                             }
-                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
                           >
                             {showConfirmPassword ? (
-                              <EyeOff size={16} />
+                              <EyeOff size={12} />
                             ) : (
-                              <Eye size={16} />
+                              <Eye size={12} />
                             )}
                           </button>
                         </div>
                       </div>
 
-                      <div className="flex gap-3 pt-4">
+                      <div className="flex gap-2 pt-3">
                         <button
                           type="submit"
                           disabled={saving}
-                          className="flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 shadow-sm"
+                          className="flex items-center gap-2 px-4 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 shadow-sm"
                         >
                           {saving ? (
-                            <Loader size={16} className="animate-spin" />
+                            <Loader size={12} className="animate-spin" />
                           ) : (
-                            <Save size={16} />
+                            <Save size={12} />
                           )}
                           {saving ? "Updating..." : "Update Password"}
                         </button>
@@ -1096,31 +1096,31 @@ export default function ProfilePage() {
                   </form>
 
                   {/* Security Tips */}
-                  <div className="mt-8 pt-6 border-t border-border">
-                    <h3 className="text-lg font-medium text-foreground mb-4">
+                  <div className="mt-6 pt-4 border-t border-border">
+                    <h3 className="text-sm font-medium text-foreground mb-3">
                       Security Tips
                     </h3>
-                    <div className="bg-muted/30 rounded-lg p-4">
-                      <ul className="space-y-2 text-sm text-muted-foreground">
+                    <div className="bg-muted/30 rounded-lg p-3 text-xs">
+                      <ul className="space-y-1.5 text-muted-foreground">
                         <li className="flex items-start gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5"></div>
+                          <div className="w-1 h-1 rounded-full bg-primary mt-1.5 flex-shrink-0"></div>
                           <span>
                             Use a strong, unique password that you don't use
                             elsewhere
                           </span>
                         </li>
                         <li className="flex items-start gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5"></div>
+                          <div className="w-1 h-1 rounded-full bg-primary mt-1.5 flex-shrink-0"></div>
                           <span>
                             Enable two-factor authentication if available
                           </span>
                         </li>
                         <li className="flex items-start gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5"></div>
+                          <div className="w-1 h-1 rounded-full bg-primary mt-1.5 flex-shrink-0"></div>
                           <span>Never share your password with anyone</span>
                         </li>
                         <li className="flex items-start gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5"></div>
+                          <div className="w-1 h-1 rounded-full bg-primary mt-1.5 flex-shrink-0"></div>
                           <span>Log out from shared devices after use</span>
                         </li>
                       </ul>
@@ -1133,29 +1133,29 @@ export default function ProfilePage() {
             {/* Notifications Tab */}
             {activeTab === "notifications" && (
               <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-                <div className="bg-linear-to-r from-primary/10 to-primary/5 px-6 py-4 border-b border-border">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-primary/20 rounded-lg">
-                      <Bell className="h-5 w-5 text-primary" />
+                <div className="bg-linear-to-r from-primary/10 to-primary/5 px-4 py-3 border-b border-border">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-primary/20 rounded-lg">
+                      <Bell className="h-4 w-4 text-primary" />
                     </div>
-                    <h2 className="text-xl font-semibold text-foreground">
+                    <h2 className="text-lg font-semibold text-foreground">
                       Notification Preferences
                     </h2>
                   </div>
                 </div>
 
-                <div className="p-6">
-                  <div className="space-y-4 max-w-2xl">
-                    <div className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-muted/30 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-muted rounded-lg">
-                          <Mail className="h-4 w-4 text-muted-foreground" />
+                <div className="p-4">
+                  <div className="space-y-3 max-w-2xl">
+                    <div className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/30 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-muted rounded-lg">
+                          <Mail className="h-3 w-3 text-muted-foreground" />
                         </div>
                         <div>
-                          <h3 className="font-medium text-foreground">
+                          <h3 className="text-sm font-medium text-foreground">
                             Email Notifications
                           </h3>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-xs text-muted-foreground">
                             Receive notifications via email
                           </p>
                         </div>
@@ -1173,20 +1173,20 @@ export default function ProfilePage() {
                           }}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                       </label>
                     </div>
 
-                    <div className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-muted/30 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-muted rounded-lg">
-                          <Bell className="h-4 w-4 text-muted-foreground" />
+                    <div className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/30 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-muted rounded-lg">
+                          <Bell className="h-3 w-3 text-muted-foreground" />
                         </div>
                         <div>
-                          <h3 className="font-medium text-foreground">
+                          <h3 className="text-sm font-medium text-foreground">
                             Push Notifications
                           </h3>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-xs text-muted-foreground">
                             Receive push notifications in your browser
                           </p>
                         </div>
@@ -1204,20 +1204,20 @@ export default function ProfilePage() {
                           }}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                       </label>
                     </div>
 
-                    <div className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-muted/30 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-muted rounded-lg">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <div className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/30 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-muted rounded-lg">
+                          <Calendar className="h-3 w-3 text-muted-foreground" />
                         </div>
                         <div>
-                          <h3 className="font-medium text-foreground">
+                          <h3 className="text-sm font-medium text-foreground">
                             Assignment Reminders
                           </h3>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-xs text-muted-foreground">
                             Get reminders for upcoming assignment deadlines
                           </p>
                         </div>
@@ -1235,20 +1235,20 @@ export default function ProfilePage() {
                           }}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                       </label>
                     </div>
 
-                    <div className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-muted/30 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-muted rounded-lg">
-                          <BookOpen className="h-4 w-4 text-muted-foreground" />
+                    <div className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/30 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-muted rounded-lg">
+                          <BookOpen className="h-3 w-3 text-muted-foreground" />
                         </div>
                         <div>
-                          <h3 className="font-medium text-foreground">
+                          <h3 className="text-sm font-medium text-foreground">
                             Grade Alerts
                           </h3>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-xs text-muted-foreground">
                             Notify when new grades are posted
                           </p>
                         </div>
@@ -1266,20 +1266,20 @@ export default function ProfilePage() {
                           }}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                       </label>
                     </div>
 
-                    <div className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-muted/30 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-muted rounded-lg">
-                          <GraduationCap className="h-4 w-4 text-muted-foreground" />
+                    <div className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/30 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-muted rounded-lg">
+                          <GraduationCap className="h-3 w-3 text-muted-foreground" />
                         </div>
                         <div>
-                          <h3 className="font-medium text-foreground">
+                          <h3 className="text-sm font-medium text-foreground">
                             Lecture Reminders
                           </h3>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-xs text-muted-foreground">
                             Remind about upcoming lectures and classes
                           </p>
                         </div>
@@ -1297,7 +1297,7 @@ export default function ProfilePage() {
                           }}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                       </label>
                     </div>
                   </div>
