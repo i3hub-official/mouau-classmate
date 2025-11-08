@@ -1,9 +1,9 @@
-// app/api/notifications/read-all/route.ts
+// app/api/notifications/stats/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { UserServiceServer } from "@/lib/services/userService.server";
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
     const currentUser = await UserServiceServer.getCurrentUserFromSession();
 
@@ -11,23 +11,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Mark all unread notifications as read
-    await prisma.notification.updateMany({
+    const total = await prisma.notification.count({
+      where: { userId: currentUser.id },
+    });
+
+    const unread = await prisma.notification.count({
       where: {
         userId: currentUser.id,
         isRead: false,
       },
-      data: {
-        isRead: true,
-        readAt: new Date(),
-      },
     });
 
-    return NextResponse.json({ success: true });
+    const read = total - unread;
+
+    return NextResponse.json({
+      total,
+      unread,
+      read,
+    });
   } catch (error) {
-    console.error("Error marking all notifications as read:", error);
+    console.error("Error fetching notification stats:", error);
     return NextResponse.json(
-      { error: "Failed to mark all notifications as read" },
+      { error: "Failed to fetch notification stats" },
       { status: 500 }
     );
   }

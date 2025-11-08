@@ -26,28 +26,32 @@ export async function POST(request: NextRequest) {
     const sampleNotifications = [
       {
         title: "Welcome to MOUAU ClassMate!",
-        message: "Your account has been successfully activated. Start exploring your courses.",
+        message:
+          "Your account has been successfully activated. Start exploring your courses.",
         type: NotificationType.SUCCESS,
         actionUrl: "/dashboard",
         priority: 1,
       },
       {
         title: "New Assignment Available",
-        message: "Introduction to Computer Science assignment is now available. Due in 7 days.",
+        message:
+          "Introduction to Computer Science assignment is now available. Due in 7 days.",
         type: NotificationType.INFO,
         actionUrl: "/assignments",
         priority: 2,
       },
       {
         title: "Grade Posted",
-        message: "Your Mathematics assignment has been graded. Check your grades page for details.",
+        message:
+          "Your Mathematics assignment has been graded. Check your grades page for details.",
         type: NotificationType.SUCCESS,
         actionUrl: "/grades",
         priority: 2,
       },
       {
         title: "Lecture Reminder",
-        message: "Physics lecture starts in 30 minutes. Don't forget to attend!",
+        message:
+          "Physics lecture starts in 30 minutes. Don't forget to attend!",
         type: NotificationType.WARNING,
         actionUrl: "/schedule",
         priority: 3,
@@ -64,9 +68,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      message: "Sample notifications created" 
+    return NextResponse.json({
+      success: true,
+      message: "Sample notifications created",
     });
   } catch (error) {
     console.error("Error creating sample notifications:", error);
