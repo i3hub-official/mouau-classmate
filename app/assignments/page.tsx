@@ -365,7 +365,7 @@ export default function AssignmentsPage() {
         <DashboardHeader />
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-3"></div>
             <p className="text-sm text-muted-foreground">
               Loading assignments...
             </p>
@@ -395,7 +395,7 @@ export default function AssignmentsPage() {
 
       {/* Main Content */}
       <main
-        className={`w-full px-6 xl:px-8 py-8 ${
+        className={`w-full px-4 md:px-6 lg:px-8 py-6 ${
           signingOut ? "pointer-events-none opacity-60" : ""
         }`}
       >
@@ -423,119 +423,118 @@ export default function AssignmentsPage() {
         )}
 
         {/* Header Section */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">
+            <h1 className="text-2xl font-bold text-foreground mb-1">
               Assignments
             </h1>
-            <p className="text-lg text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Manage and track your academic assignments
             </p>
           </div>
-          <div className="flex items-center gap-3 mt-4 lg:mt-0">
+          <div className="flex items-center gap-2 mt-3 lg:mt-0">
             <button
               onClick={handleRefresh}
               disabled={refreshing || signingOut}
-              className="px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 border border-border rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
             >
               <RefreshCw
                 className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
               />
-              Refresh
             </button>
             <button
               onClick={handleNewSubmission}
               disabled={signingOut}
-              className="bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-primary text-primary-foreground px-4 py-2 rounded-lg font-medium hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50"
             >
-              <Plus className="h-5 w-5" />
-              New Submission
+              <Plus className="h-4 w-4" />
+              <span className="text-sm">Submit</span>
             </button>
           </div>
         </div>
 
         {/* Stats Overview */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-          <div className="bg-card border border-border rounded-xl p-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+          <div className="bg-card border border-border rounded-lg p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
-                <FileText className="h-5 w-5" />
+                <FileText className="h-4 w-4" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-foreground">
+                <p className="text-xl font-bold text-foreground">
                   {stats.total}
                 </p>
-                <p className="text-sm text-muted-foreground">Total</p>
+                <p className="text-xs text-muted-foreground">Total</p>
               </div>
             </div>
           </div>
-          <div className="bg-card border border-border rounded-xl p-4">
+          <div className="bg-card border border-border rounded-lg p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-yellow-100 text-yellow-600 rounded-lg">
-                <Clock className="h-5 w-5" />
+                <Clock className="h-4 w-4" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-foreground">
+                <p className="text-xl font-bold text-foreground">
                   {stats.pending}
                 </p>
-                <p className="text-sm text-muted-foreground">Pending</p>
+                <p className="text-xs text-muted-foreground">Pending</p>
               </div>
             </div>
           </div>
-          <div className="bg-card border border-border rounded-xl p-4">
+          <div className="bg-card border border-border rounded-lg p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
-                <CheckCircle2 className="h-5 w-5" />
+                <CheckCircle2 className="h-4 w-4" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-foreground">
+                <p className="text-xl font-bold text-foreground">
                   {stats.submitted}
                 </p>
-                <p className="text-sm text-muted-foreground">Submitted</p>
+                <p className="text-xs text-muted-foreground">Submitted</p>
               </div>
             </div>
           </div>
-          <div className="bg-card border border-border rounded-xl p-4">
+          <div className="bg-card border border-border rounded-lg p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-green-100 text-green-600 rounded-lg">
-                <FileText className="h-5 w-5" />
+                <FileText className="h-4 w-4" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-foreground">
+                <p className="text-xl font-bold text-foreground">
                   {stats.graded}
                 </p>
-                <p className="text-sm text-muted-foreground">Graded</p>
+                <p className="text-xs text-muted-foreground">Graded</p>
               </div>
             </div>
           </div>
-          <div className="bg-card border border-border rounded-xl p-4">
+          <div className="bg-card border border-border rounded-lg p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-red-100 text-red-600 rounded-lg">
-                <AlertCircle className="h-5 w-5" />
+                <AlertCircle className="h-4 w-4" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-foreground">
+                <p className="text-xl font-bold text-foreground">
                   {stats.overdue}
                 </p>
-                <p className="text-sm text-muted-foreground">Overdue</p>
+                <p className="text-xs text-muted-foreground">Overdue</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Filters and Search */}
-        <div className="bg-card border border-border rounded-xl p-4 mb-6">
-          <div className="flex flex-col lg:flex-row gap-3">
+        <div className="bg-card border border-border rounded-lg p-4 mb-6">
+          <div className="flex flex-col md:flex-row gap-3">
             {/* Search */}
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
               <input
                 type="text"
-                placeholder="Search assignments, courses, instructors..."
+                placeholder="Search assignments..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 disabled={signingOut}
-                className="w-full pl-10 pr-4 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
+                className="w-full pl-10 pr-4 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 text-sm"
               />
             </div>
 
@@ -544,7 +543,7 @@ export default function AssignmentsPage() {
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               disabled={signingOut}
-              className="px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 min-w-[140px]"
+              className="px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 text-sm"
             >
               <option value="all">All Status</option>
               <option value="pending">Pending</option>
@@ -558,7 +557,7 @@ export default function AssignmentsPage() {
               value={courseFilter}
               onChange={(e) => setCourseFilter(e.target.value)}
               disabled={signingOut || courses.length === 0}
-              className="px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 min-w-[200px]"
+              className="px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 text-sm"
             >
               <option value="all">All Courses</option>
               {courses.map((course) => (
@@ -588,18 +587,18 @@ export default function AssignmentsPage() {
         </div>
 
         {/* Assignments List */}
-        <div className="space-y-4">
+        <div className="space-y-3">
           {filteredAssignments.length === 0 ? (
-            <div className="text-center py-12 bg-card border border-border rounded-xl">
-              <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-foreground mb-2">
+            <div className="text-center py-12 bg-card border border-border rounded-lg">
+              <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+              <h3 className="text-base font-medium text-foreground mb-2">
                 {assignments.length === 0
                   ? "No assignments found"
                   : "No matching assignments"}
               </h3>
-              <p className="text-muted-foreground max-w-md mx-auto">
+              <p className="text-sm text-muted-foreground max-w-md mx-auto">
                 {assignments.length === 0
-                  ? "You don't have any assignments in your enrolled courses yet. Check back later for new assignments."
+                  ? "You don't have any assignments in your enrolled courses yet."
                   : "Try adjusting your search or filters to find what you're looking for."}
               </p>
               {assignments.length === 0 && (
@@ -624,17 +623,17 @@ export default function AssignmentsPage() {
               return (
                 <div
                   key={assignment.id}
-                  className="bg-card border border-border rounded-xl p-6 hover:shadow-lg transition-all duration-200"
+                  className="bg-card border border-border rounded-lg p-5 hover:shadow-md transition-all duration-200"
                 >
                   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                     <div className="flex-1">
                       {/* Header */}
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
                         <div className="flex-1">
-                          <h3 className="text-xl font-semibold text-foreground mb-2">
+                          <h3 className="text-lg font-semibold text-foreground mb-1">
                             {assignment.title}
                           </h3>
-                          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                             <div className="flex items-center gap-1">
                               <BookOpen className="h-4 w-4" />
                               <span>
@@ -644,7 +643,7 @@ export default function AssignmentsPage() {
                             </div>
                             <div className="flex items-center gap-1">
                               <FileText className="h-4 w-4" />
-                              <span>Max Score: {assignment.maxScore}</span>
+                              <span>Max: {assignment.maxScore}</span>
                             </div>
                             {assignment.teacher && (
                               <div className="flex items-center gap-1">
@@ -658,7 +657,7 @@ export default function AssignmentsPage() {
                         </div>
                         <div className="flex items-center gap-2">
                           <span
-                            className={`px-3 py-1 rounded-full text-xs font-medium border flex items-center gap-1 ${getStatusColor(
+                            className={`px-2 py-1 rounded-full text-xs font-medium border flex items-center gap-1 ${getStatusColor(
                               status
                             )}`}
                           >
@@ -668,30 +667,18 @@ export default function AssignmentsPage() {
                         </div>
                       </div>
 
-                      {/* Description and Instructions */}
+                      {/* Description */}
                       {assignment.description && (
-                        <p className="text-muted-foreground mb-3 line-clamp-2">
+                        <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
                           {assignment.description}
                         </p>
                       )}
 
-                      {assignment.instructions && (
-                        <div className="mb-4">
-                          <p className="text-sm font-medium text-foreground mb-1">
-                            Instructions:
-                          </p>
-                          <p className="text-sm text-muted-foreground line-clamp-2">
-                            {assignment.instructions}
-                          </p>
-                        </div>
-                      )}
-
                       {/* Submission Info */}
                       {isSubmitted && latestSubmission && (
-                        <div className="mb-4 p-3 bg-muted rounded-lg">
+                        <div className="mb-3 p-3 bg-muted rounded-lg">
                           <p className="text-sm font-medium text-foreground">
-                            Submitted on{" "}
-                            {formatDate(latestSubmission.submittedAt)} at{" "}
+                            Submitted {formatDate(latestSubmission.submittedAt)} at{" "}
                             {formatTime(latestSubmission.submittedAt)}
                             {latestSubmission.attemptNumber > 1 &&
                               ` (Attempt ${latestSubmission.attemptNumber})`}
@@ -709,8 +696,8 @@ export default function AssignmentsPage() {
                       )}
 
                       {/* Footer */}
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 border-t border-border">
-                        <div className="flex items-center gap-4 text-sm">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-3 border-t border-border">
+                        <div className="flex items-center gap-3 text-sm">
                           <div className="flex items-center gap-1 text-muted-foreground">
                             <Calendar className="h-4 w-4" />
                             <span>
@@ -740,10 +727,10 @@ export default function AssignmentsPage() {
                           <button
                             onClick={() => handleViewAssignment(assignment.id)}
                             disabled={signingOut}
-                            className="px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors flex items-center gap-2 disabled:opacity-50"
+                            className="px-3 py-1.5 border border-border rounded-lg hover:bg-muted transition-colors flex items-center gap-2 disabled:opacity-50 text-sm"
                           >
                             <Eye className="h-4 w-4" />
-                            View Details
+                            View
                           </button>
 
                           {status === "pending" && (
@@ -752,10 +739,10 @@ export default function AssignmentsPage() {
                                 handleSubmitAssignment(assignment.id)
                               }
                               disabled={signingOut}
-                              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50"
+                              className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50 text-sm"
                             >
                               <Download className="h-4 w-4" />
-                              Submit Work
+                              Submit
                             </button>
                           )}
 
@@ -765,10 +752,10 @@ export default function AssignmentsPage() {
                                 handleViewAssignment(assignment.id)
                               }
                               disabled={signingOut}
-                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+                              className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 text-sm"
                             >
                               <Clock className="h-4 w-4" />
-                              Awaiting Grade
+                              Pending
                             </button>
                           )}
 
@@ -778,10 +765,10 @@ export default function AssignmentsPage() {
                                 handleViewAssignment(assignment.id)
                               }
                               disabled={signingOut}
-                              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+                              className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50 text-sm"
                             >
                               <CheckCircle2 className="h-4 w-4" />
-                              View Grade
+                              Grade
                             </button>
                           )}
                         </div>
@@ -796,7 +783,7 @@ export default function AssignmentsPage() {
 
         {/* Footer Info */}
         {filteredAssignments.length > 0 && (
-          <div className="mt-8 text-center text-sm text-muted-foreground">
+          <div className="mt-6 text-center text-sm text-muted-foreground">
             <p>
               Showing {filteredAssignments.length} of {assignments.length}{" "}
               assignments

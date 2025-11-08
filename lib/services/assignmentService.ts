@@ -58,6 +58,13 @@ export interface AssignmentStats {
   graded: number;
 }
 
+export interface AssignmentSubmissionData {
+  assignmentId: string;
+  submissionText?: string;
+  submittedAt: string;
+  files?: File[];
+}
+
 export class AssignmentService {
   /**
    * Get all assignments for a specific user
@@ -391,6 +398,95 @@ export class AssignmentService {
       const dateB = new Date(b.dueDate).getTime();
       return ascending ? dateA - dateB : dateB - dateA;
     });
+  }
+
+  /**
+   * Submit an assignment with file upload support
+   */
+  static async submitAssignmentWithFiles(
+    submissionData: AssignmentSubmissionData
+  ): Promise<{ success: boolean; submission?: Submission; message: string }> {
+    try {
+      const formData = new FormData();
+      formData.append("assignmentId", submissionData.assignmentId);
+      formData.append("submissionText", submissionData.submissionText || "");
+      formData.append("submittedAt", submissionData.submittedAt);
+
+      if (submissionData.files) {
+        submissionData.files.forEach((file: File) => {
+          formData.append("files", file);
+        });
+      }
+
+      const response = await fetch("/api/assignments/submit", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.error ||
+            errorData.message ||
+            `Failed to submit assignment: ${response.statusText}`
+        );
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Error submitting assignment with files:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get assignment submission status
+   */
+  static async getSubmissionStatus(
+    assignmentId: string,
+    studentId: string
+  ): Promise<Submission | null> {
+    try {
+      // This would typically query your database
+      // For now, return null to indicate no previous submission
+      return null;
+    } catch (error) {
+      console.error("Error fetching submission status:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if assignment submission is allowed (before deadline, etc.)
+   */
+  static async validateSubmission(
+    assignmentId: string
+  ): Promise<{ allowed: boolean; reason?: string }> {
+    try {
+      const assignment = await this.getAssignmentById(assignmentId);
+
+      if (!assignment) {
+        return { allowed: false, reason: "Assignment not found" };
+      }
+
+      const now = new Date();
+      const dueDate = new Date(assignment.dueDate);
+
+      if (now > dueDate) {
+        return { allowed: false, reason: "Assignment deadline has passed" };
+      }
+
+      // Add other validation rules as needed
+      // - Maximum attempts
+      // - Prerequisites
+      // - etc.
+
+      return { allowed: true };
+    } catch (error) {
+      console.error("Error validating submission:", error);
+      return { allowed: false, reason: "Validation failed" };
+    }
   }
 
   /**
