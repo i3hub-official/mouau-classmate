@@ -50,13 +50,13 @@ export default function HomePage() {
   }, [router]); // Add router as a dependency
 
   if (loading) {
-    // Show a full-page loader while we check authentication
-    // This prevents the landing page from flashing before redirect
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
+      <div className="min-h-screen bg-background flex flex-col">
+        <div className="flex flex-1 items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-sm text-muted-foreground"></p>
+          </div>
         </div>
       </div>
     );

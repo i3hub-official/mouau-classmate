@@ -244,12 +244,14 @@ export default function NotificationsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background flex flex-col">
         <DashboardHeader />
-        <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading notifications...</p>
+            <p className="text-sm text-muted-foreground">
+              Loading notifications...
+            </p>
           </div>
         </div>
       </div>
@@ -362,7 +364,9 @@ export default function NotificationsPage() {
 
               <select
                 value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value as NotificationType)}
+                onChange={(e) =>
+                  setTypeFilter(e.target.value as NotificationType)
+                }
                 className="px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
               >
                 <option value="all">All Types</option>
@@ -441,9 +445,9 @@ export default function NotificationsPage() {
               {filteredNotifications.map((notification) => (
                 <div
                   key={notification.id}
-                  className={`p-6 transition-colors border-l-4 ${
-                    getNotificationColor(notification.type)
-                  } ${
+                  className={`p-6 transition-colors border-l-4 ${getNotificationColor(
+                    notification.type
+                  )} ${
                     !notification.isRead ? "bg-card" : "bg-muted/30"
                   } hover:bg-muted/50`}
                 >
