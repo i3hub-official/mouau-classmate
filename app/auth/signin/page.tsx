@@ -5,6 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Home, Lock, CheckCircle, AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { ThemeToggle } from "@/app/components/theme-toggle";
 
 export default function SignInPage() {
   const [matricNumber, setMatricNumber] = useState("");
@@ -80,7 +81,7 @@ export default function SignInPage() {
             <Home size={16} />
             Back to Home
           </Link>
-          {/* <ThemeToggle /> */}
+          <ThemeToggle />
         </div>
 
         {/* Logo and Title - Centered and Standalone */}
