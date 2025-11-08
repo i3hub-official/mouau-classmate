@@ -91,6 +91,8 @@ enum AuditAction {
   SECURITY_SETTINGS_UPDATED
   ACCOUNT_DELETION
   PORTFOLIO_UPDATED
+  USER_PREFERENCES
+  NOTIFICATION_SETTINGS_RESET
   // Add any other missing actions you need
 }
 
@@ -146,12 +148,13 @@ model User {
   teacher Teacher?
 
   // Related data
-  auditLogs      AuditLog[]
-  notifications  Notification[]
-  resetTokens    PasswordResetToken[]
-  metrics        Metric[]
-  userActivities UserActivity[]
-  securityEvents SecurityEvent[]
+  auditLogs       AuditLog[]
+  notifications   Notification[]
+  resetTokens     PasswordResetToken[]
+  metrics         Metric[]
+  userActivities  UserActivity[]
+  securityEvents  SecurityEvent[]
+  UserPreferences UserPreferences?
 
   @@index([email])
   @@index([role])
@@ -680,4 +683,25 @@ model UserActivity {
   @@index([resourceType, resourceId])
   @@index([createdAt])
   @@map("user_activities")
+}
+
+// ===========================================================
+// 11. USER PREFERENCES & SETTINGS
+// ===========================================================
+model UserPreferences {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Notification settings
+  emailNotifications  Boolean @default(true)
+  pushNotifications   Boolean @default(true)
+  assignmentReminders Boolean @default(true)
+  gradeAlerts         Boolean @default(true)
+  lectureReminders    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_preferences")
 }

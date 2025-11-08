@@ -100,13 +100,11 @@ export default function ProfilePage() {
       }
 
       // Fetch profile data using the service
-      const profileData = await ProfileService.getProfile(currentUser.id);
+      const profileData = await ProfileService.getProfile();
       setUserProfile(profileData);
 
       // Fetch notification settings
-      const notificationData = await ProfileService.getNotificationSettings(
-        currentUser.id
-      );
+      const notificationData = await ProfileService.getNotificationSettings();
       setNotificationSettings(notificationData);
     } catch (error) {
       console.error("Error fetching profile:", error);
@@ -129,6 +127,7 @@ export default function ProfilePage() {
       }
 
       const updateData = {
+        id: currentUser.id,
         name: userProfile.name,
         phone: userProfile.phone,
         state: userProfile.state,
@@ -138,7 +137,7 @@ export default function ProfilePage() {
         maritalStatus: userProfile.maritalStatus,
       };
 
-      await ProfileService.updateProfile(currentUser.id, updateData);
+      await ProfileService.updateProfile(updateData);
 
       showMessage("success", "Profile updated successfully");
       setEditMode(false);
@@ -164,7 +163,7 @@ export default function ProfilePage() {
         throw new Error("User not authenticated");
       }
 
-      await ProfileService.changePassword(currentUser.id, securitySettings);
+      await ProfileService.changePassword(securitySettings);
 
       setSecuritySettings({
         currentPassword: "",
@@ -193,7 +192,6 @@ export default function ProfilePage() {
       }
 
       await ProfileService.updateNotificationSettings(
-        currentUser.id,
         notificationSettings
       );
 
