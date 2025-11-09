@@ -1,6 +1,6 @@
 // File: app/teacher/signup/page.tsx
 "use client";
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -17,17 +17,26 @@ import {
   AlertCircle,
   Camera,
   User,
-  UserCheck,
+  School,
   GraduationCap,
-  Clock,
-  RefreshCw,
 } from "lucide-react";
 import { ThemeToggle } from "@/app/components/theme-toggle";
-import {
-  useRoleProtection,
-  getCurrentRole,
-  clearRoleSelection,
-} from "@/hooks/useRoleProtection";
+
+// Helper to safely check if sessionStorage is available
+const isSessionStorageAvailable = (): boolean => {
+  try {
+    if (typeof window === "undefined") return false;
+    const test = "__storage_test__";
+    window.sessionStorage.setItem(test, test);
+    window.sessionStorage.removeItem(test);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// In-memory storage
+let inMemoryRoleData: { role: string; timestamp: number } | null = null;
 
 // Teacher-specific Terms & Conditions content
 const TEACHER_AGREEMENT_CONTENT = {
@@ -118,162 +127,31 @@ const TEACHER_AGREEMENT_CONTENT = {
 };
 
 // Validation functions
-const isValidStaffId = (staffId: string): boolean => {
-  const regex = /^[A-Za-z0-9\/\-_]{5,20}$/;
-  return regex.test(staffId);
+const isValidEmployeeId = (employeeId: string): boolean => {
+  const regex = /^[A-Za-z0-9\/-]{5,}$/;
+  return regex.test(employeeId);
 };
-
-const isValidMOUAUEmail = (email: string): boolean => {
-  return email.toLowerCase().endsWith("@mouau.edu.ng");
-};
-
-const isValidPhone = (phone: string): boolean => {
-  const cleanPhone = phone.replace(/\D/g, "");
-  return cleanPhone.length >= 10 && cleanPhone.length <= 14;
-};
-
-const isValidPassword = (
-  password: string
-): { isValid: boolean; errors: string[] } => {
-  const errors: string[] = [];
-
-  if (password.length < 8) errors.push("At least 8 characters");
-  if (!/(?=.*[a-z])/.test(password)) errors.push("One lowercase letter");
-  if (!/(?=.*[A-Z])/.test(password)) errors.push("One uppercase letter");
-  if (!/(?=.*\d)/.test(password)) errors.push("One number");
-  if (!/(?=.*[@$!%*?&])/.test(password)) errors.push("One special character");
-
-  return { isValid: errors.length === 0, errors };
-};
-
-// Colleges and Departments data
-const COLLEGES_DEPARTMENTS = {
-  COLPAS: [
-    "Physics",
-    "Chemistry",
-    "Mathematics",
-    "Computer Science",
-    "Statistics",
-  ],
-  COLNAS: [
-    "Biological Sciences",
-    "Biochemistry",
-    "Microbiology",
-    "Biotechnology",
-  ],
-  COLAMRUD: [
-    "Agricultural Economics",
-    "Agricultural Extension",
-    "Animal Science",
-    "Crop Science",
-  ],
-  COLENG: [
-    "Agricultural Engineering",
-    "Civil Engineering",
-    "Electrical Engineering",
-    "Mechanical Engineering",
-  ],
-  COLMAN: [
-    "Accountancy",
-    "Business Administration",
-    "Marketing",
-    "Banking and Finance",
-  ],
-};
-
-const ACADEMIC_RANKS = [
-  "Professor",
-  "Associate Professor",
-  "Senior Lecturer",
-  "Lecturer I",
-  "Lecturer II",
-  "Assistant Lecturer",
-  "Graduate Assistant",
-  "Visiting Lecturer",
-];
-
-const NIGERIAN_STATES = [
-  "Abia",
-  "Adamawa",
-  "Akwa Ibom",
-  "Anambra",
-  "Bauchi",
-  "Bayelsa",
-  "Benue",
-  "Borno",
-  "Cross River",
-  "Delta",
-  "Ebonyi",
-  "Edo",
-  "Ekiti",
-  "Enugu",
-  "Gombe",
-  "Imo",
-  "Jigawa",
-  "Kaduna",
-  "Kano",
-  "Katsina",
-  "Kebbi",
-  "Kogi",
-  "Kwara",
-  "Lagos",
-  "Nasarawa",
-  "Niger",
-  "Ogun",
-  "Ondo",
-  "Osun",
-  "Oyo",
-  "Plateau",
-  "Rivers",
-  "Sokoto",
-  "Taraba",
-  "Yobe",
-  "Zamfara",
-  "FCT",
-];
 
 export default function TeacherSignupPage() {
-  const router = useRouter();
-  const {
-    isValid,
-    isLoading: roleLoading,
-    roleData,
-  } = useRoleProtection({
-    requiredRole: ["teacher", "lecturer"],
-    redirectTo: "/select-role",
-    maxAge: 30, // 30 minutes
-  });
-
   const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({
-    // Step 1: Verification
-    staffId: "",
-    universityEmail: "",
+  const [roleValidated, setRoleValidated] = useState(false);
+  const [roleLoading, setRoleLoading] = useState(true);
+  const router = useRouter();
 
-    // Step 2: Personal Information
-    title: "",
+  const [formData, setFormData] = useState({
+    employeeId: "",
+    staffNumber: "",
     surname: "",
     firstName: "",
     otherName: "",
     gender: "",
-    dateOfBirth: "",
     photo: "",
-
-    // Step 3: Professional Information
     college: "",
     department: "",
-    academicRank: "",
-    staffType: "academic",
-    dateEmployed: "",
-
-    // Step 4: Contact Information
+    rank: "",
+    state: "",
+    email: "",
     phone: "",
-    alternatePhone: "",
-    residentialAddress: "",
-    stateOfOrigin: "",
-    lga: "",
-
-    // Step 5: Account Security
     password: "",
     confirmPassword: "",
   });
@@ -290,133 +168,111 @@ export default function TeacherSignupPage() {
     requiresManualEntry?: boolean;
   } | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [timeLeft, setTimeLeft] = useState<number>(30 * 60); // 30 minutes in seconds
-  const [passwordStrength, setPasswordStrength] = useState<{
-    isValid: boolean;
-    errors: string[];
-  }>({ isValid: false, errors: [] });
 
-  // Session countdown timer
+  // Role validation on mount
   useEffect(() => {
-    if (!isValid) return;
+    const validateRole = () => {
+      setRoleLoading(true);
 
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 0) {
-          clearInterval(timer);
-          handleSessionExpired();
-          return 0;
+      try {
+        let data: { role: string; timestamp: number } | null = null;
+
+        // Check sessionStorage first if available
+        if (isSessionStorageAvailable()) {
+          const storedData = sessionStorage.getItem("selectedRole");
+          if (storedData) {
+            data = JSON.parse(storedData);
+            // Sync to in-memory
+            inMemoryRoleData = data;
+          }
         }
-        return prev - 1;
-      });
-    }, 1000);
 
-    return () => clearInterval(timer);
-  }, [isValid]);
+        // Fallback to in-memory if sessionStorage not available or empty
+        if (!data && inMemoryRoleData) {
+          data = inMemoryRoleData;
+        }
 
-  const handleSessionExpired = () => {
-    clearRoleSelection();
-    router.push("/select-role?message=session_expired");
-  };
+        if (!data) {
+          throw new Error("No role selected");
+        }
 
-  // Format time display
-  const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${minutes}:${secs.toString().padStart(2, "0")}`;
-  };
+        // Check if data is expired (30 minutes)
+        const maxAge = 30 * 60 * 1000;
+        const isExpired = Date.now() - data.timestamp > maxAge;
 
-  // Show loading state
-  if (roleLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-sm text-muted-foreground">
-            Verifying your access...
-          </p>
-        </div>
-      </div>
-    );
-  }
+        if (isExpired) {
+          inMemoryRoleData = null;
+          if (isSessionStorageAvailable()) {
+            sessionStorage.removeItem("selectedRole");
+          }
+          throw new Error("Role selection expired");
+        }
 
-  // Show access denied
-  if (!isValid && !roleLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center max-w-md mx-auto p-6">
-          <div className="p-3 bg-error/10 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-            <AlertCircle className="h-8 w-8 text-error" />
-          </div>
-          <h2 className="text-xl font-bold text-foreground mb-2">
-            Access Required
-          </h2>
-          <p className="text-muted-foreground mb-4">
-            Please select Teacher/Lecturer role to access this registration
-            form.
-          </p>
-          <Link
-            href="/select-role"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-          >
-            <UserCheck size={18} />
-            Select Role
-          </Link>
-        </div>
-      </div>
-    );
-  }
+        // Validate that it's lecturer role
+        if (data.role !== "lecturer") {
+          throw new Error("Invalid role. Lecturer role required.");
+        }
+
+        setRoleValidated(true);
+      } catch (error) {
+        console.error("Role validation failed:", error);
+        inMemoryRoleData = null;
+        if (isSessionStorageAvailable()) {
+          sessionStorage.removeItem("selectedRole");
+        }
+        // Redirect silently without showing an error
+        router.push("/select-role");
+      } finally {
+        setRoleLoading(false);
+      }
+    };
+
+    validateRole();
+  }, [router]);
 
   const setErrorWithTimeout = (errorObj: Record<string, string>) => {
     setErrors(errorObj);
+
     if (Object.keys(errorObj).length > 0) {
       setTimeout(() => {
         setErrors((prev) => {
           const newErrors = { ...prev };
-          Object.keys(errorObj).forEach((key) => delete newErrors[key]);
+          Object.keys(errorObj).forEach((key) => {
+            delete newErrors[key];
+          });
           return newErrors;
         });
       }, 5000);
     }
   };
 
-  // Step 1: Agreement
   const handleAgreementAccept = () => {
     if (!agreementAccepted) {
       setErrorWithTimeout({
-        agreement: "You must accept the terms to continue",
+        agreement: "You must accept the terms and conditions to continue",
       });
       return;
     }
     setStep(2);
   };
 
-  // Step 2: Verification
-  const handleVerifyStaff = async (e: React.FormEvent) => {
+  const handleVerifyTeacher = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
 
-    const staffId = formData.staffId.trim();
-    const email = formData.universityEmail.trim().toLowerCase();
+    const employeeId = formData.employeeId.trim().toUpperCase();
 
-    if (!staffId || !email) {
+    if (!employeeId) {
       setErrorWithTimeout({
-        verification: "Both Staff ID and University Email are required",
+        employeeId: "Please enter your Employee ID",
       });
       return;
     }
 
-    if (!isValidStaffId(staffId)) {
+    if (!isValidEmployeeId(employeeId)) {
       setErrorWithTimeout({
-        staffId:
-          "Please enter a valid Staff ID (5-20 characters, letters, numbers, /, -, _)",
-      });
-      return;
-    }
-
-    if (!isValidMOUAUEmail(email)) {
-      setErrorWithTimeout({
-        universityEmail: "Only @mouau.edu.ng email addresses are accepted",
+        employeeId:
+          "Please enter a valid Employee ID (e.g., MOUAU/STAFF/12345)",
       });
       return;
     }
@@ -424,76 +280,77 @@ export default function TeacherSignupPage() {
     setIsLoading(true);
 
     try {
-      // Simulate API verification
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      // Mock verification result
-      const mockResult = {
-        exists: Math.random() > 0.5, // 50% chance of existing
-        requiresManualEntry: Math.random() > 0.7, // 30% chance of manual entry
-        data: {
-          title: "Dr.",
-          surname: "Sample",
-          firstName: "Lecturer",
-          college: "COLPAS",
-          department: "Computer Science",
+      // Real API call to verify teacher
+      const response = await fetch("/api/auth/teacher/verify", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      };
+        body: JSON.stringify({ employeeId }),
+      });
 
-      setVerificationResult(mockResult);
+      const data = await response.json();
 
-      if (
-        mockResult.exists &&
-        mockResult.data &&
-        !mockResult.requiresManualEntry
-      ) {
+      if (!response.ok) {
+        throw new Error(data.message || "Verification failed");
+      }
+
+      setVerificationResult(data);
+
+      if (data.exists && data.data) {
         setFormData((prev) => ({
           ...prev,
-          ...mockResult.data,
-          staffId,
-          universityEmail: email,
+          ...data.data,
+          employeeId: employeeId,
+          staffNumber: data.data.staffNumber || "",
         }));
         setManualEntry(false);
         setStep(3);
-      } else if (mockResult.requiresManualEntry) {
+      } else if (data.requiresManualEntry) {
         setManualEntry(true);
         setStep(3);
       } else {
-        setManualEntry(true);
-        setStep(3);
+        setErrorWithTimeout({
+          employeeId:
+            "Teacher not found. Please check your employee ID and try again.",
+        });
       }
     } catch (error) {
+      console.error("Verification error:", error);
       setErrorWithTimeout({
-        verification:
-          "Verification service unavailable. Please try manual entry.",
+        employeeId:
+          error instanceof Error
+            ? error.message
+            : "Verification failed. Please try again.",
       });
-      setManualEntry(true);
-      setStep(3);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Step 3: Personal & Professional Info
   const handleStep3Submit = (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
 
-    // Personal info validation
-    if (!formData.title) newErrors.title = "Title is required";
     if (!formData.surname) newErrors.surname = "Surname is required";
     if (!formData.firstName) newErrors.firstName = "First name is required";
     if (!formData.gender) newErrors.gender = "Gender is required";
-    if (!formData.dateOfBirth)
-      newErrors.dateOfBirth = "Date of birth is required";
-
-    // Professional info validation
     if (!formData.college) newErrors.college = "College is required";
     if (!formData.department) newErrors.department = "Department is required";
-    if (!formData.academicRank)
-      newErrors.academicRank = "Academic rank is required";
-    if (!formData.dateEmployed)
-      newErrors.dateEmployed = "Employment date is required";
+    if (!formData.rank) newErrors.rank = "Rank is required";
+    if (!formData.email) newErrors.email = "Email is required";
+    if (!formData.phone) newErrors.phone = "Phone number is required";
+
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = "Please enter a valid email address";
+    }
+
+    if (
+      formData.phone &&
+      !/^\+?[\d\s-()]{10,}$/.test(formData.phone.replace(/\s/g, ""))
+    ) {
+      newErrors.phone = "Please enter a valid phone number";
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrorWithTimeout(newErrors);
@@ -503,105 +360,74 @@ export default function TeacherSignupPage() {
     setStep(4);
   };
 
-  // Step 4: Contact Information
   const handleStep4Submit = (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
 
-    if (!formData.phone) newErrors.phone = "Phone number is required";
-    if (!formData.residentialAddress)
-      newErrors.residentialAddress = "Residential address is required";
-    if (!formData.stateOfOrigin)
-      newErrors.stateOfOrigin = "State of origin is required";
-
-    if (formData.phone && !isValidPhone(formData.phone)) {
-      newErrors.phone = "Please enter a valid phone number";
+    if (formData.password.length < 8) {
+      newErrors.password = "Password must be at least 8 characters";
     }
-
-    if (formData.alternatePhone && !isValidPhone(formData.alternatePhone)) {
-      newErrors.alternatePhone = "Please enter a valid alternate phone number";
+    if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = "Passwords do not match";
     }
 
     if (Object.keys(newErrors).length > 0) {
-      setErrorWithTimeout(newErrors);
+      setErrors(newErrors);
       return;
     }
 
     setStep(5);
   };
 
-  // Step 5: Password Setup
-  const handleStep5Submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newErrors: Record<string, string> = {};
-
-    const passwordValidation = isValidPassword(formData.password);
-    if (!passwordValidation.isValid) {
-      newErrors.password = "Password does not meet requirements";
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match";
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrorWithTimeout(newErrors);
-      return;
-    }
-
-    setStep(6);
-  };
-
-  // Final Submission
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      // Prepare registration data
-      const registrationData = {
-        verification: {
-          staffId: formData.staffId,
-          universityEmail: formData.universityEmail,
-        },
-        personalInfo: {
-          title: formData.title,
-          surname: formData.surname,
-          firstName: formData.firstName,
-          otherName: formData.otherName,
-          gender: formData.gender,
-          dateOfBirth: formData.dateOfBirth,
-          photo: formData.photo,
-        },
-        professionalInfo: {
-          college: formData.college,
-          department: formData.department,
-          academicRank: formData.academicRank,
-          staffType: formData.staffType,
-          dateEmployed: formData.dateEmployed,
-        },
-        contactInfo: {
-          phone: formData.phone,
-          alternatePhone: formData.alternatePhone,
-          residentialAddress: formData.residentialAddress,
-          stateOfOrigin: formData.stateOfOrigin,
-          lga: formData.lga,
-        },
-        security: {
-          password: formData.password,
-        },
+      // Prepare teacher data for registration
+      const teacherData = {
+        firstName: formData.firstName,
+        lastName: formData.surname,
+        otherName: formData.otherName,
+        gender: formData.gender,
+        employeeId: formData.employeeId,
+        department: formData.department,
+        qualification: formData.rank, // Using rank as qualification
+        specialization: "", // This might need to be added to the form
+        institution: "MOUAU", // Default institution
+        experience: "", // This might need to be added to the form
+        email: formData.email,
+        phone: formData.phone,
+        photo: formData.photo,
       };
 
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      // Real API call to register teacher
+      const response = await fetch("/api/auth/teacher/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          employeeId: formData.employeeId,
+          teacherData,
+          password: formData.password,
+        }),
+      });
 
-      // Clear session on successful registration
-      clearRoleSelection();
+      const data = await response.json();
 
-      setStep(7);
+      if (!response.ok) {
+        throw new Error(data.message || "Registration failed");
+      }
+
+      setStep(6);
     } catch (error) {
+      console.error("Registration error:", error);
       setErrorWithTimeout({
-        submit: "Registration failed. Please try again.",
+        submit:
+          error instanceof Error
+            ? error.message
+            : "Registration failed. Please try again.",
       });
     } finally {
       setIsLoading(false);
@@ -610,8 +436,6 @@ export default function TeacherSignupPage() {
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-
-    // Clear field-specific errors
     if (errors[field]) {
       setErrors((prev) => {
         const newErrors = { ...prev };
@@ -619,72 +443,39 @@ export default function TeacherSignupPage() {
         return newErrors;
       });
     }
-
-    // Password strength check
-    if (field === "password") {
-      setPasswordStrength(isValidPassword(value));
-    }
   };
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        setErrorWithTimeout({ photo: "Photo must be less than 2MB" });
+      if (file.size > 5 * 1024 * 1024) {
+        setErrorWithTimeout({
+          photo: "Photo must be less than 5MB",
+        });
         return;
       }
 
       if (!file.type.startsWith("image/")) {
-        setErrorWithTimeout({ photo: "Please select an image file" });
+        setErrorWithTimeout({
+          photo: "Please select an image file",
+        });
         return;
       }
 
-      setFormData((prev) => ({ ...prev, photo: file.name }));
+      setFormData({ ...formData, photo: file.name });
       const reader = new FileReader();
-      reader.onloadend = () => setPhotoPreview(reader.result as string);
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result as string);
+      };
       reader.readAsDataURL(file);
+      setErrorWithTimeout({ photo: "" });
     }
   };
 
-  const handleBackToRoleSelection = () => {
-    clearRoleSelection();
-    router.push("/select-role");
-  };
-
-  // Session Warning Component
-  const SessionWarning = () => {
-    if (timeLeft > 300) return null; // Only show when less than 5 minutes
-
-    return (
-      <div className="mb-4 p-4 bg-warning/10 border border-warning/20 rounded-lg">
-        <div className="flex items-center gap-3">
-          <Clock className="h-5 w-5 text-warning" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-warning">
-              Session expires in {formatTime(timeLeft)}
-            </p>
-            <p className="text-xs text-warning mt-1">
-              Complete your registration before the session expires
-            </p>
-          </div>
-          <button
-            onClick={() => setTimeLeft(30 * 60)} // Reset timer
-            className="p-2 text-warning hover:bg-warning/10 rounded-lg transition-colors"
-            title="Extend session"
-          >
-            <RefreshCw size={16} />
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  // Stepper Component
   const Stepper = () => (
     <div className="mb-6 md:mb-8">
-      <SessionWarning />
       <div className="flex items-center justify-between max-w-2xl mx-auto">
-        {[1, 2, 3, 4, 5, 6, 7].map((stepNumber) => (
+        {[1, 2, 3, 4, 5, 6].map((stepNumber) => (
           <div key={stepNumber} className="flex flex-col items-center">
             <div
               className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
@@ -696,23 +487,22 @@ export default function TeacherSignupPage() {
               }`}
             >
               {stepNumber < step ? (
-                <CheckCircle size={16} />
+                <CheckCircle size={16} className="md:w-[18px] md:h-[18px]" />
               ) : (
                 <span className="text-xs md:text-sm">{stepNumber}</span>
               )}
             </div>
             <div
-              className={`mt-2 text-xs font-medium ${
+              className={`mt-1 md:mt-2 text-[10px] md:text-xs font-medium ${
                 stepNumber <= step ? "text-foreground" : "text-muted-foreground"
               }`}
             >
-              {stepNumber === 1 && "Agreement"}
+              {stepNumber === 1 && "Terms"}
               {stepNumber === 2 && "Verify"}
               {stepNumber === 3 && "Details"}
-              {stepNumber === 4 && "Contact"}
-              {stepNumber === 5 && "Security"}
-              {stepNumber === 6 && "Review"}
-              {stepNumber === 7 && "Complete"}
+              {stepNumber === 4 && "Password"}
+              {stepNumber === 5 && "Review"}
+              {stepNumber === 6 && "Done"}
             </div>
           </div>
         ))}
@@ -720,47 +510,56 @@ export default function TeacherSignupPage() {
     </div>
   );
 
+  // Show loading state while validating role
+  if (roleLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-sm text-muted-foreground">
+            Verifying role access...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // If role validation failed, we should have already redirected
+  // This is a fallback in case redirect doesn't work
+  if (!roleValidated) {
+    return null;
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-linear-to-r from-background via-accent/5 to-primary/5 p-4">
-      <div className="w-full max-w-4xl bg-card border border-border rounded-xl p-6 md:p-8 shadow-lg">
-        {/* Header */}
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-background via-accent/5 to-primary/5 p-3 md:p-4">
+      <div className="w-full max-w-2xl bg-card border border-border rounded-xl p-4 md:p-8 shadow-lg">
         <div className="flex items-center justify-between mb-6 md:mb-8">
-          <button
-            onClick={handleBackToRoleSelection}
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 md:gap-2 text-xs md:text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            <Home size={16} />
-            Change Role
-          </button>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-xs text-muted-foreground">
-                Session expires in
-              </p>
-              <p className="text-sm font-medium text-foreground">
-                {formatTime(timeLeft)}
-              </p>
-            </div>
-            <ThemeToggle />
-          </div>
+            <Home size={14} className="md:w-4 md:h-4" />
+            <span className="hidden sm:inline">Back to Home</span>
+            <span className="sm:hidden">Home</span>
+          </Link>
+          <ThemeToggle />
         </div>
 
-        {/* Title */}
         <div className="text-center mb-6 md:mb-8">
-          <div className="flex flex-col items-center gap-4 mb-6">
-            <div className="p-3 border-2 rounded-xl">
+          <div className="flex flex-col items-center gap-3 md:gap-4 mb-4 md:mb-6">
+            <div className="p-2 md:p-3 border-2 rounded-xl">
               <img
                 src="/mouau_logo.webp"
                 alt="MOUAU Logo"
-                className="h-12 w-12 object-contain"
+                className="h-10 w-10 md:h-12 md:w-12 object-contain"
               />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-foreground mb-2">
+              <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1 md:mb-2">
                 MOUAU ClassMate
               </h1>
-              <p className="text-base text-muted-foreground">
-                Teacher/Lecturer Registration
+              <p className="text-sm md:text-base text-muted-foreground">
+                Teacher Registration
               </p>
             </div>
           </div>
@@ -768,82 +567,98 @@ export default function TeacherSignupPage() {
 
         <Stepper />
 
-        {/* Error Display */}
         {errors.submit && (
-          <div className="mb-6 p-4 bg-error/10 border border-error/20 rounded-lg">
-            <p className="text-error text-sm flex items-center gap-2">
-              <AlertCircle size={16} />
-              {errors.submit}
-            </p>
+          <div className="mb-4 md:mb-6 p-3 md:p-4 bg-error/10 border border-error/20 rounded-lg">
+            <p className="text-error text-xs md:text-sm">{errors.submit}</p>
           </div>
         )}
 
-        {/* Step 1: Agreement */}
         {step === 1 && (
-          <div className="space-y-6">
+          <div className="space-y-4 md:space-y-6">
             <div>
-              <h2 className="text-2xl font-bold text-foreground mb-2">
-                Terms & Conditions
+              <h2 className="text-xl md:text-2xl font-bold text-foreground mb-2">
+                Teacher Terms & Conditions
               </h2>
-              <p className="text-muted-foreground">
+              <p className="text-sm md:text-base text-muted-foreground mb-4 md:mb-6">
                 Please read and accept the terms to continue with registration
               </p>
             </div>
 
-            <div className="bg-background/50 border border-border rounded-lg p-6 max-h-96 overflow-y-auto">
-              <div className="text-center mb-6">
-                <div className="p-3 bg-primary/10 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                  <GraduationCap className="h-8 w-8 text-primary" />
+            <div className="bg-background/50 border border-border rounded-lg p-4 md:p-6 max-h-[400px] md:max-h-96 overflow-y-auto">
+              <div className="text-center mb-4 md:mb-6">
+                <div className="p-2 md:p-3 bg-primary/10 rounded-full w-12 h-12 md:w-16 md:h-16 mx-auto mb-3 md:mb-4 flex items-center justify-center">
+                  <GraduationCap className="h-6 w-6 md:h-8 md:w-8 text-primary" />
                 </div>
-                <h3 className="text-xl font-bold text-foreground mb-2">
+                <h3 className="text-lg md:text-xl font-bold text-foreground mb-2">
                   {TEACHER_AGREEMENT_CONTENT.title}
                 </h3>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs md:text-sm text-muted-foreground">
                   Last updated: {TEACHER_AGREEMENT_CONTENT.lastUpdated}
                 </p>
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-4 md:space-y-6">
                 {TEACHER_AGREEMENT_CONTENT.sections.map((section, index) => (
                   <div
                     key={index}
-                    className="border-l-4 border-primary/20 pl-4"
+                    className="border-l-4 border-primary/20 pl-3 md:pl-4"
                   >
-                    <h4 className="font-semibold text-foreground mb-2">
+                    <h4 className="font-semibold text-sm md:text-base text-foreground mb-1.5 md:mb-2">
                       {section.title}
                     </h4>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
+                    <p className="text-xs md:text-sm text-muted-foreground leading-relaxed">
                       {section.content}
                     </p>
                   </div>
                 ))}
               </div>
+
+              <div className="mt-4 md:mt-6 p-3 md:p-4 bg-card border border-accent/20 rounded-lg">
+                <div className="flex items-start gap-2 md:gap-3">
+                  <Shield className="h-4 w-4 md:h-5 md:w-5 text-accent mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs md:text-sm font-medium text-foreground mb-1">
+                      Important Notice
+                    </p>
+                    <p className="text-[10px] md:text-xs text-muted-foreground">
+                      You must accept these terms every time you access the
+                      registration form. This ensures you are always aware of
+                      your rights and responsibilities as a MOUAU faculty
+                      member.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-4">
-              <div className="flex items-start gap-3 p-4 bg-muted/30 rounded-lg border border-border">
+            <div className="space-y-3 md:space-y-4">
+              <div className="flex items-start gap-2 md:gap-3 p-3 md:p-4 bg-muted/30 rounded-lg border border-border">
                 <input
                   type="checkbox"
                   id="agreement"
                   checked={agreementAccepted}
                   onChange={(e) => setAgreementAccepted(e.target.checked)}
-                  className="mt-1 w-4 h-4 text-primary bg-background border-border rounded focus:ring-primary focus:ring-2"
+                  className="mt-0.5 md:mt-1 w-4 h-4 text-primary bg-background border-border rounded focus:ring-primary focus:ring-2"
                 />
-                <label htmlFor="agreement" className="text-sm text-foreground">
+                <label
+                  htmlFor="agreement"
+                  className="text-xs md:text-sm text-foreground"
+                >
                   <span className="font-medium">
-                    I have read, understood, and agree to the Terms & Conditions
+                    I have read, understood, and agree to the Teacher Terms &
+                    Conditions
                   </span>
-                  <p className="text-muted-foreground text-xs mt-1">
-                    By accepting, you acknowledge your responsibilities as a
-                    MOUAU academic staff member.
+                  <p className="text-muted-foreground text-[10px] md:text-xs mt-1">
+                    By accepting, you acknowledge that you understand your
+                    rights and responsibilities as a MOUAU ClassMate teacher.
                   </p>
                 </label>
               </div>
 
               {errors.agreement && (
-                <div className="p-3 bg-error/10 border border-error/20 rounded-lg">
-                  <p className="text-error text-sm flex items-center gap-2">
-                    <AlertCircle size={16} />
+                <div className="p-2.5 md:p-3 bg-error/10 border border-error/20 rounded-lg">
+                  <p className="text-error text-xs md:text-sm flex items-center gap-2">
+                    <AlertCircle size={14} className="md:w-4 md:h-4" />
                     {errors.agreement}
                   </p>
                 </div>
@@ -853,122 +668,112 @@ export default function TeacherSignupPage() {
             <button
               onClick={handleAgreementAccept}
               disabled={!agreementAccepted}
-              className="w-full py-3 bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-2.5 md:py-3 text-sm md:text-base bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Accept & Continue
-              <ArrowRight size={18} />
+              <ArrowRight size={16} className="md:w-[18px] md:h-[18px]" />
             </button>
           </div>
         )}
 
-        {/* Step 2: Verification */}
         {step === 2 && (
-          <form onSubmit={handleVerifyStaff} className="space-y-6">
+          <form
+            onSubmit={handleVerifyTeacher}
+            className="space-y-4 md:space-y-6"
+          >
             <div>
-              <h2 className="text-2xl font-bold text-foreground mb-2">
-                Staff Verification
+              <h2 className="text-xl md:text-2xl font-bold text-foreground mb-2">
+                Teacher Verification
               </h2>
-              <p className="text-muted-foreground">
-                Enter your Staff ID and University Email for verification
+              <p className="text-sm md:text-base text-muted-foreground mb-4 md:mb-6">
+                Enter your Employee ID to begin registration
               </p>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Staff ID *
+                <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
+                  Employee ID *
                 </label>
                 <input
                   type="text"
-                  value={formData.staffId}
-                  onChange={(e) =>
-                    handleInputChange("staffId", e.target.value.toUpperCase())
-                  }
+                  value={formData.employeeId}
+                  onChange={(e) => {
+                    const value = e.target.value.toUpperCase();
+                    handleInputChange("employeeId", value);
+                  }}
                   placeholder="e.g., MOUAU/STAFF/12345"
-                  className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent ${
-                    errors.staffId ? "border-error" : "border-border"
+                  className={`form-input w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent ${
+                    errors.employeeId ? "border-error" : "border-border"
                   }`}
                 />
-                {errors.staffId && (
-                  <p className="text-error text-xs mt-1 flex items-center gap-1">
+                {errors.employeeId && (
+                  <p className="text-error text-[10px] md:text-xs mt-1 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 bg-error rounded-full"></span>
-                    {errors.staffId}
+                    {errors.employeeId}
                   </p>
                 )}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  University Email *
-                </label>
-                <input
-                  type="email"
-                  value={formData.universityEmail}
-                  onChange={(e) =>
-                    handleInputChange(
-                      "universityEmail",
-                      e.target.value.toLowerCase()
-                    )
-                  }
-                  placeholder="name@mouau.edu.ng"
-                  className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent ${
-                    errors.universityEmail ? "border-error" : "border-border"
-                  }`}
-                />
-                {errors.universityEmail && (
-                  <p className="text-error text-xs mt-1 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 bg-error rounded-full"></span>
-                    {errors.universityEmail}
-                  </p>
-                )}
-              </div>
-
-              {errors.verification && (
-                <div className="p-3 bg-error/10 border border-error/20 rounded-lg">
-                  <p className="text-error text-sm">{errors.verification}</p>
-                </div>
-              )}
-            </div>
-
-            <div className="bg-primary/5 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <Shield className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-                <div>
-                  <p className="font-medium text-foreground mb-1">
-                    Verification Notice
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Your Staff ID and University email will be verified against
-                    MOUAU staff records. If not found, you'll be prompted for
-                    manual entry.
-                  </p>
+              <div className="bg-muted/50 rounded-lg p-3 md:p-4">
+                <div className="flex items-start gap-2 md:gap-3">
+                  <div className="p-1 bg-primary/20 rounded">
+                    <School className="h-3 w-3 md:h-4 md:w-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-xs md:text-sm font-medium text-foreground mb-1">
+                      Employee ID Format
+                    </p>
+                    <div className="text-[10px] md:text-xs text-foreground space-y-1">
+                      <p>
+                        • Must contain <span className="font-mono">/</span> or{" "}
+                        <span className="font-mono">-</span>
+                      </p>
+                      <p>
+                        • Example:{" "}
+                        <span className="font-mono text-[9px] md:text-xs">
+                          MOUAU/STAFF/12345
+                        </span>
+                      </p>
+                      <p>
+                        • Example:{" "}
+                        <span className="font-mono text-[9px] md:text-xs">
+                          MOUAU-STAFF-12345
+                        </span>
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-4">
+            <div className="flex gap-2 md:gap-4">
               <button
                 type="button"
                 onClick={() => setStep(1)}
-                className="flex-1 py-3 border border-border text-foreground font-semibold rounded-lg hover:bg-muted transition-colors flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 md:py-3 text-sm md:text-base border border-border text-foreground font-semibold rounded-lg hover:bg-muted transition-colors flex items-center justify-center gap-1.5 md:gap-2"
               >
-                <ArrowLeft size={18} />
+                <ArrowLeft size={16} className="md:w-[18px] md:h-[18px]" />
                 Back
               </button>
               <button
                 type="submit"
                 disabled={isLoading}
-                className="flex-1 py-3 bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                className="flex-1 py-2.5 md:py-3 text-sm md:text-base bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-1.5 md:gap-2 disabled:opacity-50"
               >
                 {isLoading ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                    Verifying...
+                    <div className="animate-spin rounded-full h-3.5 w-3.5 md:h-4 md:w-4 border-2 border-white border-t-transparent" />
+                    <span className="hidden sm:inline">Verifying...</span>
+                    <span className="sm:hidden">Wait...</span>
                   </>
                 ) : (
                   <>
-                    Verify & Continue
-                    <ArrowRight size={18} />
+                    <span className="hidden sm:inline">
+                      Verify and Continue
+                    </span>
+                    <span className="sm:hidden">Verify</span>
+                    <ArrowRight size={16} className="md:w-[18px] md:h-[18px]" />
                   </>
                 )}
               </button>
@@ -976,26 +781,584 @@ export default function TeacherSignupPage() {
           </form>
         )}
 
-        {/* Steps 3-7 would continue with similar structure */}
-        {/* Due to length, I've shown the first two steps. The remaining steps would follow the same pattern */}
-
-        {step > 2 && (
-          <div className="text-center p-8">
-            <div className="p-4 bg-primary/10 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-              <UserCheck className="h-8 w-8 text-primary" />
+        {step === 3 && (
+          <form onSubmit={handleStep3Submit} className="space-y-4 md:space-y-6">
+            <div>
+              <h2 className="text-xl md:text-2xl font-bold text-foreground mb-2">
+                {manualEntry ? "Enter Your Details" : "Confirm Your Details"}
+              </h2>
+              <p className="text-sm md:text-base text-muted-foreground mb-4 md:mb-6">
+                {manualEntry
+                  ? "Please provide your teacher information"
+                  : "Please review and confirm your details"}
+              </p>
             </div>
-            <h3 className="text-xl font-bold text-foreground mb-2">
-              Registration Steps {step}/7
-            </h3>
-            <p className="text-muted-foreground mb-4">
-              Complete the remaining steps to finish your registration
-            </p>
-            <button
-              onClick={() => setStep(2)}
-              className="px-6 py-2 border border-border text-foreground rounded-lg hover:bg-muted transition-colors"
-            >
-              Back to Verification
-            </button>
+
+            {/* Profile Photo Section */}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
+                  Profile Photo
+                </label>
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    {photoPreview ? (
+                      <img
+                        src={photoPreview}
+                        alt="Profile"
+                        className="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover border-2 border-border"
+                      />
+                    ) : (
+                      <div className="w-20 h-20 md:w-24 md:h-24 bg-muted rounded-full flex items-center justify-center border-2 border-border">
+                        <User className="h-8 w-8 md:h-10 md:w-10 text-muted-foreground" />
+                      </div>
+                    )}
+                    <label
+                      htmlFor="photo-upload"
+                      className="absolute bottom-0 right-0 w-6 h-6 md:w-8 md:h-8 bg-primary rounded-full flex items-center justify-center cursor-pointer hover:bg-primary/90 transition-colors"
+                    >
+                      <Camera className="h-3 w-3 md:h-4 md:w-4 text-white" />
+                    </label>
+                    <input
+                      id="photo-upload"
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePhotoChange}
+                      className="hidden"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-xs md:text-sm text-foreground">
+                      Upload a professional photo
+                    </p>
+                    <p className="text-[10px] md:text-xs text-muted-foreground">
+                      JPG, PNG up to 5MB
+                    </p>
+                    {errors.photo && (
+                      <p className="text-error text-[10px] md:text-xs mt-1">
+                        {errors.photo}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-3 md:gap-4">
+              <div>
+                <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
+                  Surname *
+                </label>
+                <input
+                  type="text"
+                  value={formData.surname}
+                  onChange={(e) => handleInputChange("surname", e.target.value)}
+                  className={`form-input w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent ${
+                    errors.surname ? "border-error" : "border-border"
+                  }`}
+                />
+                {errors.surname && (
+                  <p className="text-error text-[10px] md:text-xs mt-1">
+                    {errors.surname}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
+                  First Name *
+                </label>
+                <input
+                  type="text"
+                  value={formData.firstName}
+                  onChange={(e) =>
+                    handleInputChange("firstName", e.target.value)
+                  }
+                  className={`form-input w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent ${
+                    errors.firstName ? "border-error" : "border-border"
+                  }`}
+                />
+                {errors.firstName && (
+                  <p className="text-error text-[10px] md:text-xs mt-1">
+                    {errors.firstName}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
+                  Other Names
+                </label>
+                <input
+                  type="text"
+                  value={formData.otherName}
+                  onChange={(e) =>
+                    handleInputChange("otherName", e.target.value)
+                  }
+                  className="form-input w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base rounded-lg border border-border focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
+                  Gender *
+                </label>
+                <select
+                  value={formData.gender}
+                  onChange={(e) => handleInputChange("gender", e.target.value)}
+                  className={`form-input w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent ${
+                    errors.gender ? "border-error" : "border-border"
+                  }`}
+                >
+                  <option value="">Select Gender</option>
+                  <option value="MALE">Male</option>
+                  <option value="FEMALE">Female</option>
+                </select>
+                {errors.gender && (
+                  <p className="text-error text-[10px] md:text-xs mt-1">
+                    {errors.gender}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
+                  College *
+                </label>
+                <select
+                  value={formData.college}
+                  onChange={(e) => handleInputChange("college", e.target.value)}
+                  className={`form-input w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent ${
+                    errors.college ? "border-error" : "border-border"
+                  }`}
+                >
+                  <option value="">Select College</option>
+                  <option value="COLPAS">
+                    COLPAS - Physical & Applied Sciences
+                  </option>
+                  <option value="COLNAS">COLNAS - Natural Sciences</option>
+                  <option value="COLAMRUD">
+                    COLAMRUD - Agricultural Management
+                  </option>
+                  <option value="COLENG">COLENG - Engineering</option>
+                </select>
+                {errors.college && (
+                  <p className="text-error text-[10px] md:text-xs mt-1">
+                    {errors.college}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
+                  Department *
+                </label>
+                <input
+                  type="text"
+                  value={formData.department}
+                  onChange={(e) =>
+                    handleInputChange("department", e.target.value)
+                  }
+                  className={`form-input w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent ${
+                    errors.department ? "border-error" : "border-border"
+                  }`}
+                />
+                {errors.department && (
+                  <p className="text-error text-[10px] md:text-xs mt-1">
+                    {errors.department}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
+                  Academic Rank *
+                </label>
+                <select
+                  value={formData.rank}
+                  onChange={(e) => handleInputChange("rank", e.target.value)}
+                  className={`form-input w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent ${
+                    errors.rank ? "border-error" : "border-border"
+                  }`}
+                >
+                  <option value="">Select Rank</option>
+                  <option value="Professor">Professor</option>
+                  <option value="Associate Professor">
+                    Associate Professor
+                  </option>
+                  <option value="Senior Lecturer">Senior Lecturer</option>
+                  <option value="Lecturer I">Lecturer I</option>
+                  <option value="Lecturer II">Lecturer II</option>
+                  <option value="Assistant Lecturer">Assistant Lecturer</option>
+                  <option value="Graduate Assistant">Graduate Assistant</option>
+                </select>
+                {errors.rank && (
+                  <p className="text-error text-[10px] md:text-xs mt-1">
+                    {errors.rank}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
+                  State *
+                </label>
+                <input
+                  type="text"
+                  value={formData.state}
+                  onChange={(e) => handleInputChange("state", e.target.value)}
+                  className={`form-input w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent ${
+                    errors.state ? "border-error" : "border-border"
+                  }`}
+                />
+                {errors.state && (
+                  <p className="text-error text-[10px] md:text-xs mt-1">
+                    {errors.state}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => handleInputChange("email", e.target.value)}
+                  className={`form-input w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent ${
+                    errors.email ? "border-error" : "border-border"
+                  }`}
+                />
+                {errors.email && (
+                  <p className="text-error text-[10px] md:text-xs mt-1">
+                    {errors.email}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
+                  Phone *
+                </label>
+                <input
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => handleInputChange("phone", e.target.value)}
+                  className={`form-input w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent ${
+                    errors.phone ? "border-error" : "border-border"
+                  }`}
+                />
+                {errors.phone && (
+                  <p className="text-error text-[10px] md:text-xs mt-1">
+                    {errors.phone}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-2 md:gap-4">
+              <button
+                type="button"
+                onClick={() => setStep(2)}
+                className="flex-1 py-2.5 md:py-3 text-sm md:text-base border border-border text-foreground font-semibold rounded-lg hover:bg-muted transition-colors flex items-center justify-center gap-1.5 md:gap-2"
+              >
+                <ArrowLeft size={16} className="md:w-[18px] md:h-[18px]" />
+                Back
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-2.5 md:py-3 text-sm md:text-base bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-1.5 md:gap-2"
+              >
+                Continue
+                <ArrowRight size={16} className="md:w-[18px] md:h-[18px]" />
+              </button>
+            </div>
+          </form>
+        )}
+
+        {step === 4 && (
+          <form onSubmit={handleStep4Submit} className="space-y-4 md:space-y-6">
+            <div>
+              <h2 className="text-xl md:text-2xl font-bold text-foreground mb-2">
+                Create Password
+              </h2>
+              <p className="text-sm md:text-base text-muted-foreground mb-4 md:mb-6">
+                Create a secure password for your account
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
+                  Password *
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={formData.password}
+                    onChange={(e) =>
+                      handleInputChange("password", e.target.value)
+                    }
+                    className={`form-input w-full px-3 md:px-4 py-2.5 md:py-3 pr-10 text-sm md:text-base rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent ${
+                      errors.password ? "border-error" : "border-border"
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground"
+                  >
+                    {showPassword ? (
+                      <EyeOff size={16} className="md:w-[18px] md:h-[18px]" />
+                    ) : (
+                      <Eye size={16} className="md:w-[18px] md:h-[18px]" />
+                    )}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="text-error text-[10px] md:text-xs mt-1">
+                    {errors.password}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
+                  Confirm Password *
+                </label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={formData.confirmPassword}
+                    onChange={(e) =>
+                      handleInputChange("confirmPassword", e.target.value)
+                    }
+                    className={`form-input w-full px-3 md:px-4 py-2.5 md:py-3 pr-10 text-sm md:text-base rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent ${
+                      errors.confirmPassword ? "border-error" : "border-border"
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground"
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff size={16} className="md:w-[18px] md:h-[18px]" />
+                    ) : (
+                      <Eye size={16} className="md:w-[18px] md:h-[18px]" />
+                    )}
+                  </button>
+                </div>
+                {errors.confirmPassword && (
+                  <p className="text-error text-[10px] md:text-xs mt-1">
+                    {errors.confirmPassword}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-2 md:gap-4">
+              <button
+                type="button"
+                onClick={() => setStep(3)}
+                className="flex-1 py-2.5 md:py-3 text-sm md:text-base border border-border text-foreground font-semibold rounded-lg hover:bg-muted transition-colors flex items-center justify-center gap-1.5 md:gap-2"
+              >
+                <ArrowLeft size={16} className="md:w-[18px] md:h-[18px]" />
+                Back
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-2.5 md:py-3 text-sm md:text-base bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-1.5 md:gap-2"
+              >
+                Continue
+                <ArrowRight size={16} className="md:w-[18px] md:h-[18px]" />
+              </button>
+            </div>
+          </form>
+        )}
+
+        {step === 5 && (
+          <form onSubmit={handleFinalSubmit} className="space-y-4 md:space-y-6">
+            <div>
+              <h2 className="text-xl md:text-2xl font-bold text-foreground mb-2">
+                Review Your Information
+              </h2>
+              <p className="text-sm md:text-base text-muted-foreground mb-4 md:mb-6">
+                Please review all your information before submitting
+              </p>
+            </div>
+
+            <div className="bg-background/30 rounded-lg p-4 md:p-6 space-y-3 md:space-y-4">
+              <div className="grid md:grid-cols-2 gap-3 md:gap-4">
+                <div>
+                  <label className="text-xs md:text-sm font-medium text-muted-foreground">
+                    Employee ID
+                  </label>
+                  <p className="font-medium text-sm md:text-base text-foreground">
+                    {formData.employeeId}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs md:text-sm font-medium text-muted-foreground">
+                    Full Name
+                  </label>
+                  <p className="font-medium text-sm md:text-base text-foreground">
+                    {formData.surname} {formData.firstName} {formData.otherName}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs md:text-sm font-medium text-muted-foreground">
+                    Gender
+                  </label>
+                  <p className="font-medium text-sm md:text-base text-foreground">
+                    {formData.gender}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs md:text-sm font-medium text-muted-foreground">
+                    College
+                  </label>
+                  <p className="font-medium text-sm md:text-base text-foreground">
+                    {formData.college}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs md:text-sm font-medium text-muted-foreground">
+                    Department
+                  </label>
+                  <p className="font-medium text-sm md:text-base text-foreground">
+                    {formData.department}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs md:text-sm font-medium text-muted-foreground">
+                    Academic Rank
+                  </label>
+                  <p className="font-medium text-sm md:text-base text-foreground">
+                    {formData.rank}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs md:text-sm font-medium text-muted-foreground">
+                    Email
+                  </label>
+                  <p className="font-medium text-sm md:text-base text-foreground">
+                    {formData.email.substring(0, 3) +
+                      "***" +
+                      formData.email.substring(formData.email.indexOf("@"))}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs md:text-sm font-medium text-muted-foreground">
+                    Phone
+                  </label>
+                  <p className="font-medium text-sm md:text-base text-foreground">
+                    {formData.phone.substring(0, 4) +
+                      "***" +
+                      formData.phone.substring(formData.phone.length - 3)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2 md:gap-3 p-3 md:p-4 bg-primary/10 rounded-lg border border-primary/20">
+              <CheckCircle className="h-4 w-4 md:h-5 md:w-5 text-primary mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs md:text-sm text-foreground font-medium">
+                  Email Verification Required
+                </p>
+                <p className="text-[10px] md:text-xs text-muted-foreground mt-1">
+                  After submission, you'll receive a verification email to
+                  activate your account.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-2 md:gap-4">
+              <button
+                type="button"
+                onClick={() => setStep(4)}
+                className="flex-1 py-2.5 md:py-3 text-sm md:text-base border border-border text-foreground font-semibold rounded-lg hover:bg-muted transition-colors flex items-center justify-center gap-1.5 md:gap-2"
+              >
+                <ArrowLeft size={16} className="md:w-[18px] md:h-[18px]" />
+                Back
+              </button>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="flex-1 py-2.5 md:py-3 text-sm md:text-base bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-1.5 md:gap-2 disabled:opacity-50"
+              >
+                {isLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-3.5 w-3.5 md:h-4 md:w-4 border-2 border-white border-t-transparent" />
+                    <span className="hidden sm:inline">Submitting...</span>
+                    <span className="sm:hidden">Wait...</span>
+                  </>
+                ) : (
+                  <>
+                    Finish
+                    <CheckCircle
+                      size={16}
+                      className="md:w-[18px] md:h-[18px]"
+                    />
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {step === 6 && (
+          <div className="text-center space-y-4 md:space-y-6">
+            <div className="p-3 md:p-4 bg-primary/10 rounded-full w-16 h-16 md:w-20 md:h-20 mx-auto flex items-center justify-center">
+              <CheckCircle className="h-8 w-8 md:h-10 md:w-10 text-primary" />
+            </div>
+
+            <div>
+              <h2 className="text-xl md:text-2xl font-bold text-foreground mb-2">
+                Registration Complete!
+              </h2>
+              <p className="text-sm md:text-base text-muted-foreground mb-3 md:mb-4">
+                Welcome to MOUAU ClassMate, {formData.firstName}!
+              </p>
+            </div>
+
+            <div className="bg-background/30 rounded-lg p-4 md:p-6">
+              <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
+                <Mail className="h-4 w-4 md:h-5 md:w-5 text-primary shrink-0" />
+                <div className="text-left">
+                  <p className="font-medium text-foreground text-xs md:text-sm">
+                    Check Your Email
+                  </p>
+                  <p className="text-muted-foreground text-[10px] md:text-xs">
+                    We've sent a verification link to{" "}
+                    {formData.email.substring(0, 3) +
+                      "***" +
+                      formData.email.substring(formData.email.indexOf("@"))}
+                  </p>
+                </div>
+              </div>
+              <p className="text-[10px] md:text-xs text-muted-foreground">
+                Click the verification link in your email to activate your
+                account and start using MOUAU ClassMate.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 md:gap-4">
+              <Link
+                href="/auth/signin"
+                className="flex-1 py-2.5 md:py-3 text-sm md:text-base bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-colors text-center"
+              >
+                Sign In Now
+              </Link>
+              <Link
+                href="/"
+                className="flex-1 py-2.5 md:py-3 text-sm md:text-base border border-border text-foreground font-semibold rounded-lg hover:bg-muted transition-colors text-center"
+              >
+                Back to Home
+              </Link>
+            </div>
           </div>
         )}
       </div>
