@@ -24,6 +24,7 @@ interface TeacherSidebarProps {
   isOpen: boolean;
   onClose: () => void;
   user?: any;
+  onLogout: () => Promise<void>;
 }
 
 interface MenuItem {

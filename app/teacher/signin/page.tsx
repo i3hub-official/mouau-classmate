@@ -123,7 +123,7 @@ export default function TeacherSignInPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-accent/5 to-primary/5 flex flex-col">
+    <div className="min-h-screen bg-linear-to-r from-background via-accent/5 to-primary/5 flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur-xl shadow-sm">
         <div className="w-full px-4 sm:px-6 lg:px-12 py-4 flex justify-between items-center">

@@ -1,11 +1,9 @@
 // lib/services/userService.ts
-import { prisma } from "@/lib/server/prisma";
-
 export interface CurrentUser {
   id: string;
   email: string;
   name: string | null;
-  role: 'STUDENT' | 'TEACHER' | 'ADMIN';
+  role: "STUDENT" | "TEACHER" | "ADMIN";
   matricNumber?: string;
   department?: string;
   college?: string;
@@ -31,17 +29,17 @@ class UserService {
    */
   async getCurrentUser(): Promise<CurrentUser | null> {
     try {
-      const response = await fetch('/api/user/me', {
-        method: 'GET',
-        credentials: 'include',
+      const response = await fetch("/api/user/me", {
+        method: "GET",
+        credentials: "include",
         headers: {
-          'Cache-Control': 'no-cache',
+          "Cache-Control": "no-cache",
         },
       });
 
       if (!response.ok) {
         if (response.status === 401) {
-          console.warn('User not authenticated');
+          console.warn("User not authenticated");
           return null;
         }
         throw new Error(`Failed to fetch user data: ${response.statusText}`);
@@ -50,7 +48,7 @@ class UserService {
       const userData = await response.json();
       return this.transformUserData(userData);
     } catch (error) {
-      console.error('Error fetching current user:', error);
+      console.error("Error fetching current user:", error);
       return null;
     }
   }
@@ -66,7 +64,7 @@ class UserService {
   /**
    * Check if current user has specific role
    */
-  async hasRole(role: CurrentUser['role']): Promise<boolean> {
+  async hasRole(role: CurrentUser["role"]): Promise<boolean> {
     const user = await this.getCurrentUser();
     return user?.role === role;
   }
@@ -99,7 +97,7 @@ class UserService {
     };
 
     // Add role-specific data
-    if (userData.role === 'STUDENT') {
+    if (userData.role === "STUDENT") {
       return {
         ...baseUser,
         matricNumber: userData.matricNumber,
@@ -108,12 +106,12 @@ class UserService {
         course: userData.course,
         studentId: userData.studentId,
       };
-    } else if (userData.role === 'TEACHER') {
+    } else if (userData.role === "TEACHER") {
       return {
         ...baseUser,
         matricNumber: userData.matricNumber,
         department: userData.department,
-        course: userData.course || 'Lecturer',
+        course: userData.course || "Lecturer",
         teacherId: userData.teacherId,
       };
     }

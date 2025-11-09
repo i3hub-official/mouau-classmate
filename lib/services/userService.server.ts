@@ -105,7 +105,12 @@ export class UserServiceServer {
       }
 
       // If user is a student, they can only access their own data
-      if (currentUser.role === "STUDENT") {
+      if (
+        currentUser.role === "STUDENT" ||
+        currentUser.role === "TEACHER" ||
+        currentUser.role === "ADMIN" ||
+        currentUser.role === "SUPERADMIN"
+      ) {
         // Get the student record for the current user
         const student = await prisma.student.findFirst({
           where: {
@@ -155,7 +160,12 @@ export class UserServiceServer {
       }
 
       // If user is a student, get their actual student ID
-      if (currentUser.role === "STUDENT") {
+      if (
+        currentUser.role === "STUDENT" ||
+        currentUser.role === "TEACHER" ||
+        currentUser.role === "ADMIN" ||
+        currentUser.role === "SUPERADMIN"
+      ) {
         const student = await prisma.student.findFirst({
           where: { userId: currentUser.id },
           select: { id: true },
@@ -179,7 +189,13 @@ export class UserServiceServer {
     try {
       const currentUser = await this.getCurrentUserFromSession();
 
-      if (!currentUser || currentUser.role !== "STUDENT") {
+      if (
+        !currentUser ||
+        (currentUser.role !== "STUDENT" &&
+          currentUser.role !== "TEACHER" &&
+          currentUser.role !== "ADMIN" &&
+          currentUser.role !== "SUPERADMIN")
+      ) {
         return null;
       }
 

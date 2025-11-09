@@ -25,41 +25,60 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/app/components/theme-toggle";
 
+// Helper to safely check if sessionStorage is available
+const isSessionStorageAvailable = (): boolean => {
+  try {
+    if (typeof window === "undefined") return false;
+    const test = "__storage_test__";
+    window.sessionStorage.setItem(test, test);
+    window.sessionStorage.removeItem(test);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// In-memory storage
+let inMemoryRole: { role: string; timestamp: number } | null = null;
+
+const setRoleSelection = (role: string) => {
+  const data = {
+    role,
+    timestamp: Date.now(),
+  };
+
+  // Store in memory
+  inMemoryRole = data;
+
+  // Also store in sessionStorage if available
+  if (isSessionStorageAvailable()) {
+    sessionStorage.setItem("selectedRole", JSON.stringify(data));
+  }
+};
+
 export default function SelectRolePage() {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
-  const [selectedAction, setSelectedAction] = useState<
-    "signup" | "login" | null
-  >(null);
   const [signingOut, setSigningOut] = useState(false);
   const router = useRouter();
 
   const handleRoleSelection = (role: string) => {
     setSelectedRole(role);
-    setSelectedAction(null);
   };
 
-  const handleActionSelection = (action: "signup" | "login") => {
-    setSelectedAction(action);
-  };
-
+  // Updated to store role before navigation
   const handleContinue = () => {
-    if (!selectedRole || !selectedAction) return;
+    if (!selectedRole) return;
 
-    // Navigate to the appropriate page based on role and action
-    if (selectedAction === "signup") {
-      if (selectedRole === "lecturer") {
-        router.push("/teacher/signup");
-      } else if (selectedRole === "student") {
-        router.push("/auth/signup");
-      }
-    } else if (selectedAction === "login") {
-      if (selectedRole === "lecturer") {
-        router.push("/teacher/signin");
-      } else if (selectedRole === "student") {
-        router.push("/auth/signin");
-      }
+    // Store role selection
+    setRoleSelection(selectedRole);
+
+    // Navigate to appropriate signup form
+    if (selectedRole === "lecturer") {
+      router.push("/teacher/signup");
+    } else if (selectedRole === "student") {
+      router.push("/auth/signup");
     }
   };
 
@@ -70,13 +89,8 @@ export default function SelectRolePage() {
 
   // Get the appropriate navigation URL based on selections
   const getNavigationUrl = () => {
-    if (!selectedRole || !selectedAction) return "#";
-
-    if (selectedAction === "signup") {
-      return selectedRole === "lecturer" ? "/teacher/signup" : "/auth/signup";
-    } else {
-      return selectedRole === "lecturer" ? "/teacher/signin" : "/auth/signin";
-    }
+    if (!selectedRole) return "#";
+    return selectedRole === "lecturer" ? "/teacher/signup" : "/auth/signup";
   };
 
   if (loading) {
@@ -152,14 +166,42 @@ export default function SelectRolePage() {
               </span>
             </div>
             <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
-              Choose Your Journey
+              Choose Your Registration Path
             </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Select your role and get started with your academic experience
+              Select your role to access the appropriate registration form with
+              built-in security validation
             </p>
           </div>
 
-          {/* Progress Steps */}
+          {/* Security Features Highlight */}
+          <div className="bg-primary/5 rounded-2xl p-6 mb-12 border border-primary/20">
+            <div className="text-center">
+              <h3 className="text-lg font-semibold text-foreground mb-3">
+                🔒 Secure Registration System
+              </h3>
+              <div className="grid md:grid-cols-2 gap-4 text-sm text-muted-foreground">
+                <div className="flex items-center justify-center gap-2">
+                  <Shield className="h-4 w-4 text-primary" />
+                  <span>Automatic role validation</span>
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <UserCheck className="h-4 w-4 text-primary" />
+                  <span>University email protection</span>
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <FileText className="h-4 w-4 text-primary" />
+                  <span>Matric number verification</span>
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <Award className="h-4 w-4 text-primary" />
+                  <span>Unique identifier system</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Progress Steps - Simplified */}
           <div className="flex justify-center mb-12">
             <div className="flex items-center gap-4 sm:gap-8">
               <div
@@ -187,12 +229,12 @@ export default function SelectRolePage() {
               ></div>
               <div
                 className={`flex flex-col items-center transition-colors ${
-                  selectedAction ? "text-primary" : "text-muted-foreground"
+                  selectedRole ? "text-primary" : "text-muted-foreground"
                 }`}
               >
                 <div
                   className={`w-10 h-10 rounded-full flex items-center justify-center border-2 font-semibold transition-all ${
-                    selectedAction
+                    selectedRole
                       ? "bg-primary border-primary text-primary-foreground scale-110"
                       : "border-border"
                   }`}
@@ -200,38 +242,13 @@ export default function SelectRolePage() {
                   2
                 </div>
                 <span className="text-xs sm:text-sm mt-2 font-medium">
-                  Choose Action
-                </span>
-              </div>
-              <div
-                className={`w-12 sm:w-16 h-1 rounded-full transition-colors ${
-                  selectedAction ? "bg-primary" : "bg-border"
-                }`}
-              ></div>
-              <div
-                className={`flex flex-col items-center transition-colors ${
-                  selectedRole && selectedAction
-                    ? "text-primary"
-                    : "text-muted-foreground"
-                }`}
-              >
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center border-2 font-semibold transition-all ${
-                    selectedRole && selectedAction
-                      ? "bg-primary border-primary text-primary-foreground scale-110"
-                      : "border-border"
-                  }`}
-                >
-                  3
-                </div>
-                <span className="text-xs sm:text-sm mt-2 font-medium">
-                  Continue
+                  Register
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Role Selection Cards */}
+          {/* Role Selection Cards - Dual Form Approach */}
           <div className="grid md:grid-cols-2 gap-6 lg:gap-8 mb-12">
             {/* Lecturer Card */}
             <div
@@ -260,28 +277,38 @@ export default function SelectRolePage() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-foreground">
-                    Lecturer
+                    Lecturer Registration
                   </h2>
                   <p className="text-sm text-muted-foreground">
-                    Faculty Member
+                    Faculty & Teaching Staff
                   </p>
                 </div>
               </div>
 
+              <div className="bg-primary/10 rounded-lg p-4 mb-6 border border-primary/20">
+                <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-primary" />
+                  Security Requirements
+                </h4>
+                <ul className="text-sm space-y-1 text-muted-foreground">
+                  <li>• @mouau.edu.ng email address</li>
+                  <li>• Valid staff ID</li>
+                  <li>• NIN verification</li>
+                  <li>• Phone number</li>
+                </ul>
+              </div>
+
               <p className="text-muted-foreground mb-6 leading-relaxed">
-                Manage courses, create assignments, grade submissions, and
-                communicate with students efficiently.
+                Access the lecturer registration form with university email
+                validation. Only official MOUAU staff emails are accepted.
               </p>
 
               <ul className="space-y-3 mb-6">
                 {[
-                  { icon: Shield, text: "Create and manage course content" },
-                  {
-                    icon: FileText,
-                    text: "Grade assignments and provide feedback",
-                  },
-                  { icon: MessageSquare, text: "Communicate with students" },
-                  { icon: TrendingUp, text: "Track student progress" },
+                  { icon: Shield, text: "University email domain protection" },
+                  { icon: FileText, text: "Staff ID verification" },
+                  { icon: Users, text: "Course management access" },
+                  { icon: TrendingUp, text: "Student progress tracking" },
                 ].map((item, idx) => (
                   <li key={idx} className="flex items-start gap-3 group/item">
                     <div className="p-1 bg-primary/10 rounded-lg shrink-0 group-hover/item:bg-primary/20 group-hover/item:scale-110 transition-all">
@@ -297,7 +324,7 @@ export default function SelectRolePage() {
                   selectedRole === "lecturer" ? "text-primary" : "text-primary"
                 }`}
               >
-                Select as Lecturer
+                Register as Lecturer
                 <ChevronRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
               </div>
             </div>
@@ -329,23 +356,39 @@ export default function SelectRolePage() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-foreground">
-                    Student
+                    Student Registration
                   </h2>
-                  <p className="text-sm text-muted-foreground">Learner</p>
+                  <p className="text-sm text-muted-foreground">
+                    MOUAU Learners
+                  </p>
                 </div>
               </div>
 
+              <div className="bg-primary/10 rounded-lg p-4 mb-6 border border-primary/20">
+                <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-primary" />
+                  Security Requirements
+                </h4>
+                <ul className="text-sm space-y-1 text-muted-foreground">
+                  <li>• Valid matric number</li>
+                  <li>• Personal email address</li>
+                  <li>• NIN verification</li>
+                  <li>• Phone number</li>
+                </ul>
+              </div>
+
               <p className="text-muted-foreground mb-6 leading-relaxed">
-                Access course materials, submit assignments, collaborate with
-                peers, and track your academic progress.
+                Access the student registration form with matric number
+                validation. Personal emails accepted (university emails blocked
+                for students).
               </p>
 
               <ul className="space-y-3 mb-6">
                 {[
-                  { icon: BookOpen, text: "Access course materials" },
-                  { icon: Calendar, text: "Submit assignments on time" },
-                  { icon: Users, text: "Collaborate with classmates" },
-                  { icon: Award, text: "Track your grades and progress" },
+                  { icon: FileText, text: "Matric number verification" },
+                  { icon: BookOpen, text: "Course material access" },
+                  { icon: Calendar, text: "Assignment submission" },
+                  { icon: Award, text: "Grade tracking" },
                 ].map((item, idx) => (
                   <li key={idx} className="flex items-start gap-3 group/item">
                     <div className="p-1 bg-primary/10 rounded-lg shrink-0 group-hover/item:bg-primary/20 group-hover/item:scale-110 transition-all">
@@ -361,162 +404,61 @@ export default function SelectRolePage() {
                   selectedRole === "student" ? "text-primary" : "text-primary"
                 }`}
               >
-                Select as Student
+                Register as Student
                 <ChevronRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
               </div>
             </div>
           </div>
 
-          {/* Action Selection */}
-          {selectedRole && (
-            <div className="mb-12 animate-in fade-in slide-in-from-bottom duration-500">
-              <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-foreground mb-2">
-                  Are you a new or returning user?
-                </h2>
-                <p className="text-muted-foreground">
-                  Choose your next step to continue
-                </p>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto">
-                {/* Sign Up Action */}
-                <div
-                  className={`p-6 bg-card rounded-2xl border-2 transition-all cursor-pointer group ${
-                    selectedAction === "signup"
-                      ? "border-primary shadow-lg shadow-primary/20 bg-primary/5 scale-[1.02]"
-                      : "border-border hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10"
-                  }`}
-                  onClick={() => handleActionSelection("signup")}
-                >
-                  <div className="flex items-center gap-4 mb-4">
-                    <div
-                      className={`p-3 rounded-xl transition-all duration-300 ${
-                        selectedAction === "signup"
-                          ? "bg-primary text-primary-foreground scale-110"
-                          : "bg-primary/10 text-primary group-hover:bg-primary/20 group-hover:scale-110"
-                      }`}
-                    >
-                      <UserPlus className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-foreground">
-                        Create Account
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        New to MOUAU ClassMate
-                      </p>
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Sign up for a new{" "}
-                    {selectedRole === "lecturer" ? "lecturer" : "student"}{" "}
-                    account
-                  </p>
-                </div>
-
-                {/* Login Action */}
-                <div
-                  className={`p-6 bg-card rounded-2xl border-2 transition-all cursor-pointer group ${
-                    selectedAction === "login"
-                      ? "border-primary shadow-lg shadow-primary/20 bg-primary/5 scale-[1.02]"
-                      : "border-border hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10"
-                  }`}
-                  onClick={() => handleActionSelection("login")}
-                >
-                  <div className="flex items-center gap-4 mb-4">
-                    <div
-                      className={`p-3 rounded-xl transition-all duration-300 ${
-                        selectedAction === "login"
-                          ? "bg-primary text-primary-foreground scale-110"
-                          : "bg-primary/10 text-primary group-hover:bg-primary/20 group-hover:scale-110"
-                      }`}
-                    >
-                      <LogIn className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-foreground">
-                        Sign In
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        Existing account
-                      </p>
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Sign in to your existing{" "}
-                    {selectedRole === "lecturer" ? "lecturer" : "student"}{" "}
-                    account
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <Link
-              href={getNavigationUrl()}
+            <button
+              onClick={handleContinue}
+              disabled={!selectedRole}
               className={`px-8 py-3.5 font-semibold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 group ${
-                selectedRole && selectedAction
+                selectedRole
                   ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:scale-105 active:scale-100"
-                  : "bg-muted text-muted-foreground cursor-not-allowed pointer-events-none"
+                  : "bg-muted text-muted-foreground cursor-not-allowed"
               }`}
             >
-              {selectedAction === "signup"
-                ? "Create Account"
-                : selectedAction === "login"
-                ? "Sign In"
-                : "Continue"}
+              Continue to Registration
               <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
-            </Link>
+            </button>
 
             <Link
-              href="/"
+              href="/auth/signin"
               className="px-6 py-3.5 border-2 border-border text-foreground font-semibold rounded-xl hover:bg-accent/10 hover:border-primary/50 transition-all flex items-center justify-center gap-2 hover:scale-105 active:scale-100"
             >
-              Back to Home
+              <LogIn className="h-5 w-5" />
+              Sign In Instead
             </Link>
           </div>
 
-          {(!selectedRole || !selectedAction) && (
+          {!selectedRole && (
             <p className="text-center text-sm text-muted-foreground mt-4 animate-pulse">
-              {!selectedRole
-                ? "Please select your role to continue"
-                : "Please choose an action to proceed"}
+              Please select your role to continue to registration
             </p>
           )}
 
-          {/* Help Section */}
-          <div className="mt-16 bg-primary/5 rounded-3xl p-8 text-center border border-primary/20">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-card rounded-full mb-4">
-              <Settings className="h-4 w-4 text-primary" />
+          {/* Security Notice */}
+          <div className="mt-12 bg-card rounded-2xl p-6 text-center border border-border">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full mb-4">
+              <Shield className="h-4 w-4 text-primary" />
               <span className="text-sm font-medium text-foreground">
-                Need Assistance?
+                Security Notice
               </span>
             </div>
-            <h2 className="text-2xl font-bold text-foreground mb-4">
-              We're Here to Help
-            </h2>
-            <p className="text-muted-foreground mb-6 max-w-2xl mx-auto leading-relaxed">
-              If you're unsure which role to select or need assistance with your
-              account, please contact the support team.
+            <h3 className="text-lg font-semibold text-foreground mb-2">
+              Protected Registration System
+            </h3>
+            <p className="text-muted-foreground mb-4 max-w-2xl mx-auto leading-relaxed">
+              Each registration form has built-in security validation to ensure
+              proper role assignment. Lecturers require university emails, while
+              students use matric numbers for verification.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link
-                href="/support"
-                className="px-6 py-2.5 bg-card border border-border text-foreground font-medium rounded-lg hover:bg-accent/10 hover:border-primary/50 transition-all flex items-center justify-center gap-2"
-              >
-                <Settings className="h-5 w-5" />
-                Contact Support
-              </Link>
-              <Link
-                href="/help"
-                className="px-6 py-2.5 text-primary font-medium rounded-lg hover:bg-primary/10 transition-all flex items-center justify-center gap-2"
-              >
-                Learn More
-                <ChevronRight className="h-5 w-5" />
-              </Link>
+            <div className="text-xs text-muted-foreground">
+              Attempts to bypass role validation will be automatically rejected
+              by the system.
             </div>
           </div>
         </div>
