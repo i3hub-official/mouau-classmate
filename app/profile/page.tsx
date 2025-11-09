@@ -460,7 +460,7 @@ export default function ProfilePage() {
                   {editMode && (
                     <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
                       <div className="flex items-start gap-2">
-                        <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                        <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
                         <div>
                           <h3 className="font-medium text-amber-800 mb-1">
                             Important Notice
@@ -1103,24 +1103,24 @@ export default function ProfilePage() {
                     <div className="bg-muted/30 rounded-lg p-3 text-xs">
                       <ul className="space-y-1.5 text-muted-foreground">
                         <li className="flex items-start gap-2">
-                          <div className="w-1 h-1 rounded-full bg-primary mt-1.5 flex-shrink-0"></div>
+                          <div className="w-1 h-1 rounded-full bg-primary mt-1.5 shrink-0"></div>
                           <span>
                             Use a strong, unique password that you don't use
                             elsewhere
                           </span>
                         </li>
                         <li className="flex items-start gap-2">
-                          <div className="w-1 h-1 rounded-full bg-primary mt-1.5 flex-shrink-0"></div>
+                          <div className="w-1 h-1 rounded-full bg-primary mt-1.5 shrink-0"></div>
                           <span>
                             Enable two-factor authentication if available
                           </span>
                         </li>
                         <li className="flex items-start gap-2">
-                          <div className="w-1 h-1 rounded-full bg-primary mt-1.5 flex-shrink-0"></div>
+                          <div className="w-1 h-1 rounded-full bg-primary mt-1.5 shrink-0"></div>
                           <span>Never share your password with anyone</span>
                         </li>
                         <li className="flex items-start gap-2">
-                          <div className="w-1 h-1 rounded-full bg-primary mt-1.5 flex-shrink-0"></div>
+                          <div className="w-1 h-1 rounded-full bg-primary mt-1.5 shrink-0"></div>
                           <span>Log out from shared devices after use</span>
                         </li>
                       </ul>

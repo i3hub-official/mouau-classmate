@@ -122,26 +122,27 @@ enum SessionSecurityLevel {
 // ===========================================================
 
 model User {
-  id                  String    @id @default(uuid())
-  name                String?
-  email               String    @unique(map: "users_email_key")
-  emailVerified       DateTime?
-  image               String?
-  role                Role      @default(STUDENT)
-  isActive            Boolean   @default(false)
-  lastLoginAt         DateTime?
-  loginCount          Int       @default(0)
-  failedLoginAttempts Int       @default(0)
-  lastFailedLoginAt   DateTime?
-  accountLocked       Boolean   @default(false)
-  lockedUntil         DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  passwordHash        String?
-  greeting            String?   @default("Welcome back!")
-  greetingNextChange  DateTime?
-  emailVerificationRequired Boolean  @default(true) 
-  emailVerificationAttempts Int      @default(0)
+  id                        String    @id @default(uuid())
+  name                      String?
+  email                     String    @unique(map: "users_email_key")
+  emailVerified             DateTime?
+  image                     String?
+  role                      Role      @default(STUDENT)
+  isActive                  Boolean   @default(false)
+  lastLoginAt               DateTime?
+  loginCount                Int       @default(0)
+  failedLoginAttempts       Int       @default(0)
+  lastFailedLoginAt         DateTime?
+  accountLocked             Boolean   @default(false)
+  lockedUntil               DateTime?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+  passwordHash              String?
+  greeting                  String?   @default("Welcome back!")
+  greetingNextChange        DateTime?
+  emailVerificationRequired Boolean   @default(true)
+  emailVerificationAttempts Int       @default(0)
+  metadata                  Json?
 
   // Authentication (NextAuth)
   accounts Account[]
@@ -337,15 +338,15 @@ model Teacher {
   lastActivityAt DateTime?
 
   // Relationships
-  userId            String
-  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  instructedCourses Course[]     @relation("CourseInstructor")
-  createdCourses    Course[]     @relation("CourseCreator")
-  assignments       Assignment[]
-   // Search hashes for encrypted field queries
-  emailSearchHash   String? @unique(map: "teachers_email_search_hash_key")
-  phoneSearchHash   String? @unique(map: "teachers_phone_search_hash_key")
-  employeeIdSearchHash String? @unique(map: "teachers_employee_id_search_hash_key")
+  userId               String
+  user                 User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instructedCourses    Course[]     @relation("CourseInstructor")
+  createdCourses       Course[]     @relation("CourseCreator")
+  assignments          Assignment[]
+  // Search hashes for encrypted field queries
+  emailSearchHash      String?      @unique(map: "teachers_email_search_hash_key")
+  phoneSearchHash      String?      @unique(map: "teachers_phone_search_hash_key")
+  employeeIdSearchHash String?      @unique(map: "teachers_employee_id_search_hash_key")
 
   @@unique([userId], map: "teachers_user_id_key")
   @@unique([employeeId], map: "teachers_employee_id_alt_key")

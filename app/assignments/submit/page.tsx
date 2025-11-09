@@ -465,9 +465,9 @@ export default function SubmitAssignmentPage() {
 
                 {/* Animated Deadline Alert */}
                 {dueDateInfo?.isOverdue && (
-                  <div className="animate-pulse-slow bg-gradient-to-r from-red-500/10 to-red-600/10 border-2 border-red-300 rounded-xl p-4 shadow-lg">
+                  <div className="animate-pulse-slow bg-linear-to-r from-red-500/10 to-red-600/10 border-2 border-red-300 rounded-xl p-4 shadow-lg">
                     <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0">
+                      <div className="shrink-0">
                         <div className="relative">
                           <AlertCircle className="h-6 w-6 text-red-600 animate-pulse" />
                           <div className="absolute inset-0 animate-ping">
@@ -498,9 +498,9 @@ export default function SubmitAssignmentPage() {
                 )}
 
                 {dueDateInfo?.isCloseToDeadline && !dueDateInfo.isOverdue && (
-                  <div className="animate-pulse-slow bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-2 border-amber-300 rounded-xl p-4 shadow-lg">
+                  <div className="animate-pulse-slow bg-linear-to-r from-amber-500/10 to-orange-500/10 border-2 border-amber-300 rounded-xl p-4 shadow-lg">
                     <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0">
+                      <div className="shrink-0">
                         <div className="relative">
                           <Clock className="h-6 w-6 text-amber-600 animate-pulse" />
                           <div className="absolute inset-0 animate-ping">
@@ -533,9 +533,9 @@ export default function SubmitAssignmentPage() {
                 {!dueDateInfo?.isOverdue &&
                   !dueDateInfo?.isCloseToDeadline &&
                   dueDateInfo && (
-                    <div className="bg-gradient-to-r from-green-500/5 to-emerald-500/5 border border-green-200 rounded-lg p-4">
+                    <div className="bg-linear-to-r from-green-500/5 to-emerald-500/5 border border-green-200 rounded-lg p-4">
                       <div className="flex items-center gap-3">
-                        <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
+                        <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
                         <div>
                           <p className="text-sm font-medium text-green-800">
                             You have plenty of time
@@ -654,7 +654,7 @@ export default function SubmitAssignmentPage() {
                             key={file.id}
                             className="flex items-center gap-3 p-3 border border-border rounded-lg"
                           >
-                            <Paperclip className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <Paperclip className="h-4 w-4 text-muted-foreground shrink-0" />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-foreground truncate">
                                 {file.file.name}
@@ -742,25 +742,25 @@ export default function SubmitAssignmentPage() {
               </h3>
               <div className="space-y-3 text-sm">
                 <div className="flex items-start gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                  <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
                   <span className="text-muted-foreground">
                     Ensure all required fields are completed
                   </span>
                 </div>
                 <div className="flex items-start gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                  <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
                   <span className="text-muted-foreground">
                     Verify file formats and sizes before uploading
                   </span>
                 </div>
                 <div className="flex items-start gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                  <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
                   <span className="text-muted-foreground">
                     Review your submission before finalizing
                   </span>
                 </div>
                 <div className="flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
                   <span className="text-muted-foreground">
                     Submissions cannot be edited after submission
                   </span>

@@ -1,16 +1,19 @@
 // app/api/assignments/[id]/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { AssignmentService } from "@/lib/services/students/assignmentService";
 
+// 1. UPDATE: The params object is now a Promise
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id } = params;
+    // 2. UPDATE: Await the params object to resolve it before destructuring
+    const { id } = await params;
 
     if (!id) {
       return NextResponse.json(
@@ -57,3 +60,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     );
   }
 }
+
+// If you have other methods (PUT, DELETE), apply the same fix there too!
+// For example:
+/*
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  try {
+    const { id } = await params; // <-- Await here as well
+    await AssignmentService.deleteAssignment(id);
+    return NextResponse.json({ message: "Assignment deleted successfully" });
+  } catch (error) {
+    // ... error handling
+  }
+}
+*/
++98
++9

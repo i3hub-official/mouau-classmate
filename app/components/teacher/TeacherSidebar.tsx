@@ -19,7 +19,6 @@ import {
   Calendar,
   Users,
 } from "lucide-react";
-import { TeacherAuthService } from "@/lib/services/teachers";
 
 interface TeacherSidebarProps {
   isOpen: boolean;
@@ -116,7 +115,7 @@ export function TeacherSidebar({ isOpen, onClose, user }: TeacherSidebarProps) {
 
   const handleSignOut = async () => {
     try {
-      await TeacherAuthService.signOut();
+      // ADD SIGNOUT HANDLER LOGIC HERE
       window.location.href = "/";
     } catch (error) {
       console.error("Sign out error:", error);
@@ -257,7 +256,7 @@ export function TeacherSidebar({ isOpen, onClose, user }: TeacherSidebarProps) {
             <Settings className="h-5 w-5" />
             Settings
           </Link>
-          <button 
+          <button
             onClick={handleSignOut}
             className="w-full flex items-center gap-3 px-3 py-2 text-foreground hover:bg-muted rounded-lg transition-colors"
           >

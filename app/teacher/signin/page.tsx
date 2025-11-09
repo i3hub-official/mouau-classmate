@@ -45,7 +45,7 @@ export default function TeacherSignInPage() {
     const checkAuth = async () => {
       try {
         const user = await TeacherAuthService.getCurrentUser();
-        if (user && (user.role === "TEACHER")) {
+        if (user && user.role === "TEACHER") {
           router.replace("/teacher/dashboard");
         }
       } catch (error) {
@@ -132,10 +132,12 @@ export default function TeacherSignInPage() {
         if (response.token) {
           // Store in localStorage for client-side access
           localStorage.setItem("auth-token", response.token);
-          
+
           // Also store in cookie for server-side access
-          document.cookie = `auth-token=${response.token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Strict; Secure`;
-          
+          document.cookie = `auth-token=${response.token}; path=/; max-age=${
+            60 * 60 * 24 * 7
+          }; SameSite=Strict; Secure`;
+
           if (formData.rememberMe) {
             localStorage.setItem("remember_email", formData.email);
           } else {
@@ -188,7 +190,11 @@ export default function TeacherSignInPage() {
     // Check for remembered email
     const rememberedEmail = localStorage.getItem("remember_email");
     if (rememberedEmail) {
-      setFormData((prev) => ({ ...prev, email: rememberedEmail, rememberMe: true }));
+      setFormData((prev) => ({
+        ...prev,
+        email: rememberedEmail,
+        rememberMe: true,
+      }));
     }
   }, []);
 
@@ -343,7 +349,9 @@ export default function TeacherSignInPage() {
                   <input
                     type={showPassword ? "text" : "password"}
                     value={formData.password}
-                    onChange={(e) => handleInputChange("password", e.target.value)}
+                    onChange={(e) =>
+                      handleInputChange("password", e.target.value)
+                    }
                     placeholder="Enter your password"
                     className={`w-full pl-10 pr-12 py-3 bg-background border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all ${
                       errors.password
@@ -379,7 +387,9 @@ export default function TeacherSignInPage() {
                   <input
                     type="checkbox"
                     checked={formData.rememberMe}
-                    onChange={(e) => handleInputChange("rememberMe", e.target.checked)}
+                    onChange={(e) =>
+                      handleInputChange("rememberMe", e.target.checked)
+                    }
                     className="w-4 h-4 text-primary bg-background border-border rounded focus:ring-primary focus:ring-2"
                     disabled={isLocked || isLoading}
                   />
