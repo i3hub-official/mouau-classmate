@@ -1,7 +1,6 @@
 // app/teacher/dashboard/page.tsx
 "use client";
 import { useEffect, useState } from "react";
-import { TeacherDashboardService } from "@/lib/services/teachers/dashboardService";
 import {
   BookOpen,
   Users,
@@ -36,20 +35,7 @@ export default function TeacherDashboardPage() {
   }, []);
 
   const loadDashboardData = async () => {
-    try {
-      setLoading(true);
-      // In a real app, you'd get teacherId from auth context
-      const teacherId = "temp-teacher-id";
-      const dashboardData = await TeacherDashboardService.getDashboardData(
-        teacherId
-      );
-      setStats(dashboardData);
-    } catch (err) {
-      setError("Failed to load dashboard data");
-      console.error("Dashboard error:", err);
-    } finally {
-      setLoading(false);
-    }
+   
   };
 
   if (loading) {

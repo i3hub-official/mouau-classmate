@@ -21,8 +21,6 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { ThemeToggle } from "@/app/components/theme-toggle";
-import { UserService } from "@/lib/services/userService";
-import { TeacherAuthService } from "@/lib/services/teachers/authService";
 
 export default function TeacherSignInPage() {
   const [formData, setFormData] = useState({
@@ -39,22 +37,6 @@ export default function TeacherSignInPage() {
   const [showSuccess, setShowSuccess] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
-
-  useEffect(() => {
-    // Check if user is already authenticated
-    const checkAuth = async () => {
-      try {
-        const user = await TeacherAuthService.getCurrentUser();
-        if (user && user.role === "TEACHER") {
-          router.replace("/teacher/dashboard");
-        }
-      } catch (error) {
-        // User not authenticated, continue with sign in
-      }
-    };
-
-    checkAuth();
-  }, [router]);
 
   useEffect(() => {
     // Handle lockout timer
@@ -118,64 +100,6 @@ export default function TeacherSignInPage() {
 
     setIsLoading(true);
     setShowSuccess(false);
-
-    try {
-      const response = await TeacherAuthService.login({
-        email: formData.email,
-        password: formData.password,
-        ipAddress: "", // You can get this from a service if needed
-        userAgent: navigator.userAgent,
-      });
-
-      if (response.success) {
-        // Store token if provided
-        if (response.token) {
-          // Store in localStorage for client-side access
-          localStorage.setItem("auth-token", response.token);
-
-          // Also store in cookie for server-side access
-          document.cookie = `auth-token=${response.token}; path=/; max-age=${
-            60 * 60 * 24 * 7
-          }; SameSite=Strict; Secure`;
-
-          if (formData.rememberMe) {
-            localStorage.setItem("remember_email", formData.email);
-          } else {
-            localStorage.removeItem("remember_email");
-          }
-        }
-
-        setShowSuccess(true);
-        // Redirect to teacher dashboard after a short delay
-        setTimeout(() => {
-          router.replace("/teacher/dashboard");
-        }, 1500);
-      } else {
-        // Handle failed login
-        const newAttempts = loginAttempts + 1;
-        setLoginAttempts(newAttempts);
-
-        if (newAttempts >= 5) {
-          // Lock account for 30 minutes
-          setIsLocked(true);
-          setLockTimeRemaining(30 * 60); // 30 minutes in seconds
-        }
-
-        setErrors({
-          submit: response.message || "Invalid email or password",
-        });
-      }
-    } catch (error) {
-      console.error("Login error:", error);
-      setErrors({
-        submit:
-          error instanceof Error
-            ? error.message
-            : "Login failed. Please try again.",
-      });
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   const handleForgotPassword = () => {

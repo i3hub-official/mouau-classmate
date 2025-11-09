@@ -3,8 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { TeacherAssignmentService } from "@/lib/services/teachers/assignmentService";
-import { TeacherCourseService } from "@/lib/services/teachers/courseService";
 import { ArrowLeft, Save, Calendar, BookOpen } from "lucide-react";
 
 interface Course {
@@ -37,9 +35,7 @@ export default function CreateAssignmentPage() {
 
   const loadCourses = async () => {
     try {
-      const teacherId = "temp-teacher-id";
-      const response = await TeacherCourseService.getTeacherCourses(teacherId);
-      setCourses(response.courses);
+      // IMPLEMENT COURSES LOADING LOGIC HERE
     } catch (error) {
       console.error("Failed to load courses:", error);
     }
@@ -60,19 +56,16 @@ export default function CreateAssignmentPage() {
         throw new Error("Due date must be in the future");
       }
 
-      const teacherId = "temp-teacher-id";
-      await TeacherAssignmentService.createAssignment({
-        title: formData.title,
-        description: formData.description,
-        instructions: formData.instructions,
-        dueDate: dueDateTime,
-        maxScore: formData.maxScore,
-        courseId: formData.courseId,
-        teacherId,
-        allowedAttempts: formData.allowedAttempts,
-        assignmentUrl: formData.assignmentUrl || undefined,
-        allowLateSubmission: formData.allowLateSubmission,
-      });
+      // title: formData.title,
+      // description: formData.description,
+      // instructions: formData.instructions,
+      // dueDate: dueDateTime,
+      // maxScore: formData.maxScore,
+      // courseId: formData.courseId,
+      // teacherId,
+      // allowedAttempts: formData.allowedAttempts,
+      // assignmentUrl: formData.assignmentUrl || undefined,
+      // allowLateSubmission: formData.allowLateSubmission,
 
       router.push("/teacher/assignments");
     } catch (error: any) {
@@ -83,13 +76,13 @@ export default function CreateAssignmentPage() {
   };
 
   const handleChange = (field: string, value: string | number | boolean) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: "" }));
+      setErrors((prev) => ({ ...prev, [field]: "" }));
     }
   };
 
-  const minDate = new Date().toISOString().split('T')[0];
+  const minDate = new Date().toISOString().split("T")[0];
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -136,7 +129,7 @@ export default function CreateAssignmentPage() {
                 required
               >
                 <option value="">Select a course</option>
-                {courses.map(course => (
+                {courses.map((course) => (
                   <option key={course.id} value={course.id}>
                     {course.code} - {course.title}
                   </option>
@@ -194,7 +187,10 @@ export default function CreateAssignmentPage() {
                   Due Date *
                 </label>
                 <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={16} />
+                  <Calendar
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground"
+                    size={16}
+                  />
                   <input
                     type="date"
                     value={formData.dueDate}
@@ -229,7 +225,9 @@ export default function CreateAssignmentPage() {
                 <input
                   type="number"
                   value={formData.maxScore}
-                  onChange={(e) => handleChange("maxScore", parseInt(e.target.value))}
+                  onChange={(e) =>
+                    handleChange("maxScore", parseInt(e.target.value))
+                  }
                   min="1"
                   max="1000"
                   className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-background"
@@ -243,7 +241,9 @@ export default function CreateAssignmentPage() {
                 </label>
                 <select
                   value={formData.allowedAttempts}
-                  onChange={(e) => handleChange("allowedAttempts", parseInt(e.target.value))}
+                  onChange={(e) =>
+                    handleChange("allowedAttempts", parseInt(e.target.value))
+                  }
                   className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-background"
                 >
                   <option value={1}>1 Attempt</option>
@@ -277,7 +277,9 @@ export default function CreateAssignmentPage() {
                 <input
                   type="checkbox"
                   checked={formData.allowLateSubmission}
-                  onChange={(e) => handleChange("allowLateSubmission", e.target.checked)}
+                  onChange={(e) =>
+                    handleChange("allowLateSubmission", e.target.checked)
+                  }
                   className="rounded border-border text-primary focus:ring-primary/20"
                 />
                 <span className="text-sm font-medium text-foreground">
@@ -285,7 +287,8 @@ export default function CreateAssignmentPage() {
                 </span>
               </label>
               <p className="text-sm text-muted-foreground">
-                When enabled, students can submit after the deadline (may be subject to penalties)
+                When enabled, students can submit after the deadline (may be
+                subject to penalties)
               </p>
             </div>
           </div>

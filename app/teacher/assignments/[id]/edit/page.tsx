@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { TeacherAssignmentService } from "@/lib/services/teachers/assignmentService";
 import { ArrowLeft, Save, Calendar, BookOpen } from "lucide-react";
 
 export default function EditAssignmentPage() {
@@ -31,66 +30,12 @@ export default function EditAssignmentPage() {
     loadAssignment();
   }, [assignmentId]);
 
-  const loadAssignment = async () => {
-    try {
-      const teacherId = "temp-teacher-id";
-      const assignment =
-        await TeacherAssignmentService.getAssignmentWithSubmissions(
-          assignmentId,
-          teacherId
-        );
-
-      const dueDate = new Date(assignment.dueDate);
-      setFormData({
-        title: assignment.title,
-        description: assignment.description || "",
-        instructions: assignment.instructions || "",
-        dueDate: dueDate.toISOString().split("T")[0],
-        dueTime: dueDate.toTimeString().slice(0, 5),
-        maxScore: assignment.maxScore,
-        allowedAttempts: assignment.allowedAttempts,
-        assignmentUrl: assignment.assignmentUrl || "",
-        allowLateSubmission: assignment.allowLateSubmission,
-        isPublished: assignment.isPublished,
-      });
-    } catch (error) {
-      console.error("Failed to load assignment:", error);
-      setErrors({ submit: "Failed to load assignment details" });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const loadAssignment = async () => {};
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setErrors({});
-
-    try {
-      const dueDateTime = new Date(`${formData.dueDate}T${formData.dueTime}`);
-      if (dueDateTime <= new Date()) {
-        throw new Error("Due date must be in the future");
-      }
-
-      const teacherId = "temp-teacher-id";
-      await TeacherAssignmentService.updateAssignment(assignmentId, teacherId, {
-        title: formData.title,
-        description: formData.description,
-        instructions: formData.instructions,
-        dueDate: dueDateTime,
-        maxScore: formData.maxScore,
-        allowedAttempts: formData.allowedAttempts,
-        assignmentUrl: formData.assignmentUrl || undefined,
-        allowLateSubmission: formData.allowLateSubmission,
-        isPublished: formData.isPublished,
-      });
-
-      router.push(`/teacher/assignments/${assignmentId}`);
-    } catch (error: any) {
-      setErrors({ submit: error.message });
-    } finally {
-      setSaving(false);
-    }
   };
 
   const handleChange = (field: string, value: string | number | boolean) => {

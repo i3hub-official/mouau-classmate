@@ -2,8 +2,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { TeacherCourseService } from "@/lib/services/teachers/courseService";
-import { TeacherAssignmentService } from "@/lib/services/teachers/assignmentService";
+
 import { ArrowLeft, Calendar, FileText, Clock, CheckCircle, AlertCircle, BarChart3, Plus, Users, Edit, Eye, EyeOff } from "lucide-react";
 
 interface Assignment {
@@ -40,35 +39,11 @@ export default function TeacherCourseAssignmentsPage() {
   }, [courseId]);
 
   const loadCourseAndAssignments = async () => {
-    try {
-      const teacherId = "temp-teacher-id"; // Replace with actual teacher ID from auth
-      const courseData = await TeacherCourseService.getCourseDetails(courseId, teacherId);
-      
-      if (courseData) {
-        setCourse(courseData);
-        setAssignments(courseData.assignments || []);
-      }
-    } catch (error) {
-      console.error("Failed to load course assignments:", error);
-    } finally {
-      setLoading(false);
-    }
+    
   };
 
   const toggleAssignmentPublish = async (assignmentId: string, publish: boolean) => {
-    try {
-      const teacherId = "temp-teacher-id"; // Replace with actual teacher ID from auth
-      await TeacherAssignmentService.toggleAssignmentPublish(assignmentId, teacherId, publish);
-      
-      // Update local state
-      setAssignments(prev => prev.map(assignment => 
-        assignment.id === assignmentId 
-          ? { ...assignment, isPublished: publish }
-          : assignment
-      ));
-    } catch (error) {
-      console.error("Failed to toggle assignment publish status:", error);
-    }
+   
   };
 
   const formatDate = (date: Date) => {

@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { TeacherCourseService } from "@/lib/services/teachers/courseService";
 import { ArrowLeft, Save, BookOpen, Users, Calendar, FileText } from "lucide-react";
 
 export default function EditCoursePage() {
@@ -30,19 +29,7 @@ export default function EditCoursePage() {
 
   const loadCourse = async () => {
     try {
-      const teacherId = "temp-teacher-id"; // Replace with actual teacher ID from auth
-      const course = await TeacherCourseService.getCourseDetails(courseId, teacherId);
       
-      setFormData({
-        code: course.code,
-        title: course.title,
-        description: course.description || "",
-        credits: course.credits,
-        level: course.level,
-        semester: course.semester,
-        courseOutline: course.courseOutline || "",
-        isActive: course.isActive,
-      });
     } catch (error) {
       console.error("Failed to load course:", error);
       setErrors({ submit: "Failed to load course details" });
@@ -56,16 +43,7 @@ export default function EditCoursePage() {
     setSaving(true);
     setErrors({});
 
-    try {
-      const teacherId = "temp-teacher-id"; // Replace with actual teacher ID from auth
-      await TeacherCourseService.updateCourse(courseId, teacherId, formData);
-      
-      router.push(`/teacher/courses/${courseId}`);
-    } catch (error: any) {
-      setErrors({ submit: error.message });
-    } finally {
-      setSaving(false);
-    }
+    
   };
 
   const handleChange = (field: string, value: string | number | boolean) => {

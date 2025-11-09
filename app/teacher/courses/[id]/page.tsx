@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { TeacherCourseService } from "@/lib/services/teachers/courseService";
+
 import {
   ArrowLeft,
   BookOpen,
@@ -48,29 +48,7 @@ export default function CourseDetailsPage() {
   }, [courseId]);
 
   const loadCourseDetails = async () => {
-    try {
-      const teacherId = "temp-teacher-id";
-      const courseDetails = await TeacherCourseService.getCourseDetails(
-        courseId,
-        teacherId
-      );
-      // Ensure description is undefined if null
-      setCourse({
-        ...courseDetails,
-        description:
-          courseDetails.description === null
-            ? undefined
-            : courseDetails.description,
-        courseOutline:
-          courseDetails.courseOutline === null
-            ? undefined
-            : courseDetails.courseOutline,
-      });
-    } catch (error) {
-      console.error("Failed to load course details:", error);
-    } finally {
-      setLoading(false);
-    }
+   
   };
 
   if (loading) {

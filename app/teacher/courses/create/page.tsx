@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { TeacherCourseService } from "@/lib/services/teachers/courseService";
 import { ArrowLeft, Save, BookOpen } from "lucide-react";
 
 export default function CreateCoursePage() {
@@ -25,23 +24,7 @@ export default function CreateCoursePage() {
     setLoading(true);
     setErrors({});
 
-    try {
-      const teacherId = "temp-teacher-id";
-      await TeacherCourseService.createCourse({
-        ...formData,
-        instructorId: teacherId,
-      });
-
-      router.push("/teacher/courses");
-    } catch (error: any) {
-      if (error.message.includes("already exists")) {
-        setErrors({ code: error.message });
-      } else {
-        setErrors({ submit: error.message });
-      }
-    } finally {
-      setLoading(false);
-    }
+   
   };
 
   const handleChange = (field: string, value: string | number) => {

@@ -2,8 +2,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { TeacherCourseService } from "@/lib/services/teachers/courseService";
-import { TeacherScheduleService } from "@/lib/services/teachers/scheduleService";
 import {
   ArrowLeft,
   Play,
@@ -45,54 +43,11 @@ export default function TeacherCourseLecturesPage() {
   }, [courseId]);
 
   const loadCourseAndLectures = async () => {
-    try {
-      const teacherId = "temp-teacher-id"; // Replace with actual teacher ID from auth
-      const courseData = await TeacherCourseService.getCourseDetails(
-        courseId,
-        teacherId
-      );
-
-      if (courseData) {
-        setCourse(courseData);
-        setLectures(
-          (courseData.lectures || []).map((lecture: any) => ({
-            ...lecture,
-            duration: lecture.duration ?? 0,
-            submissions: lecture.submissions ?? [],
-          }))
-        );
-      }
-    } catch (error) {
-      console.error("Failed to load course lectures:", error);
-    } finally {
-      setLoading(false);
-    }
+    
   };
 
   const toggleLecturePublish = async (lectureId: string, publish: boolean) => {
-    try {
-      const teacherId = "temp-teacher-id"; // Replace with actual teacher ID from auth
-      await TeacherScheduleService.toggleLecturePublish(
-        lectureId,
-        teacherId,
-        publish
-      );
-
-      // Update local state
-      setLectures((prev) =>
-        prev.map((lecture) =>
-          lecture.id === lectureId
-            ? {
-                ...lecture,
-                isPublished: publish,
-                publishedAt: publish ? new Date() : null,
-              }
-            : lecture
-        )
-      );
-    } catch (error) {
-      console.error("Failed to toggle lecture publish status:", error);
-    }
+   
   };
 
   const formatDuration = (minutes: number) => {

@@ -2,7 +2,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { TeacherCourseService } from "@/lib/services/teachers/courseService";
+
 import {
   Plus,
   Search,
@@ -49,26 +49,7 @@ export default function TeacherCoursesPage() {
   }, []);
 
   const loadCourses = async () => {
-    try {
-      const teacherId = "temp-teacher-id";
-      const response = await TeacherCourseService.getTeacherCourses(teacherId);
-      setCourses(
-        response.courses.map((course: any) => ({
-          ...course,
-          description: course.description === null ? undefined : course.description,
-          stats: {
-            ...course.stats,
-            // If your API returns 'pendingSubmissions' instead of 'totalSubmissions', map it:
-            totalSubmissions: course.stats.totalSubmissions ?? course.stats.pendingSubmissions ?? 0,
-            // Optionally remove 'pendingSubmissions' if not needed
-          },
-        }))
-      );
-    } catch (error) {
-      console.error("Failed to load courses:", error);
-    } finally {
-      setLoading(false);
-    }
+  
   };
 
   const filteredCourses = courses.filter((course) => {
