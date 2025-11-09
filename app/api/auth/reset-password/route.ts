@@ -3,7 +3,7 @@ import {
   StudentRegistrationService,
   ValidationError,
   StudentRegistrationError,
-} from "@/lib/services/students/studentRegistrationService";
+} from "@/lib/services/student/studentRegistrationService";
 
 export async function POST(request: NextRequest) {
   try {

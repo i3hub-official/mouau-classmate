@@ -5,7 +5,7 @@ import { Bell, Check, Trash2, ExternalLink, Loader, X } from "lucide-react";
 import {
   NotificationService,
   Notification,
-} from "@/lib/services/students/notificationService";
+} from "@/lib/services/student/notificationService";
 
 interface NotificationDropdownProps {
   isOpen: boolean;

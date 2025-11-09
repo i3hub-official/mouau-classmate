@@ -58,7 +58,7 @@ export default function SignInPage() {
 
       // Redirect to dashboard after success
       setTimeout(() => {
-        router.push("/dashboard");
+        router.push("/student/dashboard");
         router.refresh(); // Refresh to update auth state
       }, 1500);
     } catch (err) {

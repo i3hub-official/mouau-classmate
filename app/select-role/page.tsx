@@ -17,7 +17,7 @@ import {
   ChevronRight,
   User,
   LogOut,
-  Settings,
+  Home,
   Award,
   LogIn,
   UserPlus,
@@ -39,7 +39,7 @@ const isSessionStorageAvailable = (): boolean => {
 };
 
 // In-memory storage
-let inMemoryRole: { role: string; timestamp: number } | null = null;
+let inMemoryRoleData: { role: string; timestamp: number } | null = null;
 
 const setRoleSelection = (role: string) => {
   const data = {
@@ -48,7 +48,7 @@ const setRoleSelection = (role: string) => {
   };
 
   // Store in memory
-  inMemoryRole = data;
+  inMemoryRoleData = data;
 
   // Also store in sessionStorage if available
   if (isSessionStorageAvailable()) {
@@ -87,7 +87,7 @@ export default function SelectRolePage() {
     setTimeout(() => setSigningOut(false), 1000);
   };
 
-  // Get the appropriate navigation URL based on selections
+  // Get appropriate navigation URL based on selections
   const getNavigationUrl = () => {
     if (!selectedRole) return "#";
     return selectedRole === "lecturer" ? "/teacher/signup" : "/auth/signup";
@@ -138,6 +138,14 @@ export default function SelectRolePage() {
 
           <div className="flex items-center gap-3 sm:gap-4">
             <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 md:gap-2 text-xs md:text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Home size={14} className="md:w-4 md:h-4" />
+              <span className="hidden sm:inline">Back to Home</span>
+              <span className="sm:hidden">Home</span>
+            </Link>
+            <Link
               href="/auth/signin"
               className="hidden md:block px-4 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
             >
@@ -174,74 +182,95 @@ export default function SelectRolePage() {
             </p>
           </div>
 
-          {/* Security Features Highlight */}
-          <div className="bg-primary/5 rounded-2xl p-6 mb-12 border border-primary/20">
-            <div className="text-center">
-              <h3 className="text-lg font-semibold text-foreground mb-3">
-                🔒 Secure Registration System
-              </h3>
-              <div className="grid md:grid-cols-2 gap-4 text-sm text-muted-foreground">
-                <div className="flex items-center justify-center gap-2">
-                  <Shield className="h-4 w-4 text-primary" />
-                  <span>Automatic role validation</span>
-                </div>
-                <div className="flex items-center justify-center gap-2">
-                  <UserCheck className="h-4 w-4 text-primary" />
-                  <span>University email protection</span>
-                </div>
-                <div className="flex items-center justify-center gap-2">
-                  <FileText className="h-4 w-4 text-primary" />
-                  <span>Matric number verification</span>
-                </div>
-                <div className="flex items-center justify-center gap-2">
-                  <Award className="h-4 w-4 text-primary" />
-                  <span>Unique identifier system</span>
-                </div>
-              </div>
+          {/* Super Minimal Security Badges with Subtle Flair */}
+          <div className="text-center mb-12">
+            <div className="inline-flex flex-wrap justify-center gap-2 mb-4">
+              {[
+                { icon: Shield, text: "Secure", variant: "primary" },
+                { icon: UserCheck, text: "Verified", variant: "accent" },
+                { icon: FileText, text: "Validated", variant: "primary" },
+                { icon: Award, text: "Trusted", variant: "accent" },
+              ].map((badge, i) => {
+                const Icon = badge.icon;
+                const isPrimary = badge.variant === "primary";
+
+                return (
+                  <div
+                    key={i}
+                    className={`
+            group relative inline-flex items-center gap-1.5 px-2.5 py-1.5 
+            rounded-lg border text-xs font-medium backdrop-blur-sm 
+            transition-all duration-300 
+            hover:scale-105 hover:shadow-sm
+            ${
+              isPrimary
+                ? "bg-primary/10 border-primary/20 text-primary hover:bg-primary/15"
+                : "bg-accent/10 border-accent/20 text-accent-foreground hover:bg-accent/15"
+            }
+          `}
+                  >
+                    {/* subtle animated border shimmer */}
+                    <span
+                      className={`absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-sm ${
+                        isPrimary ? "bg-primary/10" : "bg-accent/10"
+                      }`}
+                    ></span>
+
+                    {/* icon + text */}
+                    <Icon
+                      className={`relative z-10 h-3.5 w-3.5 transition-transform duration-300 group-hover:scale-110 ${
+                        isPrimary ? "text-primary" : "text-accent-foreground"
+                      }`}
+                    />
+                    <span className="relative z-10">{badge.text}</span>
+                  </div>
+                );
+              })}
             </div>
+
+            <p className="text-muted-foreground text-sm">
+              Layered protection — simple, verified, and trusted.
+            </p>
           </div>
 
-          {/* Progress Steps - Simplified */}
+          {/* Minimalist Animated Dots */}
           <div className="flex justify-center mb-12">
-            <div className="flex items-center gap-4 sm:gap-8">
-              <div
-                className={`flex flex-col items-center transition-colors ${
-                  selectedRole ? "text-primary" : "text-muted-foreground"
-                }`}
-              >
+            <div className="flex items-center gap-8">
+              {/* Step 1 */}
+              <div className="flex flex-col items-center gap-3">
                 <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center border-2 font-semibold transition-all ${
+                  className={`w-4 h-4 rounded-full transition-all duration-500 ${
                     selectedRole
-                      ? "bg-primary border-primary text-primary-foreground scale-110"
-                      : "border-border"
+                      ? "bg-primary scale-125 shadow-lg shadow-primary/25"
+                      : "bg-primary scale-100 animate-pulse"
                   }`}
-                >
-                  1
-                </div>
-                <span className="text-xs sm:text-sm mt-2 font-medium">
+                ></div>
+                <span className="text-sm font-medium text-primary">
                   Select Role
                 </span>
               </div>
+
+              {/* Connector */}
               <div
-                className={`w-12 sm:w-16 h-1 rounded-full transition-colors ${
-                  selectedRole ? "bg-primary" : "bg-border"
+                className={`w-16 h-0.5 rounded-full transition-colors duration-500 ${
+                  selectedRole ? "bg-primary" : "bg-muted"
                 }`}
               ></div>
-              <div
-                className={`flex flex-col items-center transition-colors ${
-                  selectedRole ? "text-primary" : "text-muted-foreground"
-                }`}
-              >
+
+              {/* Step 2 */}
+              <div className="flex flex-col items-center gap-3">
                 <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center border-2 font-semibold transition-all ${
+                  className={`w-4 h-4 rounded-full transition-all duration-500 ${
                     selectedRole
-                      ? "bg-primary border-primary text-primary-foreground scale-110"
-                      : "border-border"
+                      ? "bg-primary scale-125 shadow-lg shadow-primary/25"
+                      : "bg-muted scale-100"
+                  }`}
+                ></div>
+                <span
+                  className={`text-sm font-medium transition-colors ${
+                    selectedRole ? "text-primary" : "text-muted-foreground"
                   }`}
                 >
-                  2
-                </div>
-                <span className="text-xs sm:text-sm mt-2 font-medium">
                   Register
                 </span>
               </div>
@@ -418,7 +447,7 @@ export default function SelectRolePage() {
               className={`px-8 py-3.5 font-semibold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 group ${
                 selectedRole
                   ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:scale-105 active:scale-100"
-                  : "bg-muted text-muted-foreground cursor-not-allowed"
+                  : "bg-muted text-muted-foreground cursor-not-allowed pointer-events-none"
               }`}
             >
               Continue to Registration

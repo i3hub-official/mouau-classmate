@@ -15,7 +15,7 @@ import { ThemeToggle } from "@/app/components/theme-toggle";
 import { SignOutModal } from "@/app/components/students/SignOutModal";
 import { NotificationDropdown } from "@/app/components/students/NotificationDropdown";
 import { UserService } from "@/lib/services/userService";
-import { NotificationService } from "@/lib/services/students/notificationService";
+import { NotificationService } from "@/lib/services/student/notificationService";
 
 interface DashboardHeaderProps {
   onSignOut?: () => Promise<void>;
@@ -41,7 +41,7 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
 
   // Navigation items with their paths
   const navItems = [
-    { href: "/dashboard", label: "Dashboard" },
+    { href: "/student/dashboard", label: "Dashboard" },
     { href: "/courses", label: "Courses" },
     { href: "/assignments", label: "Assignments" },
     { href: "/schedule", label: "Schedule" },
@@ -83,8 +83,8 @@ export function DashboardHeader({ onSignOut }: DashboardHeaderProps) {
 
   // Check if a nav item is active
   const isActive = (href: string) => {
-    if (href === "/dashboard") {
-      return pathname === "/dashboard";
+    if (href === "/student/dashboard") {
+      return pathname === "/student/dashboard";
     }
     return pathname.startsWith(href);
   };

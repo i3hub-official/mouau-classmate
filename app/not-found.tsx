@@ -17,8 +17,8 @@ export default function NotFound() {
   const popularLinks = [
     { href: "/", label: "Home", icon: Home },
     { href: "/auth/signin", label: "Sign In", icon: Users },
-    { href: "/courses", label: "Courses", icon: BookOpen },
-    { href: "/schedule", label: "Schedule", icon: Calendar },
+    { href: "/student/courses", label: "Courses", icon: BookOpen },
+    { href: "/student/schedule", label: "Schedule", icon: Calendar },
     { href: "/support", label: "Support", icon: Mail },
   ];
 

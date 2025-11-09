@@ -34,7 +34,7 @@ export default function HomePage() {
         if (user && user.id) {
           // User is authenticated, redirect to the dashboard
           // Use replace so the user can't click "back" to the landing page
-          router.replace("/dashboard");
+          router.replace("/student/dashboard");
         } else {
           // User is not authenticated, show the landing page
           setLoading(false);

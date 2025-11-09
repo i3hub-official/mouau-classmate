@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { StudentRegistrationService } from "@/lib/services/students/studentRegistrationService";
+import { StudentRegistrationService } from "@/lib/services/student/studentRegistrationService";
 import {
   ValidationError,
   StudentRegistrationError,
-} from "@/lib/services/students/studentRegistrationService";
+} from "@/lib/services/student/studentRegistrationService";
 
 export async function POST(request: NextRequest) {
   try {
