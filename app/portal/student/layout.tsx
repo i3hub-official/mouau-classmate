@@ -1,37 +1,19 @@
-// File: app/teacher/layout.tsx
+// File: app/student/layout.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { TeacherSidebar } from "@/app/components/teacher/TeacherSidebar";
-import { TeacherHeader } from "@/app/components/teacher/TeacherHeader";
+import { StudentSidebar } from "@/app/components/student/StudentSidebar";
+import { StudentHeader } from "@/app/components/student/StudentHeader";
+import { StudentProfile } from "@/lib/types/student/index";
 import {
   useRoleProtection,
   clearRoleSelection,
   type UserRole,
 } from "@/hooks/useRoleProtection";
 
-// Define proper types
-interface TeacherUser {
-  id: string;
-  name: string;
-  email: string;
-  role: "TEACHER" | "LECTURER" | "STUDENT" | "ADMIN";
-  isActive: boolean;
-  lastLoginAt?: Date;
-  profile?: {
-    firstName: string;
-    lastName: string;
-    department: string;
-    employeeId: string;
-    college: string;
-    academicRank: string;
-    photo?: string;
-  };
-}
-
 interface AuthState {
-  user: TeacherUser | null;
+  user: StudentProfile | null;
   isLoading: boolean;
   error: string | null;
   isAuthenticated: boolean;
@@ -43,11 +25,11 @@ const SESSION_TIMEOUT = 60 * 60 * 1000; // 1 hour in milliseconds
 // In-memory storage for session data
 let sessionData = {
   token: null as string | null,
-  user: null as TeacherUser | null,
+  user: null as StudentProfile | null,
   lastActivity: Date.now(),
 };
 
-export default function TeacherLayout({
+export default function StudentLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -110,7 +92,7 @@ export default function TeacherLayout({
   };
 
   // Mock authentication service
-  const authenticateStudent = async (): Promise<TeacherUser> => {
+  const authenticateStudent = async (): Promise<StudentProfile> => {
     // Check in-memory storage first
     if (sessionData.user && sessionData.token && !checkSessionExpiry()) {
       updateLastActivity();
@@ -127,8 +109,8 @@ export default function TeacherLayout({
       throw new Error("No authentication token found");
     }
 
-    // Mock API call to verify teacher
-    const response = await fetch("/api/auth/teacher/verify", {
+    // Mock API call to verify student
+    const response = await fetch("/api/auth/student/verify", {
       method: "GET",
       headers: {
         Authorization: `Bearer ${authToken}`,
@@ -140,7 +122,7 @@ export default function TeacherLayout({
       throw new Error("Authentication failed");
     }
 
-    const userData: TeacherUser = await response.json();
+    const userData: StudentProfile = await response.json();
 
     // Validate user role
     if (userData.role !== "STUDENT") {
@@ -187,7 +169,7 @@ export default function TeacherLayout({
             }
           }, 15000);
 
-          const user = await authenticateTeacher();
+          const user = await authenticateStudent();
 
           if (!isMounted) return;
           clearTimeout(timeoutId);
@@ -200,8 +182,8 @@ export default function TeacherLayout({
           });
 
           // If authenticated user is on signup page, redirect to dashboard
-          if (pathname === "/portal/teacher/signup") {
-            router.push("/teacher/student/dashboard");
+          if (pathname === "/portal/student/signup") {
+            router.push("/student/student/dashboard");
             return;
           }
         } catch (error) {
@@ -241,7 +223,7 @@ export default function TeacherLayout({
           // Only redirect to login if we're on a protected path
           if (
             isAuthRequiredPath(pathname) &&
-            pathname !== "/portal/teacher/signup"
+            pathname !== "/portal/student/signup"
           ) {
             setTimeout(() => {
               router.push(
@@ -369,7 +351,7 @@ export default function TeacherLayout({
     );
   }
 
-  // Handle unauthorized role access to teacher routes
+  // Handle unauthorized role access to student routes
   if (!hasValidRole && !authState.isAuthenticated) {
     // The useRoleProtection hook will automatically redirect, but we show a message meanwhile
     return (
@@ -429,7 +411,7 @@ export default function TeacherLayout({
           </h2>
           <p className="text-muted-foreground mb-4">
             {authState.error ||
-              "Please sign in to access the teacher dashboard."}
+              "Please sign in to access the student dashboard."}
           </p>
 
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -462,7 +444,7 @@ export default function TeacherLayout({
     return null;
   }
 
-  // Render full teacher layout for authenticated users on protected routes
+  // Render full student layout for authenticated users on protected routes
   return (
     <div className="flex h-screen bg-background">
       {/* Session Warning Modal */}
@@ -513,7 +495,7 @@ export default function TeacherLayout({
         </div>
       )}
 
-      <TeacherSidebar
+      <StudentSidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         user={authState.user}
@@ -521,11 +503,29 @@ export default function TeacherLayout({
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <TeacherHeader
-          onMenuClick={() => setSidebarOpen(true)}
-          user={authState.user}
-          onLogout={handleLogout}
-        />
+        {authState.user && (
+          <StudentHeader
+            onMenuClick={() => setSidebarOpen(true)}
+            user={{
+              // Map StudentProfile to StudentProfile
+              matricNumber: authState.user.id || "",
+              firstName: authState.user.firstName || "",
+              lastName: authState.user.lastName || "",
+              phone: "", // Provide default or fetch from elsewhere
+              department: authState.user.department || "",
+              college: authState.user.college || "",
+              academicRank: authState.user.academicRank || "",
+              passportUrl: authState.user.passportUrl || "",
+              email: authState.user.email,
+              id: authState.user.id,
+              isActive: authState.user.isActive,
+              course: "", // Provide default or fetch from elsewhere
+              dateEnrolled: authState.user.dateEnrolled || new Date(), // Provide default or fetch from elsewhere
+              role: "STUDENT", // Map from authState.user.role or default
+            }}
+            onLogout={handleLogout}
+          />
+        )}
 
         <main className="flex-1 overflow-auto bg-accent/5">
           <div className="container mx-auto p-4 md:p-6 max-w-7xl">
@@ -534,17 +534,15 @@ export default function TeacherLayout({
               <div className="flex items-center justify-between">
                 <div>
                   <h1 className="text-xl font-semibold text-foreground">
-                    Welcome back,{" "}
-                    {authState.user.profile?.firstName || "Teacher"}!
+                    Welcome back, {authState.user.firstName || "Student"}!
                   </h1>
                   <p className="text-muted-foreground text-sm">
-                    {authState.user.profile?.department} •{" "}
-                    {authState.user.profile?.college}
+                    {authState.user.department} • {authState.user.college}
                   </p>
                 </div>
                 <div className="text-right text-sm text-muted-foreground">
-                  <p>Academic Rank: {authState.user.profile?.academicRank}</p>
-                  <p>Employee ID: {authState.user.profile?.employeeId}</p>
+                  <p>Academic Rank: {authState.user.academicRank}</p>
+                  <p>Employee ID: {authState.user.id}</p>
                 </div>
               </div>
             </div>

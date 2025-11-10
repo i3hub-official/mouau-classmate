@@ -42,13 +42,14 @@ export interface StudentProfile {
   matricNumber: string;
   firstName: string;
   lastName: string;
-  otherName?: string | null;  
+  otherName?: string | null;
   email: string;
   phone: string;
   passportUrl?: string | null;
   department: string;
   course: string;
   college: string;
+  academicRank?: string | null;
   dateEnrolled: Date;
   role: string;
   isActive: boolean;
