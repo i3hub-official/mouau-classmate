@@ -76,9 +76,9 @@ export default function SelectRolePage() {
 
     // Navigate to appropriate signup form
     if (selectedRole === "lecturer") {
-      router.push("/teacher/signup");
+      router.push("/portal/teacher/signup");
     } else if (selectedRole === "student") {
-      router.push("/auth/signup");
+      router.push("/portal/student/signup");
     }
   };
 
@@ -90,7 +90,9 @@ export default function SelectRolePage() {
   // Get appropriate navigation URL based on selections
   const getNavigationUrl = () => {
     if (!selectedRole) return "#";
-    return selectedRole === "lecturer" ? "/teacher/signup" : "/auth/signup";
+    return selectedRole === "lecturer"
+      ? "/portal/teacher/signup"
+      : "/portal/student/signup";
   };
 
   if (loading) {
@@ -152,7 +154,7 @@ export default function SelectRolePage() {
               Sign In
             </Link>
             <Link
-              href="/auth/signup"
+              href="/portal/student/signup"
               className="hidden md:block px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
             >
               Get Started

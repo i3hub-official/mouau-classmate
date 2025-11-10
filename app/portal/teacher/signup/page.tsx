@@ -1,4 +1,4 @@
-// File: app/teacher/signup/page.tsx
+// File: app/portal/teacher/signup/page.tsx
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";

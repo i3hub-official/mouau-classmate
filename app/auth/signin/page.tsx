@@ -326,7 +326,7 @@ export default function SignInPage() {
               <p className="text-sm text-muted-foreground">
                 Don't have an account?{" "}
                 <Link
-                  href="/auth/signup"
+                  href="/portal/student/signup"
                   className="text-primary hover:underline font-medium"
                 >
                   Sign up here

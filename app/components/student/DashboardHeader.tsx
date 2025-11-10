@@ -12,8 +12,8 @@ import {
   X,
 } from "lucide-react";
 import { ThemeToggle } from "@/app/components/theme-toggle";
-import { SignOutModal } from "@/app/components/students/SignOutModal";
-import { NotificationDropdown } from "@/app/components/students/NotificationDropdown";
+import { SignOutModal } from "@/app/components/student/SignOutModal";
+import { NotificationDropdown } from "@/app/components/student/NotificationDropdown";
 import { UserService } from "@/lib/services/userService";
 import { NotificationService } from "@/lib/services/student/notificationService";
 

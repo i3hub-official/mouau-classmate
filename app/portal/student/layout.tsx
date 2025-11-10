@@ -63,13 +63,13 @@ export default function TeacherLayout({
   const router = useRouter();
   const pathname = usePathname();
 
-  // Use the role protection hook for teacher/lecturer routes
+  // Use the role protection hook for student routes
   const {
     isValid: hasValidRole,
     isLoading: roleLoading,
     roleData,
   } = useRoleProtection({
-    requiredRole: ["teacher", "lecturer"],
+    requiredRole: ["student"],
     redirectTo: "/select-role",
     maxAge: 30,
   });
@@ -102,15 +102,15 @@ export default function TeacherLayout({
   // Check if current path requires authentication
   const isAuthRequiredPath = (path: string): boolean => {
     const publicPaths = [
-      "/teacher/signup",
-      "/teacher/signin",
-      "/teacher/forgot-password",
+      "/portal/student/signup",
+      "/student/signin",
+      "/student/forgot-password",
     ];
     return !publicPaths.some((publicPath) => path.startsWith(publicPath));
   };
 
   // Mock authentication service
-  const authenticateTeacher = async (): Promise<TeacherUser> => {
+  const authenticateStudent = async (): Promise<TeacherUser> => {
     // Check in-memory storage first
     if (sessionData.user && sessionData.token && !checkSessionExpiry()) {
       updateLastActivity();
@@ -143,8 +143,8 @@ export default function TeacherLayout({
     const userData: TeacherUser = await response.json();
 
     // Validate user role
-    if (userData.role !== "TEACHER" && userData.role !== "LECTURER") {
-      throw new Error("Access denied. Teacher/Lecturer role required.");
+    if (userData.role !== "STUDENT") {
+      throw new Error("Access denied. Student role required.");
     }
 
     // Store in-memory
@@ -200,7 +200,7 @@ export default function TeacherLayout({
           });
 
           // If authenticated user is on signup page, redirect to dashboard
-          if (pathname === "/teacher/signup") {
+          if (pathname === "/portal/teacher/signup") {
             router.push("/teacher/student/dashboard");
             return;
           }
@@ -239,7 +239,10 @@ export default function TeacherLayout({
           clearSession();
 
           // Only redirect to login if we're on a protected path
-          if (isAuthRequiredPath(pathname) && pathname !== "/teacher/signup") {
+          if (
+            isAuthRequiredPath(pathname) &&
+            pathname !== "/portal/teacher/signup"
+          ) {
             setTimeout(() => {
               router.push(
                 "/auth/signin?redirect=" + encodeURIComponent(pathname)
@@ -392,7 +395,7 @@ export default function TeacherLayout({
             Redirecting...
           </h2>
           <p className="text-muted-foreground mb-4">
-            Please select Teacher/Lecturer role to access this page.
+            Please select Student role to access this page.
           </p>
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
         </div>

@@ -102,7 +102,7 @@ export default function TeacherLayout({
   // Check if current path requires authentication
   const isAuthRequiredPath = (path: string): boolean => {
     const publicPaths = [
-      "/teacher/signup",
+      "/portal/teacher/signup",
       "/teacher/signin",
       "/teacher/forgot-password",
     ];
@@ -200,7 +200,7 @@ export default function TeacherLayout({
           });
 
           // If authenticated user is on signup page, redirect to dashboard
-          if (pathname === "/teacher/signup") {
+          if (pathname === "/portal/teacher/signup") {
             router.push("/teacher/student/dashboard");
             return;
           }
@@ -239,7 +239,10 @@ export default function TeacherLayout({
           clearSession();
 
           // Only redirect to login if we're on a protected path
-          if (isAuthRequiredPath(pathname) && pathname !== "/teacher/signup") {
+          if (
+            isAuthRequiredPath(pathname) &&
+            pathname !== "/portal/teacher/signup"
+          ) {
             setTimeout(() => {
               router.push(
                 "/auth/signin?redirect=" + encodeURIComponent(pathname)
