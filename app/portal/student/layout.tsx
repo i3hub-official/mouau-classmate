@@ -3,8 +3,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { StudentSidebar } from "@/app/components/student/StudentSidebar";
-import { StudentHeader } from "@/app/components/student/StudentHeader";
+import { StudentSidebar } from "@/app/components/portal/student/StudentSidebar";
+import { StudentHeader } from "@/app/components/portal/student/StudentHeader";
 import { StudentProfile } from "@/lib/types/student/index";
 import {
   useRoleProtection,
