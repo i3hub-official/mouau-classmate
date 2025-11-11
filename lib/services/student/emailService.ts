@@ -2,7 +2,7 @@
 import { prisma } from "@/lib/server/prisma";
 import { protectData, unprotectData } from "@/lib/security/dataProtection";
 import { AuditAction, ResourceType } from "@prisma/client";
-import { generateVerificationToken } from "@/lib/utils/utils";
+import { generateVerificationToken } from "@/lib/utils";
 
 export class StudentEmailService {
   /**

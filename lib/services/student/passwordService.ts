@@ -1,7 +1,7 @@
 // lib/services/passwordService.ts
 import { prisma } from "@/lib/server/prisma";
 import { protectData, unprotectData } from "@/lib/security/dataProtection";
-import { generateVerificationToken } from "@/lib/utils/utils";
+import { generateVerificationToken } from "@/lib/utils";
 import { AuditAction, ResourceType } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { Student } from "@/lib/types/student/index";

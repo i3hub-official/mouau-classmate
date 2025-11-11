@@ -3,8 +3,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { TeacherSidebar } from "@/app/components/teacher/TeacherSidebar";
-import { TeacherHeader } from "@/app/components/teacher/TeacherHeader";
+import { TeacherSidebar } from "@/app/components/portal/teacher/TeacherSidebar";
+import { TeacherHeader } from "@/app/components/portal/teacher/TeacherHeader";
 import {
   useRoleProtection,
   clearRoleSelection,

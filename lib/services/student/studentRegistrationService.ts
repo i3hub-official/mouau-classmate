@@ -6,7 +6,7 @@ import {
   verifyPassword,
   validatePasswordStrength,
 } from "@/lib/security/dataProtection";
-import { generateVerificationToken } from "@/lib/utils/utils";
+import { generateVerificationToken } from "@/lib/utils";
 import { AuditAction } from "@prisma/client";
 
 export class StudentRegistrationService {

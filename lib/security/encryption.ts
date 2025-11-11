@@ -1,113 +1,214 @@
 // src/lib/security/encryption.ts
-import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
+import crypto from "crypto";
+import bcrypt from "bcryptjs";
+
+/* ------------------------------------
+ * Utility loaders
+ * ------------------------------------ */
 
 function mustHexEnv(name: string, expectedBytes: number): Buffer {
   const raw = process.env[name];
-  if (!raw) throw new Error(`${name} not set`);
-  const buf = Buffer.from(raw, 'hex');
+  if (!raw)
+    throw new Error(`❌ Missing required environment variable: ${name}`);
+  const buf = Buffer.from(raw, "hex");
   if (buf.length !== expectedBytes) {
-    throw new Error(`${name} must be ${expectedBytes} bytes (hex). Got ${buf.length} bytes`);
+    throw new Error(
+      `❌ ${name} must be ${expectedBytes} bytes in hex (${
+        expectedBytes * 2
+      } chars). Got ${buf.length} bytes.`
+    );
   }
   return buf;
 }
+
 function mustEnv(name: string): string {
   const v = process.env[name];
-  if (!v) throw new Error(`${name} not set`);
+  if (!v) throw new Error(`❌ Missing required environment variable: ${name}`);
   return v;
 }
 
-const ENCRYPTION_KEY = mustHexEnv('ENCRYPTION_KEY', 32); // 32 bytes for AES-256
-const FIXED_IV_EMAIL = mustHexEnv('FIXED_IV_EMAIL', 16);
-const FIXED_IV_PHONE = mustHexEnv('FIXED_IV_PHONE', 16);
- const FIXED_GENERAL = mustHexEnv('FIXED_GENERAL', 16);
-const FIXED_IV_NIN = mustHexEnv('FIXED_IV_NIN', 16);
-const SALT_ROUNDS = Number(process.env.SALT_ROUNDS ?? 12);
-const HASH_PEPPER = mustEnv('HASH_PEPPER');
+/* ------------------------------------
+ * Key material (lazy load)
+ * ------------------------------------ */
+let _ENCRYPTION_KEY: Buffer | null = null;
+let _FIXED_IV_EMAIL: Buffer | null = null;
+let _FIXED_IV_PHONE: Buffer | null = null;
+let _FIXED_IV_NIN: Buffer | null = null;
+let _FIXED_GENERAL: Buffer | null = null;
+let _SALT_ROUNDS: number | null = null;
+let _HASH_PEPPER: string | null = null;
 
-// Tier 1: AES-256-GCM (random 12-byte IV)
-export function encryptHighestSecurity(data: string): string {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', ENCRYPTION_KEY, iv);
-  let encrypted = cipher.update(data, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
+function getKeys() {
+  if (!_ENCRYPTION_KEY) {
+    _ENCRYPTION_KEY = mustHexEnv("ENCRYPTION_KEY", 32);
+    _FIXED_IV_EMAIL = mustHexEnv("FIXED_IV_EMAIL", 16);
+    _FIXED_IV_PHONE = mustHexEnv("FIXED_IV_PHONE", 16);
+    _FIXED_IV_NIN = mustHexEnv("FIXED_IV_NIN", 16);
+    _FIXED_GENERAL = mustHexEnv("FIXED_GENERAL", 16);
+    _SALT_ROUNDS = Number(process.env.SALT_ROUNDS ?? 12);
+    _HASH_PEPPER = mustEnv("HASH_PEPPER");
+  }
+  return {
+    ENCRYPTION_KEY: _ENCRYPTION_KEY!,
+    FIXED_IV_EMAIL: _FIXED_IV_EMAIL!,
+    FIXED_IV_PHONE: _FIXED_IV_PHONE!,
+    FIXED_IV_NIN: _FIXED_IV_NIN!,
+    FIXED_GENERAL: _FIXED_GENERAL!,
+    SALT_ROUNDS: _SALT_ROUNDS!,
+    HASH_PEPPER: _HASH_PEPPER!,
+  };
+}
+
+/* ------------------------------------
+ * Tier 1: AES-256-GCM (authenticated)
+ * ------------------------------------ */
+export function encryptHighestSecurity(plaintext: string): string {
+  const { ENCRYPTION_KEY } = getKeys();
+  const iv = crypto.randomBytes(12); // 96-bit nonce
+  const cipher = crypto.createCipheriv("aes-256-gcm", ENCRYPTION_KEY, iv);
+  const encrypted = Buffer.concat([
+    cipher.update(plaintext, "utf8"),
+    cipher.final(),
+  ]);
   const authTag = cipher.getAuthTag();
-  return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
+
+  // Encode compactly as base64: iv.authTag.ciphertext
+  return `${iv.toString("base64")}.${authTag.toString(
+    "base64"
+  )}.${encrypted.toString("base64")}`;
 }
 
-export function decryptHighestSecurity(encryptedData: string): string {
-  // parse iv:auth:content safely
-  const firstSep = encryptedData.indexOf(':');
-  const secondSep = encryptedData.indexOf(':', firstSep + 1);
-  if (firstSep === -1 || secondSep === -1) throw new Error('Invalid encrypted format for GCM');
-  const ivHex = encryptedData.slice(0, firstSep);
-  const authTagHex = encryptedData.slice(firstSep + 1, secondSep);
-  const content = encryptedData.slice(secondSep + 1);
+export function decryptHighestSecurity(ciphertext: string): string {
+  const { ENCRYPTION_KEY } = getKeys();
+  const parts = ciphertext.split(".");
+  if (parts.length !== 3)
+    throw new Error("Invalid encrypted format for AES-GCM");
+  const [ivB64, authTagB64, dataB64] = parts;
+  const iv = Buffer.from(ivB64, "base64");
+  const authTag = Buffer.from(authTagB64, "base64");
+  const data = Buffer.from(dataB64, "base64");
 
-  const iv = Buffer.from(ivHex, 'hex');
-  const authTag = Buffer.from(authTagHex, 'hex');
-  const decipher = crypto.createDecipheriv('aes-256-gcm', ENCRYPTION_KEY, iv);
+  const decipher = crypto.createDecipheriv("aes-256-gcm", ENCRYPTION_KEY, iv);
   decipher.setAuthTag(authTag);
-  let decrypted = decipher.update(content, 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
-  return decrypted;
+  const decrypted = Buffer.concat([decipher.update(data), decipher.final()]);
+  return decrypted.toString("utf8");
 }
 
-// Tier 2: Deterministic / Searchable (FIXED IV used intentionally)
-export function encryptSearchable(data: string, type: 'email' | 'phone' | 'general' | 'nin'): string {
-  const iv = type === 'email' ? FIXED_IV_EMAIL : type === 'phone' ? FIXED_IV_PHONE : type === 'nin' ? FIXED_IV_NIN : FIXED_GENERAL;
-  const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
-  return cipher.update(data, 'utf8', 'hex') + cipher.final('hex');
+/* ------------------------------------
+ * Tier 2: Deterministic (Searchable)
+ * ------------------------------------ */
+export function encryptSearchable(
+  data: string,
+  type: "email" | "phone" | "general" | "nin"
+): string {
+  const {
+    ENCRYPTION_KEY,
+    FIXED_IV_EMAIL,
+    FIXED_IV_PHONE,
+    FIXED_IV_NIN,
+    FIXED_GENERAL,
+  } = getKeys();
+
+  const iv =
+    type === "email"
+      ? FIXED_IV_EMAIL
+      : type === "phone"
+      ? FIXED_IV_PHONE
+      : type === "nin"
+      ? FIXED_IV_NIN
+      : FIXED_GENERAL;
+
+  const cipher = crypto.createCipheriv("aes-256-cbc", ENCRYPTION_KEY, iv);
+  const encrypted = Buffer.concat([
+    cipher.update(data, "utf8"),
+    cipher.final(),
+  ]);
+  return encrypted.toString("base64");
 }
 
-export function decryptSearchable(encryptedData: string, type: 'email' | 'phone' | 'general' | 'nin'): string {
-  const iv = type === 'email' ? FIXED_IV_EMAIL : type === 'phone' ? FIXED_IV_PHONE : type === 'nin' ? FIXED_IV_NIN : FIXED_GENERAL;
-  const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
-  return decipher.update(encryptedData, 'hex', 'utf8') + decipher.final('utf8');
+export function decryptSearchable(
+  ciphertext: string,
+  type: "email" | "phone" | "general" | "nin"
+): string {
+  const {
+    ENCRYPTION_KEY,
+    FIXED_IV_EMAIL,
+    FIXED_IV_PHONE,
+    FIXED_IV_NIN,
+    FIXED_GENERAL,
+  } = getKeys();
+
+  const iv =
+    type === "email"
+      ? FIXED_IV_EMAIL
+      : type === "phone"
+      ? FIXED_IV_PHONE
+      : type === "nin"
+      ? FIXED_IV_NIN
+      : FIXED_GENERAL;
+
+  const decipher = crypto.createDecipheriv("aes-256-cbc", ENCRYPTION_KEY, iv);
+  const decrypted = Buffer.concat([
+    decipher.update(Buffer.from(ciphertext, "base64")),
+    decipher.final(),
+  ]);
+  return decrypted.toString("utf8");
 }
 
-// Tier 3: Basic (random-IV AES-CBC)
+/* ------------------------------------
+ * Tier 3: AES-CBC (random IV)
+ * ------------------------------------ */
 export function encryptBasic(data: string): string {
+  const { ENCRYPTION_KEY } = getKeys();
   const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
-  const encrypted = cipher.update(data, 'utf8', 'hex') + cipher.final('hex');
-  return `${iv.toString('hex')}:${encrypted}`;
+  const cipher = crypto.createCipheriv("aes-256-cbc", ENCRYPTION_KEY, iv);
+  const encrypted = Buffer.concat([
+    cipher.update(data, "utf8"),
+    cipher.final(),
+  ]);
+  return `${iv.toString("base64")}.${encrypted.toString("base64")}`;
 }
 
 export function decryptBasic(encryptedData: string): string {
-  const sep = encryptedData.indexOf(':');
-  if (sep === -1) throw new Error('Invalid encrypted format for basic');
-  const ivHex = encryptedData.slice(0, sep);
-  const content = encryptedData.slice(sep + 1);
-  const iv = Buffer.from(ivHex, 'hex');
-  const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
-  return decipher.update(content, 'hex', 'utf8') + decipher.final('utf8');
+  const { ENCRYPTION_KEY } = getKeys();
+  const [ivB64, dataB64] = encryptedData.split(".");
+  if (!ivB64 || !dataB64)
+    throw new Error("Invalid encrypted format for AES-CBC");
+  const iv = Buffer.from(ivB64, "base64");
+  const data = Buffer.from(dataB64, "base64");
+
+  const decipher = crypto.createDecipheriv("aes-256-cbc", ENCRYPTION_KEY, iv);
+  const decrypted = Buffer.concat([decipher.update(data), decipher.final()]);
+  return decrypted.toString("utf8");
 }
 
-// Hashing Utilities (bcryptjs callback wrapped as Promise)
+/* ------------------------------------
+ * Hashing Utilities
+ * ------------------------------------ */
 export async function hashData(data: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    bcrypt.hash(data, SALT_ROUNDS, (err, hash) => {
-      if (err) return reject(err);
-      if (typeof hash !== 'string') return reject(new Error('Hash generation failed'));
-      resolve(hash);
-    });
-  });
+  const { SALT_ROUNDS, HASH_PEPPER } = getKeys();
+  return bcrypt.hash(data + HASH_PEPPER, SALT_ROUNDS);
 }
 
 export async function verifyHash(data: string, hash: string): Promise<boolean> {
-  return new Promise((resolve, reject) => {
-    bcrypt.compare(data, hash, (err, same) => {
-      if (err) return reject(err);
-      resolve(same === true);
-    });
-  });
+  const { SALT_ROUNDS, HASH_PEPPER } = getKeys();
+  // Constant-time compare for safety
+  const hashed = await bcrypt.hash(data + HASH_PEPPER, SALT_ROUNDS);
+  return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(hashed));
 }
 
+/* ------------------------------------
+ * Deterministic Search Hash (SHA-256)
+ * ------------------------------------ */
 export function generateSearchHash(data: string): string {
-  return crypto.createHash('sha256').update(data + HASH_PEPPER).digest('hex');
+  const { HASH_PEPPER } = getKeys();
+  return crypto
+    .createHash("sha256")
+    .update(data + HASH_PEPPER)
+    .digest("hex");
 }
 
 export function verifySearchHash(data: string, hash: string): boolean {
-  return generateSearchHash(data) === hash;
+  const candidate = generateSearchHash(data);
+  return crypto.timingSafeEqual(Buffer.from(candidate), Buffer.from(hash));
 }
