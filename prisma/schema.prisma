@@ -514,6 +514,7 @@ model Assignment {
   instructions        String?
   dueDate             DateTime
   maxScore            Int      @default(100)
+  weight              Float    @default(1.0)
   allowedAttempts     Int      @default(1)
   assignmentUrl       String?
   isPublished         Boolean  @default(false)
