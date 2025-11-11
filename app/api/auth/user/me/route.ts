@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { StudentService } from "@/lib/services/student/studentService";
 import { TeacherService } from "@/lib/services/teacher/teacherService";
-import { AdminUserService } from "@/lib/services/admin/userService";
+import { AdminService } from "@/lib/services/admin/adminService";
 import { AuditAction } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       } catch (error) {
         // Try admin if teacher failed
         try {
-          user = await AdminUserService.getUserById(userId);
+          user = await AdminService.getAdminById(userId);
         } catch (error) {
           return NextResponse.json(
             { success: false, error: "User not found" },

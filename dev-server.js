@@ -1,3 +1,4 @@
+// server.js (or whatever you've named it)
 import { createServer } from 'https';
 import { createServer as createHttpServer } from 'http';
 import next from 'next';
@@ -24,11 +25,19 @@ const httpsPort = 3002;
 const certPath = process.env.SSL_CERTIFICATE;
 const keyPath = process.env.SSL_KEY;
 
+// Make sure all required environment variables are loaded
+const requiredEnvVars = ['ENCRYPTION_KEY', 'DATABASE_URL'];
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingEnvVars.length > 0) {
+  console.error(`❌ Missing required environment variables: ${missingEnvVars.join(', ')}`);
+  process.exit(1);
+}
+
 const app = next({
   dev,
-  env: {
-    JWT_SECRET: process.env.JWT_SECRET,
-  },
+  // Pass all environment variables to Next.js
+  env: process.env,
 });
 
 const handle = app.getRequestHandler();
@@ -149,4 +158,7 @@ function watchNetworkChanges(interval = 5000) {
 // ===== Start everything =====
 startServers().then(() => {
   watchNetworkChanges(5000); // check every 5 seconds
+}).catch(err => {
+  console.error('Failed to start servers:', err);
+  process.exit(1);
 });
