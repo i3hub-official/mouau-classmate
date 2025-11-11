@@ -23,7 +23,7 @@ export default function NotFound() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-accent/10 flex items-center justify-center p-4 md:pt-20">
+    <div className="min-h-screen bg-linear-to-br from-background via-primary/5 to-accent/10 flex items-center justify-center p-4 md:pt-20">
       <div className="max-w-3xl w-full">
         {/* Header Section */}
         <div className="text-center mb-8 md:mb-12">

@@ -1,27 +1,122 @@
-// app/auth/signin/page.tsx
+// File: app/auth/signin/page.tsx
+
 "use client";
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Home, Lock, CheckCircle, AlertCircle } from "lucide-react";
+import {
+  ArrowRight,
+  Home,
+  Lock,
+  CheckCircle,
+  AlertCircle,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ThemeToggle } from "@/app/components/theme-toggle";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function SignInPage() {
-  const [matricNumber, setMatricNumber] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const { signIn, isLoading } = useAuth();
   const [loginSuccess, setLoginSuccess] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+
+  // Smart detection of user type based on input
+  const detectUserType = (input: string): "student" | "teacher" | "admin" => {
+    const trimmedInput = input.trim().toUpperCase();
+
+    // Student: Matric number pattern MOUAU/XX/XXX or variations
+    if (/^MOUAU\/\d{2,3}\/\d{3,5}(?:\/\d{2})?$/.test(trimmedInput)) {
+      return "student";
+    }
+
+    // Teacher: University email domain
+    if (/@mouau\.edu\.ng$/i.test(input)) {
+      return "teacher";
+    }
+
+    // Admin: Any other email (will be validated by backend)
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input)) {
+      return "admin";
+    }
+
+    // Default to student for any non-email input that doesn't match matric pattern
+    return "student";
+  };
+
+  const getPlaceholder = () => {
+    return "Enter your matric number or email";
+  };
+
+  const getInputType = (input: string): "text" | "email" => {
+    // If it contains @, treat as email for better mobile keyboard
+    return input.includes("@") ? "email" : "text";
+  };
+
+  const getAutoComplete = (input: string): string => {
+    const userType = detectUserType(input);
+    return userType === "student" ? "username" : "email";
+  };
+
+  const validateIdentifier = (
+    input: string
+  ): { isValid: boolean; error?: string } => {
+    if (!input.trim()) {
+      return {
+        isValid: false,
+        error: "Please enter your matric number or email",
+      };
+    }
+
+    const userType = detectUserType(input);
+
+    switch (userType) {
+      case "student":
+        if (
+          !/^MOUAU\/\d{2,3}\/\d{3,5}(?:\/\d{2})?$/i.test(input.toUpperCase())
+        ) {
+          return {
+            isValid: false,
+            error: "Please enter a valid matric number (e.g., MOUAU/20/12345)",
+          };
+        }
+        break;
+
+      case "teacher":
+        if (!/@mouau\.edu\.ng$/i.test(input)) {
+          return {
+            isValid: false,
+            error: "Please use your university email (@mouau.edu.ng)",
+          };
+        }
+        break;
+
+      case "admin":
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input)) {
+          return {
+            isValid: false,
+            error: "Please enter a valid email address",
+          };
+        }
+        break;
+    }
+
+    return { isValid: true };
+  };
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    // Basic validation
-    if (!matricNumber.trim()) {
-      setError("Please enter your matriculation number");
+    // Validation
+    const validation = validateIdentifier(identifier);
+    if (!validation.isValid) {
+      setError(validation.error!);
       return;
     }
 
@@ -30,42 +125,42 @@ export default function SignInPage() {
       return;
     }
 
-    setIsLoading(true);
+    // Auto-detect user type and prepare credentials
+    const userType = detectUserType(identifier);
+    const credentials = {
+      password,
+      ...(userType === "student" && {
+        matricNumber: identifier.toUpperCase(),
+      }),
+      ...((userType === "teacher" || userType === "admin") && {
+        email: identifier.toLowerCase(),
+      }),
+    };
 
-    try {
-      // Call our custom API endpoint instead of NextAuth
-      const response = await fetch("/auth/signin/auth", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          matricNumber: matricNumber.trim().toUpperCase(),
-          password: password,
-        }),
-      });
+    const result = await signIn(credentials);
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        // Use the specific error message from our API
-        throw new Error(data.error || "Authentication failed");
-      }
-
-      // Successful login
-      setIsLoading(false);
+    if (result.success) {
       setLoginSuccess(true);
+      // Redirect is handled in the useAuth hook
+    } else {
+      setError(result.error || "Authentication failed");
+    }
+  };
 
-      // Redirect to dashboard after success
-      setTimeout(() => {
-        router.push("/student/dashboard");
-        router.refresh(); // Refresh to update auth state
-      }, 1500);
-    } catch (err) {
-      setIsLoading(false);
-      setError(
-        err instanceof Error ? err.message : "An unexpected error occurred"
-      );
+  const getHelperText = () => {
+    if (!identifier) return "Enter your matric number or university email";
+
+    const userType = detectUserType(identifier);
+
+    switch (userType) {
+      case "student":
+        return "Matric number detected";
+      case "teacher":
+        return "University email detected";
+      case "admin":
+        return "Email detected";
+      default:
+        return "Enter your credentials";
     }
   };
 
@@ -84,7 +179,7 @@ export default function SignInPage() {
           <ThemeToggle />
         </div>
 
-        {/* Logo and Title - Centered and Standalone */}
+        {/* Logo and Title */}
         <div className="text-center mb-8">
           <div className="flex flex-col items-center gap-4 mb-6">
             <div className="p-3 rounded-xl relative">
@@ -101,13 +196,11 @@ export default function SignInPage() {
                   onContextMenu={(e) => e.preventDefault()}
                   onDragStart={(e) => e.preventDefault()}
                 />
-                {/* Success checkmark overlay */}
                 {loginSuccess && (
                   <div className="absolute -top-1 -right-1 bg-green-500 rounded-full p-1 animate-bounce">
                     <CheckCircle size={16} className="text-white" />
                   </div>
                 )}
-                {/* Transparent overlay to prevent right-click and drag */}
                 <div
                   className="absolute inset-0 z-10"
                   onContextMenu={(e) => e.preventDefault()}
@@ -124,7 +217,7 @@ export default function SignInPage() {
                   ? "Signing you in..."
                   : loginSuccess
                   ? "Welcome back!"
-                  : "Student Portal Sign In"}
+                  : "University Portal Sign In"}
               </p>
             </div>
           </div>
@@ -146,7 +239,7 @@ export default function SignInPage() {
                 {/* Show helpful actions based on error type */}
                 {(error.includes("verify") ||
                   error.includes("Verification")) && (
-                  <div className="mt-2 flex gap-2">
+                  <div className="mt-2">
                     <Link
                       href="/auth/verify-email"
                       className="text-xs text-primary hover:underline font-medium"
@@ -190,27 +283,21 @@ export default function SignInPage() {
         {/* Loading Spinner */}
         {isLoading && (
           <div className="flex flex-col items-center justify-center mb-6 space-y-4">
-            {/* Main Spinner */}
             <div className="relative">
-              {/* Outer ring */}
               <div className="w-16 h-16 border-4 border-primary/20 rounded-full"></div>
-              {/* Spinning ring */}
               <div className="absolute top-0 left-0 w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-              {/* Inner dot */}
               <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-2 h-2 bg-primary rounded-full"></div>
             </div>
 
-            {/* Loading text */}
             <div className="text-center">
               <p className="text-sm font-medium text-foreground">
-                Authenticating
+                Authenticating...
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 Please wait while we verify your credentials
               </p>
             </div>
 
-            {/* Animated dots */}
             <div className="flex space-x-1">
               <div
                 className="w-2 h-2 bg-primary rounded-full animate-bounce"
@@ -231,16 +318,13 @@ export default function SignInPage() {
         {/* Success State */}
         {loginSuccess && (
           <div className="flex flex-col items-center justify-center mb-6 space-y-4">
-            {/* Success Animation */}
             <div className="relative">
               <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center animate-pulse">
                 <CheckCircle className="h-8 w-8 text-white" />
               </div>
-              {/* Pulsing ring effect */}
               <div className="absolute inset-0 border-4 border-green-500 rounded-full animate-ping opacity-75"></div>
             </div>
 
-            {/* Success text */}
             <div className="text-center">
               <p className="text-sm font-medium text-foreground">
                 Login Successful!
@@ -258,23 +342,26 @@ export default function SignInPage() {
             <form onSubmit={handleSignIn} className="space-y-6">
               <div>
                 <label
-                  htmlFor="matricNumber"
+                  htmlFor="identifier"
                   className="block text-sm font-medium text-foreground mb-2"
                 >
-                  Matriculation Number
+                  Matric Number or Email
                 </label>
                 <input
-                  type="text"
-                  id="matricNumber"
-                  value={matricNumber}
+                  type={getInputType(identifier)}
+                  id="identifier"
+                  value={identifier}
                   onChange={(e) => {
-                    setMatricNumber(e.target.value);
+                    setIdentifier(e.target.value);
                     if (error) setError("");
                   }}
-                  placeholder="e.g., MOUAU/20/12345"
+                  placeholder={getPlaceholder()}
                   className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-colors"
-                  autoComplete="username"
+                  autoComplete={getAutoComplete(identifier)}
                 />
+                <p className="text-xs text-muted-foreground mt-2">
+                  {getHelperText()}
+                </p>
               </div>
 
               <div>
@@ -285,30 +372,42 @@ export default function SignInPage() {
                   >
                     Password
                   </label>
+                  <Link
+                    href="/auth/forgot-password"
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
                 </div>
-                <input
-                  type="password"
-                  id="password"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    if (error) setError("");
-                  }}
-                  placeholder="Enter your password"
-                  className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-colors"
-                  autoComplete="current-password"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    id="password"
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (error) setError("");
+                    }}
+                    placeholder="Enter your password"
+                    className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-colors pr-12"
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
               </div>
 
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || !identifier.trim() || !password.trim()}
                 className="w-full py-3 bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 relative overflow-hidden group"
               >
-                {/* Button background animation */}
                 <div className="absolute inset-0 bg-linear-to-r from-primary to-primary/80 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></div>
-
-                {/* Button content */}
                 <span className="relative z-10 flex items-center gap-2">
                   {isLoading ? "Signing In..." : "Sign In"}
                   {!isLoading && (
@@ -324,7 +423,7 @@ export default function SignInPage() {
             {/* Additional Links */}
             <div className="mt-6 space-y-4 text-center">
               <p className="text-sm text-muted-foreground">
-                Don't have an account?{" "}
+                Student without an account?{" "}
                 <Link
                   href="/portal/student/signup"
                   className="text-primary hover:underline font-medium"
@@ -346,7 +445,7 @@ export default function SignInPage() {
           </>
         )}
 
-        {/* Loading progress bar (subtle) */}
+        {/* Loading progress bar */}
         {isLoading && (
           <div className="mt-4">
             <div className="w-full bg-muted rounded-full h-1">

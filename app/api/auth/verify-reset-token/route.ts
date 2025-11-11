@@ -1,62 +1,49 @@
+// app/api/auth/verify-reset-token/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { StudentRegistrationService } from "@/lib/services/student/studentRegistrationService";
-import {
-  ValidationError,
-  StudentRegistrationError,
-} from "@/lib/services/student/studentRegistrationService";
+import { StudentPasswordService } from "@/lib/services/student/passwordService";
+import { TeacherPasswordService } from "@/lib/services/teacher/passwordService";
+import { AdminPasswordService } from "@/lib/services/admin/passwordService";
 
 export async function POST(request: NextRequest) {
   try {
     const { token, encodedEmail } = await request.json();
 
-    if (!token) {
+    // Validate input
+    if (!token || !encodedEmail) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "TOKEN_REQUIRED",
-          message: "Reset token is required",
-        },
+        { success: false, error: "Token and email are required" },
         { status: 400 }
       );
     }
 
-    const result = await StudentRegistrationService.verifyPasswordResetToken(
-      token,
-      encodedEmail
-    );
+    // Try to verify token for each user type
+    let verifyResult;
 
-    if (result.success) {
-      return NextResponse.json(result);
-    } else {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "INVALID_TOKEN",
-          message: result.message,
-        },
-        { status: 400 }
-      );
+    // Try student service first
+    try {
+      verifyResult = await StudentPasswordService.verifyResetToken(token);
+    } catch (error) {
+      // Not a student, try teacher
+      try {
+        verifyResult = await TeacherPasswordService.verifyResetToken(token);
+      } catch (error) {
+        // Not a teacher, try admin
+        try {
+          verifyResult = await AdminPasswordService.verifyResetToken(token);
+        } catch (error) {
+          return NextResponse.json(
+            { success: false, error: "Invalid or expired reset token" },
+            { status: 400 }
+          );
+        }
+      }
     }
+
+    return NextResponse.json(verifyResult);
   } catch (error) {
     console.error("Token verification error:", error);
-
-    if (error instanceof ValidationError) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: error.code,
-          message: error.message,
-        },
-        { status: 400 }
-      );
-    }
-
     return NextResponse.json(
-      {
-        success: false,
-        error: "SERVER_ERROR",
-        message: "Failed to verify reset token",
-      },
+      { success: false, error: "An error occurred while verifying your token" },
       { status: 500 }
     );
   }

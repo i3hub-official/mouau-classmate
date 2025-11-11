@@ -1,428 +1,411 @@
 // lib/services/profileService.ts
-export interface UserProfile {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  matricNumber?: string;
-  department?: string;
-  college?: string;
-  course?: string;
-  phone?: string;
-  state?: string;
-  lga?: string;
-  dateOfBirth?: string;
-  gender?: string;
-  maritalStatus?: string;
-  admissionYear?: number;
-  dateEnrolled?: string;
-}
+import { prisma } from "@/lib/server/prisma";
+import { StudentProfile } from "@/lib/types/student/index";
+import {
+  protectData,
+  unprotectData,
+  verifyProtectedData,
+} from "@/lib/security/dataProtection";
+import { AuditAction } from "@prisma/client";
 
-export interface SecuritySettings {
-  currentPassword: string;
-  newPassword: string;
-  confirmPassword: string;
-}
-
-export interface NotificationSettings {
-  emailNotifications: boolean;
-  pushNotifications: boolean;
-  assignmentReminders: boolean;
-  gradeAlerts: boolean;
-  lectureReminders: boolean;
-}
-
-export interface UpdateProfileData {
-  name?: string;
-  phone?: string;
-  state?: string;
-  lga?: string;
-  dateOfBirth?: string;
-  gender?: string;
-  maritalStatus?: string;
-}
-
-export class ProfileService {
+export class StudentProfileService {
   /**
-   * Get user profile data
+   * Get student profile
    */
-  static async getProfile(): Promise<UserProfile | null> {
+  static async getStudentProfile(
+    userId: string
+  ): Promise<StudentProfile | null> {
     try {
-      const response = await fetch("/api/profile", {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
+      const student = await prisma.student.findUnique({
+        where: { userId },
+        select: {
+          id: true,
+          matricNumber: true,
+          firstName: true,
+          lastName: true,
+          otherName: true,
+          email: true,
+          phone: true,
+          passportUrl: true,
+          department: true,
+          course: true,
+          college: true,
+          dateEnrolled: true,
+          isActive: true,
+          user: {
+            select: {
+              role: true,
+            },
+          },
         },
       });
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Unauthorized - Please sign in");
-        }
-        if (response.status === 404) {
-          throw new Error("Profile API route not found");
-        }
-        throw new Error(`Failed to fetch profile: ${response.statusText}`);
-      }
+      if (!student) return null;
 
-      const data = await response.json();
-      return data;
+      // Decrypt sensitive data
+      const decryptedProfile = {
+        ...student,
+        email: await unprotectData(student.email, "email"),
+        phone: await unprotectData(student.phone, "phone"),
+        firstName: await unprotectData(student.firstName, "name"),
+        lastName: await unprotectData(student.lastName, "name"),
+        otherName: student.otherName
+          ? await unprotectData(student.otherName, "name")
+          : null,
+        role: student.user.role,
+      };
+
+      return decryptedProfile as StudentProfile;
     } catch (error) {
-      console.error("Error fetching profile:", error);
+      console.error("Error getting student profile:", error);
       throw error;
     }
   }
 
   /**
-   * Update user profile
+   * Update student profile
    */
-  static async updateProfile(profileData: UpdateProfileData): Promise<boolean> {
+  static async updateStudentProfile(
+    userId: string,
+    profileData: Partial<{
+      firstName: string;
+      lastName: string;
+      otherName: string;
+      phone: string;
+      passportUrl: string;
+    }>
+  ) {
     try {
-      const response = await fetch("/api/profile", {
-        method: "PUT",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(profileData),
+      // Get the current student data
+      const currentStudent = await prisma.student.findUnique({
+        where: { userId },
       });
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Unauthorized - Please sign in");
-        }
-        if (response.status === 404) {
-          throw new Error("Profile update API route not found");
-        }
-        throw new Error(`Failed to update profile: ${response.statusText}`);
+      if (!currentStudent) {
+        throw new Error("Student not found");
       }
 
-      return true;
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      throw error;
-    }
-  }
+      // Prepare update data
+      const updateData: any = {};
 
-  /**
-   * Change user password
-   */
-  static async changePassword(
-    securitySettings: SecuritySettings
-  ): Promise<boolean> {
-    try {
-      const response = await fetch("/api/profile/security/password", {
-        method: "PUT",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
+      // Update fields if provided
+      if (profileData.firstName) {
+        updateData.firstName = (
+          await protectData(profileData.firstName, "name")
+        ).encrypted;
+      }
+
+      if (profileData.lastName) {
+        updateData.lastName = (
+          await protectData(profileData.lastName, "name")
+        ).encrypted;
+      }
+
+      if (profileData.otherName !== undefined) {
+        updateData.otherName = profileData.otherName
+          ? (await protectData(profileData.otherName, "name")).encrypted
+          : null;
+      }
+
+      if (profileData.phone) {
+        const protectedPhone = await protectData(profileData.phone, "phone");
+        updateData.phone = protectedPhone.encrypted;
+        updateData.phoneSearchHash = protectedPhone.searchHash;
+      }
+
+      if (profileData.passportUrl !== undefined) {
+        updateData.passportUrl = profileData.passportUrl;
+      }
+
+      // Update the student profile
+      const updatedStudent = await prisma.student.update({
+        where: { userId },
+        data: {
+          ...updateData,
+          updatedAt: new Date(),
         },
-        body: JSON.stringify({
-          currentPassword: securitySettings.currentPassword,
-          newPassword: securitySettings.newPassword,
-        }),
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Unauthorized - Please sign in");
-        }
-        if (response.status === 400) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Invalid current password");
-        }
-        if (response.status === 404) {
-          throw new Error("Password change API route not found");
-        }
-        throw new Error(`Failed to change password: ${response.statusText}`);
-      }
-
-      return true;
-    } catch (error) {
-      console.error("Error changing password:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get notification settings
-   */
-  static async getNotificationSettings(): Promise<NotificationSettings> {
-    try {
-      const response = await fetch("/api/profile/notifications", {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Unauthorized - Please sign in");
-        }
-        if (response.status === 404) {
-          throw new Error("Notification settings API route not found");
-        }
-        throw new Error(
-          `Failed to fetch notification settings: ${response.statusText}`
-        );
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error("Error fetching notification settings:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Update notification settings
-   */
-  static async updateNotificationSettings(
-    settings: NotificationSettings
-  ): Promise<boolean> {
-    try {
-      const response = await fetch("/api/profile/notifications", {
-        method: "PUT",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(settings),
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Unauthorized - Please sign in");
-        }
-        if (response.status === 404) {
-          throw new Error("Notification settings update API route not found");
-        }
-        throw new Error(
-          `Failed to update notification settings: ${response.statusText}`
-        );
-      }
-
-      return true;
-    } catch (error) {
-      console.error("Error updating notification settings:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get user activity log
-   */
-  static async getActivityLog(limit: number = 50): Promise<any[]> {
-    try {
-      const response = await fetch(`/api/profile/activity?limit=${limit}`, {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
+        select: {
+          id: true,
+          matricNumber: true,
+          firstName: true,
+          lastName: true,
+          otherName: true,
+          email: true,
+          phone: true,
+          passportUrl: true,
+          department: true,
+          course: true,
+          college: true,
+          dateEnrolled: true,
+          isActive: true,
+          user: {
+            select: {
+              role: true,
+            },
+          },
         },
       });
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Unauthorized - Please sign in");
-        }
-        if (response.status === 404) {
-          throw new Error("Activity log API route not found");
-        }
-        throw new Error(`Failed to fetch activity log: ${response.statusText}`);
-      }
+      // Decrypt sensitive data for response
+      const decryptedProfile = {
+        ...updatedStudent,
+        email: await unprotectData(updatedStudent.email, "email"),
+        phone: await unprotectData(updatedStudent.phone, "phone"),
+        firstName: await unprotectData(updatedStudent.firstName, "name"),
+        lastName: await unprotectData(updatedStudent.lastName, "name"),
+        otherName: updatedStudent.otherName
+          ? await unprotectData(updatedStudent.otherName, "name")
+          : null,
+        role: updatedStudent.user.role,
+      };
 
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error("Error fetching activity log:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Upload profile picture
-   */
-  static async uploadProfilePicture(file: File): Promise<string | null> {
-    try {
-      const formData = new FormData();
-      formData.append("profilePicture", file);
-
-      const response = await fetch("/api/profile/picture", {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Unauthorized - Please sign in");
-        }
-        if (response.status === 404) {
-          throw new Error("Profile picture upload API route not found");
-        }
-        throw new Error(
-          `Failed to upload profile picture: ${response.statusText}`
-        );
-      }
-
-      const data = await response.json();
-      return data.imageUrl;
-    } catch (error) {
-      console.error("Error uploading profile picture:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Delete account
-   */
-  static async deleteAccount(confirmation: string): Promise<boolean> {
-    try {
-      const response = await fetch("/api/profile", {
-        method: "DELETE",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ confirmation }),
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Unauthorized - Please sign in");
-        }
-        if (response.status === 400) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Invalid confirmation");
-        }
-        if (response.status === 404) {
-          throw new Error("Delete account API route not found");
-        }
-        throw new Error(`Failed to delete account: ${response.statusText}`);
-      }
-
-      return true;
-    } catch (error) {
-      console.error("Error deleting account:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get user statistics
-   */
-  static async getUserStats(): Promise<{
-    totalLogins: number;
-    lastLogin: string | null;
-    accountAge: number;
-    profileCompletion: number;
-  }> {
-    try {
-      const response = await fetch("/api/profile/stats", {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
+      // Log the profile update
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: "PROFILE_UPDATED",
+          resourceType: "USER",
+          resourceId: userId,
+          details: {
+            updatedFields: Object.keys(profileData),
+          },
         },
       });
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Unauthorized - Please sign in");
-        }
-        if (response.status === 404) {
-          throw new Error("User stats API route not found");
-        }
-        throw new Error(`Failed to fetch user stats: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data;
+      return {
+        success: true,
+        profile: decryptedProfile as StudentProfile,
+        message: "Profile updated successfully",
+      };
     } catch (error) {
-      console.error("Error fetching user stats:", error);
+      console.error("Error updating student profile:", error);
       throw error;
     }
   }
 
   /**
-   * Export user data
+   * Update student email
    */
-  static async exportUserData(): Promise<any> {
+  static async updateStudentEmail(
+    userId: string,
+    newEmail: string,
+    password: string
+  ) {
     try {
-      const response = await fetch("/api/profile/export", {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
+      // Get the user
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          student: true,
         },
       });
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Unauthorized - Please sign in");
-        }
-        if (response.status === 404) {
-          throw new Error("Export data API route not found");
-        }
-        throw new Error(`Failed to export user data: ${response.statusText}`);
+      if (!user || !user.student) {
+        throw new Error("Student not found");
       }
 
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error("Error exporting user data:", error);
-      throw error;
-    }
-  }
+      // Verify the password
+      if (!user.passwordHash) {
+        throw new Error("Password not set");
+      }
 
-  /**
-   * Request account deletion
-   */
-  static async requestAccountDeletion(reason?: string): Promise<boolean> {
-    try {
-      const response = await fetch("/api/profile/deletion-request", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
+      const isPasswordValid = await verifyProtectedData(
+        password,
+        user.passwordHash,
+        "password"
+      );
+      if (!isPasswordValid) {
+        throw new Error("Invalid password");
+      }
+
+      // Check if the new email is already in use
+      const existingStudent = await prisma.student.findFirst({
+        where: {
+          email: (await protectData(newEmail, "email")).encrypted,
         },
-        body: JSON.stringify({ reason }),
       });
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Unauthorized - Please sign in");
-        }
-        if (response.status === 404) {
-          throw new Error("Account deletion API route not found");
-        }
-        throw new Error(
-          `Failed to request account deletion: ${response.statusText}`
-        );
+      if (existingStudent && existingStudent.id !== user.student.id) {
+        throw new Error("Email is already in use");
       }
 
-      return true;
+      // Protect the new email
+      const protectedEmail = await protectData(newEmail, "email");
+
+      // Update the student email
+      await prisma.student.update({
+        where: { id: user.student.id },
+        data: {
+          email: protectedEmail.encrypted,
+          emailSearchHash: protectedEmail.searchHash,
+        },
+      });
+
+      // Update the user email
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          email: protectedEmail.encrypted,
+          emailVerified: null, // Require email verification again
+          emailVerificationRequired: true,
+        },
+      });
+
+      // Generate email verification token
+      const verificationToken =
+        require("@/lib/utils/utils").generateVerificationToken();
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+      await prisma.verificationToken.create({
+        data: {
+          identifier: userId,
+          token: verificationToken,
+          expires: expiresAt,
+        },
+      });
+
+      // Log the email update
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: "PROFILE_UPDATED",
+          resourceType: "USER",
+          resourceId: userId,
+          details: {
+            updatedFields: ["email"],
+          },
+        },
+      });
+
+      return {
+        success: true,
+        verificationToken,
+        message:
+          "Email updated successfully. Please check your new email for verification.",
+      };
     } catch (error) {
-      console.error("Error requesting account deletion:", error);
+      console.error("Error updating student email:", error);
       throw error;
     }
   }
 
   /**
-   * Default notification settings
+   * Deactivate student account
    */
-  private static getDefaultNotificationSettings(): NotificationSettings {
-    return {
-      emailNotifications: true,
-      pushNotifications: true,
-      assignmentReminders: true,
-      gradeAlerts: true,
-      lectureReminders: true,
-    };
+  static async deactivateStudentAccount(userId: string, password: string) {
+    try {
+      // Get the user
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      // Verify the password
+      if (!user.passwordHash) {
+        throw new Error("Password not set");
+      }
+
+      const isPasswordValid = await verifyProtectedData(
+        password,
+        user.passwordHash,
+        "password"
+      );
+      if (!isPasswordValid) {
+        throw new Error("Invalid password");
+      }
+
+      // Deactivate the user account
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          isActive: false,
+        },
+      });
+
+      // Log the account deactivation
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: "ACCOUNT_DELETION_REQUESTED",
+          resourceType: "USER",
+          resourceId: userId,
+        },
+      });
+
+      return {
+        success: true,
+        message: "Account deactivated successfully",
+      };
+    } catch (error) {
+      console.error("Error deactivating student account:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete student account
+   */
+  static async deleteStudentAccount(userId: string, password: string) {
+    try {
+      // Get the user
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      // Verify the password
+      if (!user.passwordHash) {
+        throw new Error("Password not set");
+      }
+
+      const isPasswordValid = await verifyProtectedData(
+        password,
+        user.passwordHash,
+        "password"
+      );
+      if (!isPasswordValid) {
+        throw new Error("Invalid password");
+      }
+
+      // Delete the student (this will cascade delete related records)
+      const student = await prisma.student.findUnique({
+        where: { userId },
+      });
+
+      if (student) {
+        await prisma.student.delete({
+          where: { id: student.id },
+        });
+      }
+
+      // Delete the user
+      await prisma.user.delete({
+        where: { id: userId },
+      });
+
+      // Log the account deletion
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: "ACCOUNT_DELETION",
+          resourceType: "USER",
+          resourceId: userId,
+        },
+      });
+
+      return {
+        success: true,
+        message: "Account deleted successfully",
+      };
+    } catch (error) {
+      console.error("Error deleting student account:", error);
+      throw error;
+    }
   }
 }

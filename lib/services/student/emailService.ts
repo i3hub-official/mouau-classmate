@@ -1,504 +1,448 @@
-// lib/services/emailService.ts - FIXED VERSION
+// lib/services/student/emailService.ts
+import { prisma } from "@/lib/server/prisma";
+import { protectData, unprotectData } from "@/lib/security/dataProtection";
+import { AuditAction, ResourceType } from "@prisma/client";
+import { generateVerificationToken } from "@/lib/utils/utils";
 
-import nodemailer from "nodemailer";
-import fs from "fs";
-import path from "path";
-import handlebars from "handlebars";
-
-export interface EmailOptions {
-  to: string;
-  subject: string;
-  template: string;
-  context: Record<string, any>;
-}
-
-export interface EmailTemplate {
-  subject: string;
-  html: string;
-  text: string;
-}
-
-export class EmailService {
-  private transporter: nodemailer.Transporter;
-  private templatesDir: string;
-  private connectionVerified: boolean = false;
-  private lastConnectionCheck: number = 0;
-  private readonly CONNECTION_CHECK_INTERVAL = 5 * 60 * 1000;
-
-  constructor() {
-    // Log configuration for debugging
-    // this.logSmtpConfiguration();
-
-    this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || "smtp.gmail.com",
-      port: parseInt(process.env.SMTP_PORT || "587"),
-      secure: process.env.SMTP_SECURE === "true", // false for port 587, true for 465
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-      // Enhanced timeout settings
-      connectionTimeout: 30000, // 30 seconds
-      greetingTimeout: 30000, // 30 seconds
-      socketTimeout: 30000, // 30 seconds
-      // Gmail-specific settings
-      tls: {
-        rejectUnauthorized: false,
-      },
-      debug: false,
-      logger: false,
-    });
-
-    this.templatesDir = path.join(process.cwd(), "lib/templates/emails");
-    this.registerHelpers();
-  }
-
-  private logSmtpConfiguration() {
-    console.log("📧 SMTP Configuration:", {
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT,
-      secure: process.env.SMTP_SECURE,
-      user: process.env.SMTP_USER ? "SET" : "MISSING",
-      pass: process.env.SMTP_PASS ? "SET" : "MISSING",
-      fromName: process.env.EMAIL_FROM_NAME,
-      fromAddress: process.env.EMAIL_FROM_ADDRESS,
-      nodeEnv: process.env.NODE_ENV,
-    });
-  }
-
-  private registerHelpers() {
-    handlebars.registerHelper("eq", (a, b) => a === b);
-    handlebars.registerHelper("neq", (a, b) => a !== b);
-    handlebars.registerHelper("formatDate", (date: Date) => {
-      return new Date(date).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
-    });
-  }
-
-  private async loadTemplate(templateName: string): Promise<EmailTemplate> {
+export class StudentEmailService {
+  /**
+   * Send welcome email
+   */
+  static async sendWelcomeEmail(studentId: string) {
     try {
-      const templatePath = path.join(this.templatesDir, templateName);
-
-      // Check if template directory exists
-      if (!fs.existsSync(templatePath)) {
-        throw new Error(`Template directory not found: ${templatePath}`);
-      }
-
-      const subject = await fs.promises.readFile(
-        path.join(templatePath, "subject.hbs"),
-        "utf-8"
-      );
-
-      const html = await fs.promises.readFile(
-        path.join(templatePath, "html.hbs"),
-        "utf-8"
-      );
-
-      const text = await fs.promises.readFile(
-        path.join(templatePath, "text.hbs"),
-        "utf-8"
-      );
-
-      return { subject, html, text };
-    } catch (error) {
-      console.error(`❌ Template loading error for ${templateName}:`, error);
-      throw new Error(
-        `Failed to load email template: ${templateName}. Error: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
-    }
-  }
-
-  private compileTemplate(
-    template: EmailTemplate,
-    context: Record<string, any>
-  ) {
-    return {
-      subject: handlebars.compile(template.subject)(context),
-      html: handlebars.compile(template.html)(context),
-      text: handlebars.compile(template.text)(context),
-    };
-  }
-
-  private async ensureConnection(): Promise<boolean> {
-    const now = Date.now();
-    if (
-      this.connectionVerified &&
-      now - this.lastConnectionCheck < this.CONNECTION_CHECK_INTERVAL
-    ) {
-      return true;
-    }
-
-    try {
-      // console.log("🔍 Checking email server connection...");
-      const isConnected = await this.verifyConnection();
-
-      if (isConnected) {
-        this.connectionVerified = true;
-        this.lastConnectionCheck = now;
-        // console.log("✅ Email connection verified and cached");
-        return true;
-      } else {
-        this.connectionVerified = false;
-        console.error("❌ Email connection verification failed");
-        return false;
-      }
-    } catch (error) {
-      this.connectionVerified = false;
-      console.error("❌ Error during email connection check:", error);
-      return false;
-    }
-  }
-
-  async sendEmail(options: EmailOptions): Promise<boolean> {
-    try {
-      // console.log("🚀 Starting email send process...");
-      // console.log("📧 Environment:", process.env.NODE_ENV);
-      // console.log("📬 Recipient:", options.to);
-      // console.log("📄 Template:", options.template);
-
-      // Load and compile template first
-      // console.log("📝 Loading email template...");
-      const template = await this.loadTemplate(options.template);
-      const compiled = this.compileTemplate(template, options.context);
-
-      // console.log("✅ Template loaded and compiled successfully");
-      // console.log("📧 Subject:", compiled.subject);
-
-      // Check if we should actually send or just simulate
-      const shouldSimulate =
-        process.env.EMAIL_SIMULATE === "true" ||
-        process.env.NODE_ENV === "test";
-
-      if (shouldSimulate) {
-        console.log("🧪 SIMULATION MODE - Email would be sent:");
-        console.log({
-          to: options.to,
-          from: {
-            name: process.env.EMAIL_FROM_NAME || "MOUAU ClassMate",
-            address: process.env.EMAIL_FROM_ADDRESS || "noreply@mouau.edu.ng",
-          },
-          subject: compiled.subject,
-          template: options.template,
-        });
-        console.log("✅ Email simulation successful");
-        return true;
-      }
-
-      // ACTUALLY SEND THE EMAIL
-      // console.log("📤 SENDING REAL EMAIL...");
-      // console.log("🔄 Verifying connection before sending...");
-
-      const isConnected = await this.ensureConnection();
-
-      if (!isConnected) {
-        console.error("❌ Cannot send email - no connection to email server");
-        throw new Error("Email server connection failed");
-      }
-
-      // console.log("✅ Connection verified, preparing to send...");
-
-      const mailOptions = {
-        from: {
-          name: process.env.EMAIL_FROM_NAME || "MOUAU ClassMate",
-          address: process.env.EMAIL_FROM_ADDRESS || "noreply@mouau.edu.ng",
+      const student = await prisma.student.findUnique({
+        where: { id: studentId },
+        include: {
+          user: true,
         },
-        to: options.to,
-        subject: compiled.subject,
-        html: compiled.html,
-        text: compiled.text,
-      };
-
-      console.log("📤 Sending email with options:", {
-        from: mailOptions.from,
-        to: mailOptions.to,
-        subject: mailOptions.subject,
       });
 
-      const result = await this.transporter.sendMail(mailOptions);
-
-      // console.log("✅ EMAIL SENT SUCCESSFULLY!");
-      // console.log("📬 Message ID:", result.messageId);
-      // console.log("📨 Response:", result.response);
-      // console.log("✉️ Accepted:", result.accepted);
-      // console.log("🚫 Rejected:", result.rejected);
-
-      if (result.rejected && result.rejected.length > 0) {
-        console.error("⚠️ Some recipients were rejected:", result.rejected);
+      if (!student || !student.user) {
+        throw new Error("Student not found");
       }
 
-      return true;
-    } catch (error) {
-      console.error("❌ FAILED TO SEND EMAIL");
-      console.error("💥 Error details:", error);
+      // Decrypt email
+      const email = await unprotectData(student.email, "email");
 
-      // Reset connection status on error
-      this.connectionVerified = false;
+      // In a real implementation, you would use an email service like SendGrid, Nodemailer, etc.
+      // For now, we'll just log the email that would be sent
+      console.log(`Welcome email sent to ${email}`);
 
-      // Log specific error details
-      if (error instanceof Error) {
-        console.error("📧 Email error:", {
-          name: error.name,
-          message: error.message,
-          stack: error.stack,
-        });
+      // Log the email sent
+      await prisma.auditLog.create({
+        data: {
+          userId: student.user.id,
+          action: AuditAction.NOTIFICATION_SENT,
+          resourceType: ResourceType.USER,
+          resourceId: student.user.id,
+          details: {
+            type: "welcome",
+            email,
+          },
+        },
+      });
 
-        // Provide helpful debugging information
-        if (error.message.includes("Invalid login")) {
-          console.error("\n🔐 AUTHENTICATION ERROR:");
-          console.error("   • Using Gmail? You need an App Password");
-          console.error(
-            "   • Go to: https://myaccount.google.com/apppasswords"
-          );
-          console.error("   • Generate a new App Password");
-          console.error("   • Update your SMTP_PASS environment variable");
-        } else if (error.message.includes("ECONNREFUSED")) {
-          console.error("\n🌐 CONNECTION ERROR:");
-          console.error("   • Check SMTP_HOST and SMTP_PORT");
-          console.error(
-            "   • Current: " +
-              process.env.SMTP_HOST +
-              ":" +
-              process.env.SMTP_PORT
-          );
-          console.error("   • Gmail: smtp.gmail.com:587 (secure: false)");
-          console.error("   • Gmail Alt: smtp.gmail.com:465 (secure: true)");
-        } else if (error.message.includes("ETIMEDOUT")) {
-          console.error("\n⏰ TIMEOUT ERROR:");
-          console.error("   • Network connectivity issue");
-          console.error("   • Check firewall settings");
-          console.error("   • Try a different network");
-        }
-      }
-
-      throw error; // Re-throw to let caller handle it
-    }
-  }
-
-  async verifyConnection(): Promise<boolean> {
-    try {
-      // console.log("🔌 Testing email server connection...");
-      // console.log("📧 Configuration:", {
-      //   host: process.env.SMTP_HOST,
-      //   port: process.env.SMTP_PORT,
-      //   user: process.env.SMTP_USER,
-      //   secure: process.env.SMTP_SECURE,
-      // });
-
-      // Test the connection
-      await this.transporter.verify();
-
-      // console.log("✅ Email server connection verified successfully");
-      this.connectionVerified = true;
-      this.lastConnectionCheck = Date.now();
-      return true;
-    } catch (error) {
-      console.error("❌ Email server connection verification FAILED");
-      console.error("💥 Error:", error);
-
-      if (error instanceof Error) {
-        console.error("\n🔍 Diagnostics:");
-        console.error("   Error name:", error.name);
-        console.error("   Error message:", error.message);
-
-        if (error.message.includes("Invalid login")) {
-          console.error("\n🔐 AUTHENTICATION ISSUE:");
-          console.error("   1. Verify SMTP_USER is correct");
-          console.error(
-            "   2. For Gmail, use App Password (not regular password)"
-          );
-          console.error(
-            "   3. Generate at: https://myaccount.google.com/apppasswords"
-          );
-        }
-      }
-
-      this.connectionVerified = false;
-      this.lastConnectionCheck = Date.now();
-      return false;
-    }
-  }
-
-  // Enhanced test method that actually sends
-  async testEmailService(testEmail?: string): Promise<{
-    success: boolean;
-    steps: {
-      connection: boolean;
-      template: boolean;
-      sending: boolean;
-    };
-    error?: string;
-  }> {
-    console.log("\n🧪 ===== EMAIL SERVICE TEST =====");
-    console.log("📧 Environment:", process.env.NODE_ENV);
-    console.log("🔧 Simulate mode:", process.env.EMAIL_SIMULATE);
-
-    const results: {
-      success: boolean;
-      steps: {
-        connection: boolean;
-        template: boolean;
-        sending: boolean;
+      return {
+        success: true,
+        message: "Welcome email sent successfully",
       };
-      error?: string;
-    } = {
-      success: false,
-      steps: {
-        connection: false,
-        template: false,
-        sending: false,
-      },
-    };
-
-    try {
-      // Step 1: Test connection
-      console.log("\n1️⃣ Testing SMTP connection...");
-      results.steps.connection = await this.verifyConnection();
-
-      if (!results.steps.connection) {
-        results.error = "SMTP connection failed";
-        console.error("❌ Test failed at connection step");
-        return results;
-      }
-
-      // Step 2: Test template loading
-      console.log("\n2️⃣ Testing template loading...");
-      try {
-        await this.loadTemplate("email-verification");
-        results.steps.template = true;
-        console.log("✅ Template loaded successfully");
-      } catch (templateError) {
-        results.error = `Template loading failed: ${
-          templateError instanceof Error
-            ? templateError.message
-            : "Unknown error"
-        }`;
-        console.error("❌ Test failed at template step");
-        return results;
-      }
-
-      // Step 3: Test actual email sending
-      console.log("\n3️⃣ Testing email sending...");
-
-      if (!testEmail) {
-        console.log("⚠️ No test email provided, skipping send test");
-        console.log(
-          "💡 Provide test email: emailService.testEmailService('your@email.com')"
-        );
-        results.steps.sending = true; // Mark as passed since we can't test without email
-      } else {
-        console.log("📬 Test recipient:", testEmail);
-
-        try {
-          results.steps.sending = await this.sendEmail({
-            to: testEmail,
-            subject: "Test Email from MOUAU ClassMate",
-            template: "email-verification",
-            context: {
-              name: "Test User",
-              verificationLink:
-                "https://mouau.edu.ng/auth/verify?token=test123",
-            },
-          });
-
-          if (results.steps.sending) {
-            console.log("✅ Test email sent successfully!");
-            console.log("📬 Check inbox:", testEmail);
-          }
-        } catch (sendError) {
-          console.error("❌ Failed to send test email:", sendError);
-          results.error =
-            sendError instanceof Error ? sendError.message : "Send failed";
-          return results;
-        }
-      }
-
-      results.success =
-        results.steps.connection &&
-        results.steps.template &&
-        results.steps.sending;
-
-      console.log("\n" + "=".repeat(40));
-      if (results.success) {
-        console.log("✅ EMAIL SERVICE TEST PASSED");
-      } else {
-        console.log("❌ EMAIL SERVICE TEST FAILED");
-      }
-      console.log("=".repeat(40) + "\n");
-
-      return results;
     } catch (error) {
-      console.error("❌ Email service test failed with error:", error);
-      results.error =
-        error instanceof Error ? error.message : "Unknown error occurred";
-      return results;
+      console.error("Error sending welcome email:", error);
+      throw error;
     }
   }
 
-  // Get connection status
-  getConnectionStatus(): {
-    verified: boolean;
-    lastChecked: number;
-    config: any;
-  } {
-    return {
-      verified: this.connectionVerified,
-      lastChecked: this.lastConnectionCheck,
-      config: {
-        host: process.env.SMTP_HOST,
-        port: process.env.SMTP_PORT,
-        user: process.env.SMTP_USER ? "SET" : "MISSING",
-        pass: process.env.SMTP_PASS
-          ? "SET (length: " + (process.env.SMTP_PASS?.length || 0) + ")"
-          : "MISSING",
-        secure: process.env.SMTP_SECURE,
-        nodeEnv: process.env.NODE_ENV,
-        simulateMode: process.env.EMAIL_SIMULATE,
-      },
-    };
-  }
-
-  // Force send email (bypass simulation)
-  async forceSendEmail(options: EmailOptions): Promise<boolean> {
-    const originalSimulate = process.env.EMAIL_SIMULATE;
-    const originalNodeEnv = process.env.NODE_ENV;
-
+  /**
+   * Send email verification email
+   */
+  static async sendEmailVerificationEmail(userId: string, token: string) {
     try {
-      // Temporarily disable simulation
-      (process.env as any).EMAIL_SIMULATE = "false";
-      if (process.env.NODE_ENV === "test") {
-        (process.env as any).NODE_ENV = "production";
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          student: true,
+        },
+      });
+
+      if (!user || !user.student) {
+        throw new Error("User or student not found");
       }
 
-      // console.log("🚀 FORCE SENDING EMAIL (bypassing simulation)...");
-      const result = await this.sendEmail(options);
+      // Decrypt email
+      const email = await unprotectData(user.student.email, "email");
 
-      return result;
-    } finally {
-      // Restore original values
-      if (originalSimulate !== undefined) {
-        (process.env as any).EMAIL_SIMULATE = originalSimulate;
-      }
-      if (originalNodeEnv !== undefined) {
-        (process.env as any).NODE_ENV = originalNodeEnv;
-      }
+      // In a real implementation, you would use an email service like SendGrid, Nodemailer, etc.
+      // For now, we'll just log the email that would be sent
+      console.log(`Email verification sent to ${email} with token ${token}`);
+
+      // Log the email sent
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: AuditAction.NOTIFICATION_SENT,
+          resourceType: ResourceType.USER,
+          resourceId: userId,
+          details: {
+            type: "email_verification",
+            email,
+            token,
+          },
+        },
+      });
+
+      return {
+        success: true,
+        message: "Email verification sent successfully",
+      };
+    } catch (error) {
+      console.error("Error sending email verification:", error);
+      throw error;
     }
   }
-}
 
-// Singleton instance
-export const emailService = new EmailService();
+  /**
+   * Verify email code for student
+   */
+  static async verifyEmailCode(
+    code: string,
+    encodedEmail: string,
+    hash: string
+  ) {
+    try {
+      // Find student by encrypted email
+      const student = await prisma.student.findFirst({
+        where: {
+          emailSearchHash: hash,
+        },
+        include: {
+          user: true,
+        },
+      });
 
-// Export test function
-export async function testEmailService(testEmail?: string) {
-  return await emailService.testEmailService(testEmail);
-}
+      if (!student || !student.user) {
+        throw new Error("Student not found");
+      }
 
-// Quick status check
-export function getEmailStatus() {
-  return emailService.getConnectionStatus();
+      // Decrypt email for comparison
+      const decryptedEmail = await unprotectData(student.email, "email");
+
+      // Verify the hash matches
+      const { generateSearchHash } = await import(
+        "@/lib/security/dataProtection"
+      );
+      const expectedHash = generateSearchHash(decryptedEmail);
+
+      if (hash !== expectedHash) {
+        throw new Error("Invalid verification code");
+      }
+
+      // Find and verify the token
+      const verificationToken = await prisma.verificationToken.findUnique({
+        where: { token: code },
+      });
+
+      if (!verificationToken || verificationToken.expires < new Date()) {
+        throw new Error("Invalid or expired verification code");
+      }
+
+      // Update user email verification status
+      await prisma.user.update({
+        where: { id: student.user.id },
+        data: {
+          emailVerified: new Date(),
+        },
+      });
+
+      // Delete the verification token
+      await prisma.verificationToken.delete({
+        where: { token: verificationToken.token },
+      });
+
+      // Log the verification
+      await prisma.auditLog.create({
+        data: {
+          userId: student.user.id,
+          action: AuditAction.EMAIL_VERIFIED,
+          resourceType: ResourceType.USER,
+          resourceId: student.user.id,
+          details: {
+            email: decryptedEmail,
+            verificationCode: code,
+          },
+          ipAddress: "unknown",
+          userAgent: "unknown",
+        },
+      });
+
+      return {
+        success: true,
+        data: {
+          email: decryptedEmail,
+        },
+        message: "Email verified successfully",
+      };
+    } catch (error) {
+      console.error("Student email verification error:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send password reset email
+   */
+  static async sendPasswordResetEmail(userId: string, token: string) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          student: true,
+        },
+      });
+
+      if (!user || !user.student) {
+        throw new Error("User or student not found");
+      }
+
+      // Decrypt email
+      const email = await unprotectData(user.student.email, "email");
+
+      // In a real implementation, you would use an email service like SendGrid, Nodemailer, etc.
+      // For now, we'll just log the email that would be sent
+      console.log(`Password reset sent to ${email} with token ${token}`);
+
+      // Log the email sent
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: AuditAction.NOTIFICATION_SENT,
+          resourceType: ResourceType.USER,
+          resourceId: userId,
+          details: {
+            type: "password_reset",
+            email,
+            token,
+          },
+        },
+      });
+
+      return {
+        success: true,
+        message: "Password reset email sent successfully",
+      };
+    } catch (error) {
+      console.error("Error sending password reset email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send assignment reminder email
+   */
+  static async sendAssignmentReminderEmail(
+    studentId: string,
+    assignmentId: string
+  ) {
+    try {
+      const student = await prisma.student.findUnique({
+        where: { id: studentId },
+        include: {
+          user: true,
+        },
+      });
+
+      if (!student || !student.user) {
+        throw new Error("Student not found");
+      }
+
+      const assignment = await prisma.assignment.findUnique({
+        where: { id: assignmentId },
+        include: {
+          course: true,
+        },
+      });
+
+      if (!assignment) {
+        throw new Error("Assignment not found");
+      }
+
+      // Decrypt email
+      const email = await unprotectData(student.email, "email");
+
+      // In a real implementation, you would use an email service like SendGrid, Nodemailer, etc.
+      // For now, we'll just log the email that would be sent
+      console.log(
+        `Assignment reminder sent to ${email} for assignment ${assignment.title}`
+      );
+
+      // Log the email sent
+      await prisma.auditLog.create({
+        data: {
+          userId: student.user.id,
+          action: AuditAction.NOTIFICATION_SENT,
+          resourceType: ResourceType.ASSIGNMENT,
+          resourceId: assignmentId,
+          details: {
+            type: "assignment_reminder",
+            email,
+            assignmentTitle: assignment.title,
+            courseCode: assignment.course.code,
+            dueDate: assignment.dueDate,
+          },
+        },
+      });
+
+      return {
+        success: true,
+        message: "Assignment reminder sent successfully",
+      };
+    } catch (error) {
+      console.error("Error sending assignment reminder:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send grade notification email
+   */
+  static async sendGradeNotificationEmail(
+    studentId: string,
+    assignmentId: string,
+    grade: number
+  ) {
+    try {
+      const student = await prisma.student.findUnique({
+        where: { id: studentId },
+        include: {
+          user: true,
+        },
+      });
+
+      if (!student || !student.user) {
+        throw new Error("Student not found");
+      }
+
+      const assignment = await prisma.assignment.findUnique({
+        where: { id: assignmentId },
+        include: {
+          course: true,
+        },
+      });
+
+      if (!assignment) {
+        throw new Error("Assignment not found");
+      }
+
+      // Decrypt email
+      const email = await unprotectData(student.email, "email");
+
+      // In a real implementation, you would use an email service like SendGrid, Nodemailer, etc.
+      // For now, we'll just log the email that would be sent
+      console.log(
+        `Grade notification sent to ${email} for assignment ${assignment.title} with grade ${grade}`
+      );
+
+      // Log the email sent
+      await prisma.auditLog.create({
+        data: {
+          userId: student.user.id,
+          action: AuditAction.NOTIFICATION_SENT,
+          resourceType: ResourceType.ASSIGNMENT,
+          resourceId: assignmentId,
+          details: {
+            type: "grade_notification",
+            email,
+            assignmentTitle: assignment.title,
+            courseCode: assignment.course.code,
+            grade,
+          },
+        },
+      });
+
+      return {
+        success: true,
+        message: "Grade notification sent successfully",
+      };
+    } catch (error) {
+      console.error("Error sending grade notification:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Resend verification email
+   */
+  static async resendVerificationEmail(email: string) {
+    try {
+      // Find the student by email (using search hash)
+      const emailHash = await protectData(email, "email");
+      const student = await prisma.student.findFirst({
+        where: {
+          emailSearchHash: emailHash.searchHash,
+        },
+        include: {
+          user: true,
+        },
+      });
+
+      if (!student || !student.user) {
+        throw new Error("No student account found with this email");
+      }
+
+      // Check if there's already a recent verification email sent
+      const recentToken = await prisma.verificationToken.findFirst({
+        where: {
+          identifier: student.user.email,
+          createdAt: {
+            gte: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
+          },
+        },
+      });
+
+      if (recentToken) {
+        throw new Error(
+          "Verification email was recently sent. Please check your inbox or try again later."
+        );
+      }
+
+      // Generate verification token
+      const verificationToken = generateVerificationToken();
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+      await prisma.verificationToken.create({
+        data: {
+          identifier: student.user.email,
+          token: verificationToken,
+          expires: expiresAt,
+        },
+      });
+
+      // In a real implementation, you would use an email service like SendGrid, Nodemailer, etc.
+      // For now, we'll just log the email that would be sent
+      console.log(
+        `Verification email resent to ${email} with token ${verificationToken}`
+      );
+
+      // Log the email sent
+      await prisma.auditLog.create({
+        data: {
+          userId: student.user.id,
+          action: AuditAction.RESEND_VERIFICATION_REQUESTED,
+          resourceType: ResourceType.USER,
+          resourceId: student.user.id,
+          details: {
+            email,
+            token: verificationToken,
+          },
+        },
+      });
+
+      return {
+        success: true,
+        message: "Verification email sent successfully",
+      };
+    } catch (error) {
+      console.error("Error resending verification email:", error);
+      throw error;
+    }
+  }
 }

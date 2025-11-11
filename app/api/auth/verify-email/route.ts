@@ -1,262 +1,96 @@
-// app/auth/verify-email/route.ts
+// app/api/auth/verify-email/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { StudentRegistrationService } from "@/lib/services/student/studentRegistrationService";
 import { prisma } from "@/lib/server/prisma";
+import { StudentEmailService } from "@/lib/services/student/emailService";
+import { TeacherEmailService } from "@/lib/services/teacher/emailService";
+import { AdminEmailService } from "@/lib/services/admin/emailService";
+import { AuditAction, ResourceType } from "@prisma/client";
 
 export async function POST(request: NextRequest) {
-  const startTime = Date.now();
-
   try {
-    const body = await request.json();
-    const { code, encodedEmail, hash } = body;
+    const { code, encodedEmail, hash } = await request.json();
 
-    // Validate required parameters
-    if (!code || typeof code !== "string" || code.trim() === "") {
+    // Validate input
+    if (!code || !encodedEmail) {
       return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: "MISSING_CODE",
-            message: "Verification code is required",
-          },
-        },
+        { success: false, error: "Verification code and email are required" },
         { status: 400 }
       );
     }
 
-    // Optional: Validate encoded email if provided
-    if (encodedEmail && typeof encodedEmail !== "string") {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: "INVALID_EMAIL_PARAMETER",
-            message: "Invalid email parameter format",
-          },
-        },
-        { status: 400 }
-      );
-    }
-
-    // Get client IP for logging
-    const ipAddress =
-      request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
-      request.headers.get("x-real-ip") ||
-      "unknown";
-
+    // Extract IP address more reliably
+    const forwarded = request.headers.get("x-forwarded-for");
+    const ip = forwarded ? forwarded.split(/, /)[0] : "unknown";
     const userAgent = request.headers.get("user-agent") || "unknown";
 
-    // Verify the email using the new method signature
-    const result = await StudentRegistrationService.verifyEmail(
-      code,
-      encodedEmail
-    );
+    // Try to verify email for each user type
+    let verifyResult;
+    let userFound = false;
 
-    // Log successful verification
+    // Try teacher first
+    try {
+      verifyResult = await TeacherEmailService.verifyEmailCode(
+        code,
+        encodedEmail,
+        hash
+      );
+      userFound = true;
+    } catch (error) {
+      console.error("Teacher email verification failed:", error);
+
+      // Try admin if teacher failed
+      try {
+        verifyResult = await AdminEmailService.verifyEmailCode(
+          code,
+          encodedEmail,
+          hash
+        );
+        userFound = true;
+      } catch (error) {
+        console.error("Admin email verification failed:", error);
+
+        // Try student if admin failed
+        try {
+          verifyResult = await StudentEmailService.verifyEmailCode(
+            code,
+            encodedEmail,
+            hash
+          );
+          userFound = true;
+        } catch (error) {
+          console.error("Student email verification failed:", error);
+
+          // All attempts failed
+          return NextResponse.json(
+            { success: false, error: "Invalid verification code" },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    // Log the verification attempt
     await prisma.auditLog.create({
       data: {
-        userId: result.user.id,
-        action: "EMAIL_VERIFIED",
-        resourceType: "USER",
-        resourceId: result.user.id,
+        action: verifyResult?.success
+          ? AuditAction.EMAIL_VERIFIED
+          : AuditAction.EMAIL_VERIFICATION_FAILED,
+        resourceType: ResourceType.USER,
         details: {
-          email: result.user.email,
-          verifiedAt: new Date().toISOString(),
-          ipAddress,
+          encodedEmail,
+          success: verifyResult?.success || false,
         },
-        ipAddress,
+        ipAddress: ip,
         userAgent,
       },
     });
 
-    // Track verification success metric
-    const duration = Date.now() - startTime;
-    await prisma.metric.create({
-      data: {
-        name: "email_verification_success",
-        value: duration,
-        tags: {
-          userId: result.user.id,
-          duration: `${duration}ms`,
-        },
-        timestamp: new Date(),
-      },
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: "Email verified successfully! You can now sign in.",
-      user: {
-        id: result.user.id,
-        email: result.user.email,
-        name: result.user.name,
-      },
-    });
-  } catch (error: any) {
-    console.error("❌ Email verification error:", error);
-
-    const duration = Date.now() - startTime;
-    const ipAddress =
-      request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
-
-    // Track verification failure metric
-    await prisma.metric.create({
-      data: {
-        name: "email_verification_error",
-        value: duration,
-        tags: {
-          error: error.name || "UnknownError",
-          duration: `${duration}ms`,
-        },
-        timestamp: new Date(),
-      },
-    });
-
-    // Log failed verification attempt
-    await prisma.auditLog.create({
-      data: {
-        action: "EMAIL_VERIFICATION_FAILED",
-        resourceType: "USER",
-        details: {
-          error: error.message,
-          errorCode: error.code,
-          ipAddress,
-        },
-        ipAddress,
-        userAgent: request.headers.get("user-agent") || "unknown",
-      },
-    });
-
-    if (
-      error.name === "ValidationError" ||
-      error.name === "StudentRegistrationError"
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: error.code || "VERIFICATION_FAILED",
-            message: error.message,
-          },
-        },
-        { status: 400 }
-      );
-    }
-
+    return NextResponse.json(verifyResult);
+  } catch (error) {
+    console.error("Email verification error:", error);
     return NextResponse.json(
-      {
-        success: false,
-        error: {
-          code: "SERVER_ERROR",
-          message: "Email verification failed. Please try again.",
-        },
-      },
+      { success: false, error: "An error occurred while verifying your email" },
       { status: 500 }
-    );
-  }
-}
-
-// GET endpoint to verify via URL parameters
-export async function GET(request: NextRequest) {
-  const startTime = Date.now();
-
-  try {
-    const { searchParams } = new URL(request.url);
-    const code = searchParams.get("t"); // Verification code
-    const encodedEmail = searchParams.get("e"); // Encoded email
-    const hash = searchParams.get("h"); // Timestamp hash
-
-    if (!code) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: "MISSING_CODE",
-            message: "Verification code is required",
-          },
-        },
-        { status: 400 }
-      );
-    }
-
-    const ipAddress =
-      request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
-      request.headers.get("x-real-ip") ||
-      "unknown";
-
-    const userAgent = request.headers.get("user-agent") || "unknown";
-
-    // Verify the email
-    const result = await StudentRegistrationService.verifyEmail(
-      code,
-      encodedEmail || undefined
-    );
-
-    // Log successful verification
-    await prisma.auditLog.create({
-      data: {
-        userId: result.user.id,
-        action: "EMAIL_VERIFIED",
-        resourceType: "USER",
-        resourceId: result.user.id,
-        details: {
-          email: result.user.email,
-          verifiedAt: new Date().toISOString(),
-          method: "GET",
-          ipAddress,
-        },
-        ipAddress,
-        userAgent,
-      },
-    });
-
-    // Track success metric
-    const duration = Date.now() - startTime;
-    await prisma.metric.create({
-      data: {
-        name: "email_verification_success_get",
-        value: duration,
-        tags: {
-          userId: result.user.id,
-          duration: `${duration}ms`,
-        },
-        timestamp: new Date(),
-      },
-    });
-
-    // Redirect to success page or return JSON
-    const baseUrl = request.nextUrl.origin;
-    return NextResponse.redirect(
-      `${baseUrl}/auth/verify-email?status=success&message=${encodeURIComponent(
-        "Email verified successfully!"
-      )}`
-    );
-  } catch (error: any) {
-    console.error("❌ Email verification error (GET):", error);
-
-    const duration = Date.now() - startTime;
-    const ipAddress =
-      request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
-
-    // Track failure metric
-    await prisma.metric.create({
-      data: {
-        name: "email_verification_error_get",
-        value: duration,
-        tags: {
-          error: error.name || "UnknownError",
-          duration: `${duration}ms`,
-        },
-        timestamp: new Date(),
-      },
-    });
-
-    // Redirect to error page
-    const baseUrl = request.nextUrl.origin;
-    return NextResponse.redirect(
-      `${baseUrl}/auth/verify-email?status=error&message=${encodeURIComponent(
-        error.message || "Verification failed"
-      )}`
     );
   }
 }

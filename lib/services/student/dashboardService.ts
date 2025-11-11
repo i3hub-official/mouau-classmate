@@ -1,363 +1,353 @@
 // lib/services/dashboardService.ts
+
 import { prisma } from "@/lib/server/prisma";
+import {
+  StudentDashboard,
+  DashboardStats,
+  RecentActivity,
+  UpcomingDeadline,
+} from "@/lib/types/student/index";
+import { StudentCourseService } from "./courseService";
+import { StudentAssignmentService } from "./assignmentService";
+import { StudentGradeService } from "./gradeService";
+import { StudentNotificationService } from "./notificationService";
+import { StudentService } from "./studentService";
 
-interface DashboardStats {
-  activeCourses: number;
-  pendingAssignments: number;
-  upcomingDeadlines: number;
-  classmatesCount: number;
-  recentActivities: any[];
-  userInfo: any;
-}
-
-interface RecentActivity {
-  id: string;
-  title: string;
-  description: string;
-  type: "assignment" | "lecture" | "schedule" | "notification";
-  courseCode: string;
-  courseName: string;
-  timestamp: Date;
-  icon: string;
-  color: string;
-}
-
-export class DashboardService {
+export class StudentDashboardService {
   /**
-   * Get comprehensive dashboard data for a student
+   * Get student dashboard data
    */
-  static async getStudentDashboard(userId: string): Promise<DashboardStats> {
+  static async getStudentDashboard(
+    studentId: string
+  ): Promise<StudentDashboard> {
     try {
-      // Get student data
-      const student = await prisma.student.findFirst({
-        where: { userId },
-        include: {
-          user: {
-            select: {
-              name: true,
-              email: true,
-            },
-          },
-          enrollments: {
-            include: {
-              course: true,
-            },
-          },
-        },
-      });
-
+      // Get student profile
+      const student = await StudentService.getStudentProfile(studentId);
       if (!student) {
         throw new Error("Student not found");
       }
 
-      // Get active courses count
-      const activeCourses = await prisma.enrollment.count({
-        where: {
-          studentId: student.id,
-          isCompleted: false,
-        },
-      });
-
-      // Get pending assignments (assignments with due date in future and no submission or not graded)
-      const pendingAssignments = await prisma.assignment.count({
-        where: {
-          course: {
-            enrollments: {
-              some: {
-                studentId: student.id,
-              },
-            },
-          },
-          dueDate: {
-            gt: new Date(),
-          },
-          isPublished: true,
-          OR: [
-            {
-              submissions: {
-                none: {
-                  studentId: student.id,
-                },
-              },
-            },
-            {
-              submissions: {
-                some: {
-                  studentId: student.id,
-                  isGraded: false,
-                },
-              },
-            },
-          ],
-        },
-      });
-
-      // Get upcoming deadlines (assignments due in next 7 days)
-      const upcomingDeadlines = await prisma.assignment.count({
-        where: {
-          course: {
-            enrollments: {
-              some: {
-                studentId: student.id,
-              },
-            },
-          },
-          dueDate: {
-            gt: new Date(),
-            lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-          },
-          isPublished: true,
-        },
-      });
-
-      // Get classmates count (students in same courses)
-      const classmatesCount = await prisma.student.count({
-        where: {
-          enrollments: {
-            some: {
-              course: {
-                enrollments: {
-                  some: {
-                    studentId: student.id,
-                  },
-                },
-              },
-            },
-          },
-          id: {
-            not: student.id,
-          },
-        },
-      });
+      // Get dashboard stats
+      const stats = await this.getDashboardStats(studentId);
 
       // Get recent activities
-      const recentActivities = await this.getRecentActivities(student.id);
+      const recentActivities = await this.getRecentActivities(studentId, 5);
+
+      // Get upcoming deadlines
+      const upcomingDeadlines = await this.getUpcomingDeadlines(studentId, 5);
+
+      // Get current enrollments
+      const currentEnrollments =
+        await StudentCourseService.getActiveStudentEnrollments(studentId, 1, 5);
+
+      // Get recent grades
+      const recentGrades = await this.getRecentGrades(studentId, 5);
 
       return {
-        activeCourses,
-        pendingAssignments,
-        upcomingDeadlines,
-        classmatesCount,
+        student,
+        stats,
         recentActivities,
-        userInfo: {
-          id: student.userId,
-          name: student.user.name,
-          email: student.user.email,
-          matricNumber: student.matricNumber,
-          department: student.department,
-          college: student.college,
-          course: student.course,
-        },
+        upcomingDeadlines,
+        currentEnrollments: currentEnrollments.enrollments,
+        recentGrades,
       };
     } catch (error) {
-      console.error("Error fetching dashboard data:", error);
+      console.error("Error getting student dashboard:", error);
       throw error;
     }
   }
 
   /**
-   * Get recent activities for a student
+   * Get dashboard statistics
+   */
+  private static async getDashboardStats(
+    studentId: string
+  ): Promise<DashboardStats> {
+    try {
+      // Get total courses
+      const totalCourses = await prisma.enrollment.count({
+        where: { studentId },
+      });
+
+      // Get active courses
+      const activeCourses = await prisma.enrollment.count({
+        where: {
+          studentId,
+          isCompleted: false,
+        },
+      });
+
+      // Get completed courses
+      const completedCourses = await prisma.enrollment.count({
+        where: {
+          studentId,
+          isCompleted: true,
+        },
+      });
+
+      // Get pending assignments
+      const enrollments = await prisma.enrollment.findMany({
+        where: { studentId },
+        select: { courseId: true },
+      });
+
+      const courseIds = enrollments.map((e) => e.courseId);
+
+      const pendingAssignments = await prisma.assignment.count({
+        where: {
+          courseId: { in: courseIds },
+          isPublished: true,
+          dueDate: {
+            gte: new Date(),
+          },
+          submissions: {
+            none: {
+              studentId,
+            },
+          },
+        },
+      });
+
+      // Get upcoming deadlines (assignments due in the next 7 days)
+      const upcomingDeadlines = await prisma.assignment.count({
+        where: {
+          courseId: { in: courseIds },
+          isPublished: true,
+          dueDate: {
+            gte: new Date(),
+            lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          },
+          submissions: {
+            none: {
+              studentId,
+            },
+          },
+        },
+      });
+
+      // Get current GPA
+      const gradeStats = await StudentGradeService.getGradeStatistics(
+        studentId
+      );
+      const currentGPA = gradeStats.gpa;
+
+      // Get total credits
+      // If 'Enrollment' does not have a 'credit' field, sum the credits from the related 'Course' model
+      const enrollmentsWithCourses = await prisma.enrollment.findMany({
+        where: { studentId },
+        select: { course: { select: { credits: true } } },
+      });
+      const totalCredits = enrollmentsWithCourses.reduce(
+        (sum, enrollment) => sum + (enrollment.course?.credits ?? 0),
+        0
+      );
+
+      // Get unread notifications
+      const unreadNotifications = await prisma.notification.count({
+        where: {
+          userId: studentId,
+          isRead: false,
+        },
+      });
+
+      return {
+        totalCourses,
+        activeCourses,
+        completedCourses,
+        pendingAssignments,
+        upcomingDeadlines,
+        currentGPA,
+        totalCredits,
+        unreadNotifications,
+      };
+    } catch (error) {
+      console.error("Error getting dashboard stats:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get recent activities
    */
   private static async getRecentActivities(
-    studentId: string
+    studentId: string,
+    limit: number = 10
   ): Promise<RecentActivity[]> {
-    const activities: RecentActivity[] = [];
+    try {
+      // Get recent user activities
+      const activities = await prisma.userActivity.findMany({
+        where: { userId: studentId },
+        take: limit,
+        orderBy: { createdAt: "desc" },
+      });
 
-    // Get recent assignments
-    const recentAssignments = await prisma.assignment.findMany({
-      where: {
-        course: {
-          enrollments: {
-            some: {
-              studentId: studentId,
-            },
-          },
-        },
-        isPublished: true,
-        createdAt: {
-          gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Last 7 days
-        },
-      },
-      include: {
-        course: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      take: 5,
-    });
+      // Transform to RecentActivity format
+      const recentActivities: RecentActivity[] = activities.map((activity) => ({
+        id: activity.id,
+        type: this.getActivityType(activity.action),
+        title: activity.action.replace(/_/g, " ").toLowerCase(), // Added title property
+        description: this.getActivityDescription(activity),
+        timestamp: activity.createdAt,
+        metadata: activity.details,
+      }));
 
-    // Get recent lectures
-    const recentLectures = await prisma.lecture.findMany({
-      where: {
-        course: {
-          enrollments: {
-            some: {
-              studentId: studentId,
-            },
-          },
-        },
-        isPublished: true,
-        publishedAt: {
-          gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-        },
-      },
-      include: {
-        course: true,
-      },
-      orderBy: {
-        publishedAt: "desc",
-      },
-      take: 5,
-    });
-
-    // Get schedule changes (this would need additional logic based on your scheduling system)
-    // For now, we'll use assignment due date changes as schedule changes
-
-    // Convert assignments to activities
-    activities.push(
-      ...recentAssignments.map((assignment) => ({
-        id: assignment.id,
-        title: "New assignment posted",
-        description: assignment.title,
-        type: "assignment" as const,
-        courseCode: assignment.course.code,
-        courseName: assignment.course.title,
-        timestamp: assignment.createdAt,
-        icon: "FileText",
-        color: "blue",
-      }))
-    );
-
-    // Convert lectures to activities
-    activities.push(
-      ...recentLectures.map((lecture) => ({
-        id: lecture.id,
-        title: "Lecture notes updated",
-        description: lecture.title,
-        type: "lecture" as const,
-        courseCode: lecture.course.code,
-        courseName: lecture.course.title,
-        timestamp: lecture.publishedAt || lecture.createdAt,
-        icon: "BookOpen",
-        color: "green",
-      }))
-    );
-
-    // Sort all activities by timestamp and return top 5
-    return activities
-      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-      .slice(0, 5);
+      return recentActivities;
+    } catch (error) {
+      console.error("Error getting recent activities:", error);
+      throw error;
+    }
   }
 
   /**
-   * Get student's enrolled courses
+   * Get upcoming deadlines
    */
-  static async getStudentCourses(userId: string) {
-    const student = await prisma.student.findFirst({
-      where: { userId },
-      include: {
-        enrollments: {
-          include: {
-            course: {
-              include: {
-                instructor: true,
-                assignments: {
-                  where: {
-                    isPublished: true,
-                  },
-                  orderBy: {
-                    dueDate: "asc",
-                  },
-                  take: 3,
-                },
-              },
-            },
-          },
-          where: {
-            isCompleted: false,
-          },
-        },
-      },
-    });
+  private static async getUpcomingDeadlines(
+    studentId: string,
+    limit: number = 10
+  ): Promise<UpcomingDeadline[]> {
+    try {
+      const assignments = await StudentAssignmentService.getUpcomingAssignments(
+        studentId,
+        30
+      ); // Next 30 days
 
-    return student?.enrollments.map((enrollment) => enrollment.course) || [];
+      // Filter assignments that haven't been submitted
+      const unsubmittedAssignments = assignments.filter(
+        (assignment) => assignment.submissions.length === 0
+      );
+
+      // Transform to UpcomingDeadline format
+      const upcomingDeadlines: UpcomingDeadline[] = unsubmittedAssignments
+        .slice(0, limit)
+        .map((assignment) => {
+          const dueDate = new Date(assignment.dueDate);
+          const now = new Date();
+          const daysRemaining = Math.ceil(
+            (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+          );
+
+          return {
+            id: assignment.id,
+            assignmentId: assignment.id,
+            title: assignment.title,
+            courseCode: assignment.course?.code ?? "",
+            courseTitle: assignment.course?.title ?? "",
+            dueDate,
+            daysRemaining,
+            isSubmitted: false,
+            isLate: false,
+          };
+        });
+
+      return upcomingDeadlines;
+    } catch (error) {
+      console.error("Error getting upcoming deadlines:", error);
+      throw error;
+    }
   }
 
   /**
-   * Get upcoming assignments with deadlines
+   * Get recent grades
    */
-  static async getUpcomingAssignments(userId: string) {
-    const student = await prisma.student.findFirst({
-      where: { userId },
-    });
+  private static async getRecentGrades(studentId: string, limit: number = 10) {
+    try {
+      const submissions = await StudentAssignmentService.getGradedAssignments(
+        studentId,
+        1,
+        limit
+      );
 
-    if (!student) return [];
+      // Transform to GradeInfo format
+      const recentGrades = submissions.assignments.map((assignment) => {
+        const submission = assignment.submissions[0];
+        return {
+          courseId: assignment.courseId,
+          courseCode: assignment.course?.code ?? "",
+          courseTitle: assignment.course?.title ?? "",
+          credits: assignment.course?.credits ?? 0,
+          grade: this.scoreToGrade(submission.score),
+          score: submission.score,
+          gradePoint: this.calculateGradePoint(
+            this.scoreToGrade(submission.score)
+          ),
+          semester: assignment.course?.semester ?? 0,
+          level: assignment.course?.level ?? 0,
+        };
+      });
 
-    return await prisma.assignment.findMany({
-      where: {
-        course: {
-          enrollments: {
-            some: {
-              studentId: student.id,
-            },
-          },
-        },
-        dueDate: {
-          gt: new Date(),
-        },
-        isPublished: true,
-      },
-      include: {
-        course: true,
-        submissions: {
-          where: {
-            studentId: student.id,
-          },
-        },
-      },
-      orderBy: {
-        dueDate: "asc",
-      },
-      take: 10,
-    });
+      return recentGrades;
+    } catch (error) {
+      console.error("Error getting recent grades:", error);
+      throw error;
+    }
   }
 
   /**
-   * Get student's academic progress
+   * Get activity type from action
    */
-  static async getAcademicProgress(userId: string) {
-    const student = await prisma.student.findFirst({
-      where: { userId },
-      include: {
-        enrollments: {
-          include: {
-            course: true,
-          },
-        },
-      },
-    });
+  private static getActivityType(
+    action: string
+  ): "enrollment" | "submission" | "grade" | "assignment" | "lecture" {
+    if (action.includes("ENROLLMENT")) return "enrollment";
+    if (action.includes("SUBMISSION")) return "submission";
+    if (action.includes("GRADE")) return "grade";
+    if (action.includes("ASSIGNMENT")) return "assignment";
+    if (action.includes("LECTURE")) return "lecture";
+    return "enrollment"; // Default
+  }
 
-    if (!student) return null;
+  /**
+   * Get activity description from activity
+   */
+  private static getActivityDescription(activity: any): string {
+    switch (activity.action) {
+      case "ENROLLMENT_CREATED":
+        return `Enrolled in course`;
+      case "ASSIGNMENT_SUBMITTED":
+        return `Submitted assignment`;
+      case "GRADE_ASSIGNED":
+        return `Received a grade`;
+      default:
+        return activity.action.replace(/_/g, " ").toLowerCase();
+    }
+  }
 
-    const totalCourses = student.enrollments.length;
-    const completedCourses = student.enrollments.filter(
-      (e) => e.isCompleted
-    ).length;
-    const averageProgress =
-      student.enrollments.reduce((acc, curr) => acc + curr.progress, 0) /
-        totalCourses || 0;
-    const averageScore =
-      student.enrollments.reduce((acc, curr) => acc + (curr.score || 0), 0) /
-        totalCourses || 0;
+  /**
+   * Convert score to grade
+   */
+  private static scoreToGrade(
+    score: number | null | undefined
+  ): "A" | "B" | "C" | "D" | "E" | "F" | null {
+    if (score === null || score === undefined) return null;
+    if (score >= 70) return "A";
+    if (score >= 60) return "B";
+    if (score >= 50) return "C";
+    if (score >= 45) return "D";
+    if (score >= 40) return "E";
+    return "F";
+  }
 
-    return {
-      totalCourses,
-      completedCourses,
-      inProgressCourses: totalCourses - completedCourses,
-      averageProgress,
-      averageScore,
-      enrollments: student.enrollments,
-    };
+  /**
+   * Calculate grade point from grade
+   */
+  private static calculateGradePoint(
+    grade: "A" | "B" | "C" | "D" | "E" | "F" | null
+  ): number {
+    switch (grade) {
+      case "A":
+        return 5.0;
+      case "B":
+        return 4.0;
+      case "C":
+        return 3.0;
+      case "D":
+        return 2.0;
+      case "E":
+        return 1.0;
+      case "F":
+        return 0.0;
+      default:
+        return 0;
+    }
   }
 }

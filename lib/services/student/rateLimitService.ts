@@ -1,143 +1,161 @@
 // lib/services/rateLimitService.ts
 import { prisma } from "@/lib/server/prisma";
 
-export interface RateLimitOptions {
-  maxAttempts: number;
-  windowMs: number;
-  prefix?: string;
-}
-
-export interface RateLimitResult {
-  isLimited: boolean;
-  remainingAttempts: number;
-  retryAfter?: number;
-  resetTime?: Date;
-}
-
-export class RateLimitService {
-  private static readonly CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 hour
-
+export class StudentRateLimitService {
+  /**
+   * Check if a user has exceeded the rate limit for a specific action
+   */
   static async checkRateLimit(
     key: string,
-    options: RateLimitOptions
-  ): Promise<RateLimitResult> {
-    const now = new Date();
-    const windowStart = new Date(now.getTime() - options.windowMs);
-    const windowEnd = new Date(now.getTime() + options.windowMs);
-
+    maxRequests: number,
+    windowMs: number
+  ): Promise<{ allowed: boolean; remaining: number; resetTime: Date }> {
     try {
-      // Clean up old rate limit records periodically
-      await this.cleanupExpiredRecords();
+      const now = new Date();
+      const windowStart = new Date(now.getTime() - windowMs);
+      const windowEnd = now;
 
       // Find or create rate limit record
-      const rateLimit = await prisma.rateLimit.upsert({
+      let rateLimit = await prisma.rateLimit.findFirst({
         where: {
-          key_windowStart: {
-            key,
-            windowStart,
+          key,
+          windowStart: {
+            gte: windowStart,
           },
         },
-        create: {
-          key,
-          count: 1,
-          windowStart,
-          windowEnd,
-        },
-        update: {
-          count: { increment: 1 },
+      });
+
+      if (!rateLimit) {
+        // Create a new rate limit record
+        rateLimit = await prisma.rateLimit.create({
+          data: {
+            key,
+            count: 1,
+            windowStart,
+            windowEnd,
+          },
+        });
+
+        return {
+          allowed: true,
+          remaining: maxRequests - 1,
+          resetTime: windowEnd,
+        };
+      }
+
+      // Update the existing record
+      const newCount = rateLimit.count + 1;
+      const allowed = newCount <= maxRequests;
+
+      await prisma.rateLimit.update({
+        where: { id: rateLimit.id },
+        data: {
+          count: newCount,
           updatedAt: now,
         },
       });
 
-      const remainingAttempts = Math.max(0, options.maxAttempts - rateLimit.count);
-      const isLimited = rateLimit.count > options.maxAttempts;
-
-      let retryAfter: number | undefined;
-      if (isLimited) {
-        retryAfter = rateLimit.windowEnd.getTime() - now.getTime();
-      }
-
       return {
-        isLimited,
-        remainingAttempts,
-        retryAfter,
-        resetTime: rateLimit.windowEnd,
+        allowed,
+        remaining: Math.max(0, maxRequests - newCount),
+        resetTime: windowEnd,
       };
     } catch (error) {
-      console.error("Rate limit check error:", error);
-      // Fail open - don't block requests if rate limiting fails
+      console.error("Error checking rate limit:", error);
+      // In case of error, allow the request to avoid blocking legitimate traffic
       return {
-        isLimited: false,
-        remainingAttempts: options.maxAttempts,
+        allowed: true,
+        remaining: 0,
+        resetTime: new Date(Date.now() + windowMs),
       };
     }
   }
 
-  private static async cleanupExpiredRecords(): Promise<void> {
-    // Only cleanup occasionally to avoid performance issues
-    if (Math.random() > 0.1) { // 10% chance to cleanup
-      return;
-    }
+  /**
+   * Check if a user has exceeded the rate limit for password reset requests
+   */
+  static async checkPasswordResetRateLimit(
+    userId: string
+  ): Promise<{ allowed: boolean; remaining: number; resetTime: Date }> {
+    const key = `password_reset:${userId}`;
+    const maxRequests = 3; // 3 requests per hour
+    const windowMs = 60 * 60 * 1000; // 1 hour
 
+    return this.checkRateLimit(key, maxRequests, windowMs);
+  }
+
+  /**
+   * Check if a user has exceeded the rate limit for email verification requests
+   */
+  static async checkEmailVerificationRateLimit(
+    userId: string
+  ): Promise<{ allowed: boolean; remaining: number; resetTime: Date }> {
+    const key = `email_verification:${userId}`;
+    const maxRequests = 5; // 5 requests per day
+    const windowMs = 24 * 60 * 60 * 1000; // 24 hours
+
+    return this.checkRateLimit(key, maxRequests, windowMs);
+  }
+
+  /**
+   * Check if a user has exceeded the rate limit for assignment submissions
+   */
+  static async checkAssignmentSubmissionRateLimit(
+    userId: string,
+    assignmentId: string
+  ): Promise<{ allowed: boolean; remaining: number; resetTime: Date }> {
+    const key = `assignment_submission:${userId}:${assignmentId}`;
+    const maxRequests = 10; // 10 submissions per day
+    const windowMs = 24 * 60 * 60 * 1000; // 24 hours
+
+    return this.checkRateLimit(key, maxRequests, windowMs);
+  }
+
+  /**
+   * Check if an IP address has exceeded the rate limit for login attempts
+   */
+  static async checkLoginRateLimit(
+    ipAddress: string
+  ): Promise<{ allowed: boolean; remaining: number; resetTime: Date }> {
+    const key = `login:${ipAddress}`;
+    const maxRequests = 20; // 20 login attempts per 15 minutes
+    const windowMs = 15 * 60 * 1000; // 15 minutes
+
+    return this.checkRateLimit(key, maxRequests, windowMs);
+  }
+
+  /**
+   * Check if a user has exceeded the rate limit for profile updates
+   */
+  static async checkProfileUpdateRateLimit(
+    userId: string
+  ): Promise<{ allowed: boolean; remaining: number; resetTime: Date }> {
+    const key = `profile_update:${userId}`;
+    const maxRequests = 5; // 5 profile updates per hour
+    const windowMs = 60 * 60 * 1000; // 1 hour
+
+    return this.checkRateLimit(key, maxRequests, windowMs);
+  }
+
+  /**
+   * Clean up expired rate limit records
+   */
+  static async cleanupExpiredRateLimits(): Promise<void> {
     try {
+      const now = new Date();
+
+      // Delete rate limit records that have expired
       await prisma.rateLimit.deleteMany({
         where: {
-          windowEnd: { lt: new Date() },
+          windowEnd: {
+            lt: now,
+          },
         },
       });
+
+      console.log("Expired rate limit records cleaned up");
     } catch (error) {
-      console.error("Rate limit cleanup error:", error);
+      console.error("Error cleaning up expired rate limits:", error);
     }
-  }
-
-  static async getRateLimitStatus(
-    key: string,
-    options: RateLimitOptions
-  ): Promise<RateLimitResult> {
-    const now = new Date();
-    const windowStart = new Date(now.getTime() - options.windowMs);
-
-    const rateLimit = await prisma.rateLimit.findUnique({
-      where: {
-        key_windowStart: {
-          key,
-          windowStart,
-        },
-      },
-    });
-
-    if (!rateLimit) {
-      return {
-        isLimited: false,
-        remainingAttempts: options.maxAttempts,
-      };
-    }
-
-    const remainingAttempts = Math.max(0, options.maxAttempts - rateLimit.count);
-    const isLimited = rateLimit.count > options.maxAttempts;
-
-    let retryAfter: number | undefined;
-    if (isLimited) {
-      retryAfter = rateLimit.windowEnd.getTime() - now.getTime();
-    }
-
-    return {
-      isLimited,
-      remainingAttempts,
-      retryAfter,
-      resetTime: rateLimit.windowEnd,
-    };
-  }
-
-  static async resetRateLimit(key: string): Promise<void> {
-    const now = new Date();
-    const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000); // 24 hours window
-
-    await prisma.rateLimit.deleteMany({
-      where: {
-        key,
-        windowStart: { gte: windowStart },
-      },
-    });
   }
 }

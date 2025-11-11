@@ -1,4 +1,5 @@
-// app/components/RecentActivities.tsx
+// File: app/components/student/RecentActivities.tsx
+"use client";
 import { FileText, BookOpen, Calendar, Clock } from "lucide-react";
 
 interface RecentActivity {

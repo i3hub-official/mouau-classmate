@@ -1,4 +1,4 @@
-// app/components/SignOutModal.tsx
+// File: app/components/student/SignOutModal.tsx
 "use client";
 import { LogOut } from "lucide-react";
 import { useState, useEffect } from "react";

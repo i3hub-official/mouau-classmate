@@ -1,4 +1,4 @@
-// app/components/PerformanceOverview.tsx
+// app/components/student/PerformanceOverview.tsx
 import { BarChart3, TrendingUp, Target, Award } from "lucide-react";
 
 interface PerformanceOverviewProps {

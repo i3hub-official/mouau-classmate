@@ -1,552 +1,404 @@
 // lib/services/students/assignmentService.ts
 
-export interface Course {
-  id: string;
-  code: string;
-  title: string;
-  description?: string;
-  credits?: number;
-}
+import { prisma } from "@/lib/server/prisma";
+import { Assignment, AssignmentWithSubmission, AssignmentSubmissionData } from "@/lib/types/student/index";
+import { AuditAction } from "@prisma/client";
 
-export interface Teacher {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  department?: string;
-}
-
-export interface Submission {
-  id: string;
-  assignmentId: string;
-  studentId: string;
-  submittedAt: Date;
-  content?: string;
-  fileUrl?: string;
-  score?: number;
-  feedback?: string;
-  isGraded: boolean;
-  attemptNumber: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface Assignment {
-  id: string;
-  title: string;
-  description?: string;
-  instructions?: string;
-  dueDate: Date;
-  maxScore: number;
-  courseId: string;
-  teacherId: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface AssignmentWithRelations extends Assignment {
-  course: Course;
-  teacher: Teacher;
-  submissions: Submission[];
-}
-
-export interface AssignmentStats {
-  total: number;
-  pending: number;
-  submitted: number;
-  overdue: number;
-  graded: number;
-}
-
-export interface AssignmentSubmissionData {
-  assignmentId: string;
-  submissionText?: string;
-  submittedAt: string;
-  files?: File[];
-}
-
-export class AssignmentService {
+export class StudentAssignmentService {
   /**
-   * Get all assignments for a specific user
+   * Get assignments for a student
    */
-  static async getAssignmentsByUserId(
-    userId: string
-  ): Promise<AssignmentWithRelations[]> {
+  static async getStudentAssignments(studentId: string, page: number = 1, limit: number = 10) {
     try {
-      if (!userId) {
-        throw new Error("User ID is required to fetch assignments");
-      }
+      const skip = (page - 1) * limit;
 
-      const response = await fetch(`/api/assignments/user/${userId}`, {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
+      // Get student enrollments to find their courses
+      const enrollments = await prisma.enrollment.findMany({
+        where: { studentId },
+        select: { courseId: true },
       });
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("You must be logged in to view assignments");
-        }
-        if (response.status === 404) {
-          console.warn("No assignments found for user");
-          return [];
-        }
-        throw new Error(`Failed to fetch assignments: ${response.statusText}`);
+      const courseIds = enrollments.map(e => e.courseId);
+
+      if (courseIds.length === 0) {
+        return {
+          assignments: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            totalPages: 0,
+          },
+        };
       }
 
-      const assignments = await response.json();
+      const [assignments, total] = await Promise.all([
+        prisma.assignment.findMany({
+          where: {
+            courseId: { in: courseIds },
+            isPublished: true,
+          },
+          skip,
+          take: limit,
+          include: {
+            course: true,
+            submissions: {
+              where: { studentId },
+              orderBy: { attemptNumber: "desc" },
+              take: 1, // Get only the latest submission
+            },
+          },
+          orderBy: { dueDate: "asc" },
+        }),
+        prisma.assignment.count({
+          where: {
+            courseId: { in: courseIds },
+            isPublished: true,
+          },
+        }),
+      ]);
 
-      // Ensure dates are properly parsed
-      return assignments.map((assignment: any) => ({
-        ...assignment,
-        dueDate: new Date(assignment.dueDate),
-        createdAt: new Date(assignment.createdAt),
-        updatedAt: new Date(assignment.updatedAt),
-        submissions: assignment.submissions.map((sub: any) => ({
-          ...sub,
-          submittedAt: sub.submittedAt ? new Date(sub.submittedAt) : null,
-          createdAt: new Date(sub.createdAt),
-          updatedAt: new Date(sub.updatedAt),
-        })),
-      }));
-    } catch (error) {
-      console.error("Error fetching assignments by user ID:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get a single assignment by ID
-   */
-  static async getAssignmentById(
-    assignmentId: string
-  ): Promise<AssignmentWithRelations | null> {
-    try {
-      if (!assignmentId) {
-        throw new Error("Assignment ID is required");
-      }
-
-      const response = await fetch(`/api/assignments/${assignmentId}`, {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          console.warn("Assignment not found");
-          return null;
-        }
-        throw new Error(`Failed to fetch assignment: ${response.statusText}`);
-      }
-
-      const assignment = await response.json();
-
-      // Parse dates
       return {
-        ...assignment,
-        dueDate: new Date(assignment.dueDate),
-        createdAt: new Date(assignment.createdAt),
-        updatedAt: new Date(assignment.updatedAt),
-        submissions: assignment.submissions.map((sub: any) => ({
-          ...sub,
-          submittedAt: sub.submittedAt ? new Date(sub.submittedAt) : null,
-          createdAt: new Date(sub.createdAt),
-          updatedAt: new Date(sub.updatedAt),
-        })),
+        assignments: assignments as AssignmentWithSubmission[],
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
       };
     } catch (error) {
-      console.error("Error fetching assignment by ID:", error);
+      console.error("Error getting student assignments:", error);
       throw error;
     }
   }
 
   /**
-   * Get assignments for a specific course
+   * Get assignment by ID
    */
-  static async getAssignmentsByCourseId(
-    courseId: string
-  ): Promise<AssignmentWithRelations[]> {
+  static async getAssignmentById(id: string): Promise<Assignment | null> {
     try {
-      if (!courseId) {
-        throw new Error("Course ID is required");
-      }
-
-      const response = await fetch(`/api/assignments/course/${courseId}`, {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
+      const assignment = await prisma.assignment.findUnique({
+        where: { id },
+        include: {
+          course: true,
         },
       });
 
-      if (!response.ok) {
-        if (response.status === 404) {
-          console.warn("No assignments found for course");
-          return [];
-        }
-        throw new Error(
-          `Failed to fetch course assignments: ${response.statusText}`
-        );
-      }
-
-      const assignments = await response.json();
-
-      return assignments.map((assignment: any) => ({
-        ...assignment,
-        dueDate: new Date(assignment.dueDate),
-        createdAt: new Date(assignment.createdAt),
-        updatedAt: new Date(assignment.updatedAt),
-        submissions:
-          assignment.submissions?.map((sub: any) => ({
-            ...sub,
-            submittedAt: sub.submittedAt ? new Date(sub.submittedAt) : null,
-            createdAt: new Date(sub.createdAt),
-            updatedAt: new Date(sub.updatedAt),
-          })) || [],
-      }));
+      return assignment as Assignment;
     } catch (error) {
-      console.error("Error fetching assignments by course ID:", error);
+      console.error("Error getting assignment by ID:", error);
       throw error;
     }
   }
 
   /**
-   * Calculate assignment statistics
+   * Get assignment with student's submissions
    */
-  static calculateStats(
-    assignments: AssignmentWithRelations[]
-  ): AssignmentStats {
-    const now = new Date();
-
-    const stats = {
-      total: assignments.length,
-      pending: 0,
-      submitted: 0,
-      overdue: 0,
-      graded: 0,
-    };
-
-    assignments.forEach((assignment) => {
-      const hasSubmission = assignment.submissions.length > 0;
-      const isGraded = assignment.submissions.some((sub) => sub.isGraded);
-      const dueDate = new Date(assignment.dueDate);
-      const isOverdue = dueDate < now && !hasSubmission;
-
-      if (isGraded) {
-        stats.graded++;
-      } else if (hasSubmission) {
-        stats.submitted++;
-      } else if (isOverdue) {
-        stats.overdue++;
-      } else {
-        stats.pending++;
-      }
-    });
-
-    return stats;
-  }
-
-  /**
-   * Get assignment status
-   */
-  static getAssignmentStatus(assignment: AssignmentWithRelations): string {
-    const now = new Date();
-    const dueDate = new Date(assignment.dueDate);
-
-    const hasSubmission = assignment.submissions.length > 0;
-    const isGraded = assignment.submissions.some((sub) => sub.isGraded);
-    const isOverdue = dueDate < now && !hasSubmission;
-
-    if (isGraded) return "graded";
-    if (hasSubmission) return "submitted";
-    if (isOverdue) return "overdue";
-    return "pending";
-  }
-
-  /**
-   * Get days left until assignment is due
-   */
-  static getDaysLeft(dueDate: Date): number {
-    const due = new Date(dueDate);
-    const now = new Date();
-    const diffTime = due.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  }
-
-  /**
-   * Get submission information for an assignment
-   */
-  static getSubmissionInfo(assignment: AssignmentWithRelations) {
-    const latestSubmission = assignment.submissions[0] || null;
-    const isSubmitted = !!latestSubmission?.submittedAt;
-    const isGraded = !!latestSubmission?.isGraded;
-    const score = latestSubmission?.score ?? null;
-    const feedback = latestSubmission?.feedback ?? null;
-
-    return { latestSubmission, isSubmitted, isGraded, score, feedback };
-  }
-
-  /**
-   * Extract unique courses from assignments
-   */
-  static extractCourses(assignments: AssignmentWithRelations[]): string[] {
-    return Array.from(
-      new Set(
-        assignments.map(
-          (assignment) =>
-            `${assignment.course.code} - ${assignment.course.title}`
-        )
-      )
-    );
-  }
-
-  /**
-   * Filter assignments by search term
-   */
-  static filterBySearchTerm(
-    assignments: AssignmentWithRelations[],
-    searchTerm: string
-  ): AssignmentWithRelations[] {
-    if (!searchTerm.trim()) return assignments;
-
-    const lowerSearchTerm = searchTerm.toLowerCase();
-
-    return assignments.filter(
-      (assignment) =>
-        assignment.title.toLowerCase().includes(lowerSearchTerm) ||
-        assignment.course.title.toLowerCase().includes(lowerSearchTerm) ||
-        assignment.course.code.toLowerCase().includes(lowerSearchTerm) ||
-        assignment.description?.toLowerCase().includes(lowerSearchTerm) ||
-        assignment.teacher?.firstName.toLowerCase().includes(lowerSearchTerm) ||
-        assignment.teacher?.lastName.toLowerCase().includes(lowerSearchTerm)
-    );
-  }
-
-  /**
-   * Filter assignments by status
-   */
-  static filterByStatus(
-    assignments: AssignmentWithRelations[],
-    status: string
-  ): AssignmentWithRelations[] {
-    if (status === "all") return assignments;
-
-    return assignments.filter((assignment) => {
-      return this.getAssignmentStatus(assignment) === status;
-    });
-  }
-
-  /**
-   * Filter assignments by course
-   */
-  static filterByCourse(
-    assignments: AssignmentWithRelations[],
-    courseFilter: string
-  ): AssignmentWithRelations[] {
-    if (courseFilter === "all") return assignments;
-
-    return assignments.filter(
-      (assignment) =>
-        `${assignment.course.code} - ${assignment.course.title}` ===
-        courseFilter
-    );
-  }
-
-  /**
-   * Apply all filters to assignments
-   */
-  static applyFilters(
-    assignments: AssignmentWithRelations[],
-    filters: {
-      searchTerm?: string;
-      status?: string;
-      course?: string;
-    }
-  ): AssignmentWithRelations[] {
-    let filtered = [...assignments];
-
-    if (filters.searchTerm) {
-      filtered = this.filterBySearchTerm(filtered, filters.searchTerm);
-    }
-
-    if (filters.status && filters.status !== "all") {
-      filtered = this.filterByStatus(filtered, filters.status);
-    }
-
-    if (filters.course && filters.course !== "all") {
-      filtered = this.filterByCourse(filtered, filters.course);
-    }
-
-    return filtered;
-  }
-
-  /**
-   * Sort assignments by due date
-   */
-  static sortByDueDate(
-    assignments: AssignmentWithRelations[],
-    ascending: boolean = true
-  ): AssignmentWithRelations[] {
-    return [...assignments].sort((a, b) => {
-      const dateA = new Date(a.dueDate).getTime();
-      const dateB = new Date(b.dueDate).getTime();
-      return ascending ? dateA - dateB : dateB - dateA;
-    });
-  }
-
-  /**
-   * Submit an assignment with file upload support
-   */
-  static async submitAssignmentWithFiles(
-    submissionData: AssignmentSubmissionData
-  ): Promise<{ success: boolean; submission?: Submission; message: string }> {
+  static async getAssignmentWithSubmissions(assignmentId: string, studentId: string): Promise<AssignmentWithSubmission | null> {
     try {
-      const formData = new FormData();
-      formData.append("assignmentId", submissionData.assignmentId);
-      formData.append("submissionText", submissionData.submissionText || "");
-      formData.append("submittedAt", submissionData.submittedAt);
-
-      if (submissionData.files) {
-        submissionData.files.forEach((file: File) => {
-          formData.append("files", file);
-        });
-      }
-
-      const response = await fetch("/api/assignments/submit", {
-        method: "POST",
-        body: formData,
-        credentials: "include",
+      const assignment = await prisma.assignment.findUnique({
+        where: { id: assignmentId },
+        include: {
+          course: true,
+          submissions: {
+            where: { studentId },
+            orderBy: { attemptNumber: "desc" },
+          },
+        },
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.error ||
-            errorData.message ||
-            `Failed to submit assignment: ${response.statusText}`
-        );
-      }
-
-      return await response.json();
+      return assignment as AssignmentWithSubmission;
     } catch (error) {
-      console.error("Error submitting assignment with files:", error);
+      console.error("Error getting assignment with submissions:", error);
       throw error;
     }
   }
 
   /**
-   * Get assignment submission status
+   * Submit assignment
    */
-  static async getSubmissionStatus(
-    assignmentId: string,
-    studentId: string
-  ): Promise<Submission | null> {
+  static async submitAssignment(studentId: string, submissionData: AssignmentSubmissionData) {
     try {
-      // This would typically query your database
-      // For now, return null to indicate no previous submission
-      return null;
-    } catch (error) {
-      console.error("Error fetching submission status:", error);
-      throw error;
-    }
-  }
+      const { assignmentId, content, submissionUrl, attemptNumber } = submissionData;
 
-  /**
-   * Check if assignment submission is allowed (before deadline, etc.)
-   */
-  static async validateSubmission(
-    assignmentId: string
-  ): Promise<{ allowed: boolean; reason?: string }> {
-    try {
-      const assignment = await this.getAssignmentById(assignmentId);
+      // Check if assignment exists and is published
+      const assignment = await prisma.assignment.findUnique({
+        where: { id: assignmentId },
+      });
 
       if (!assignment) {
-        return { allowed: false, reason: "Assignment not found" };
+        throw new Error("Assignment not found");
       }
 
-      const now = new Date();
-      const dueDate = new Date(assignment.dueDate);
-
-      if (now > dueDate) {
-        return { allowed: false, reason: "Assignment deadline has passed" };
+      if (!assignment.isPublished) {
+        throw new Error("Assignment is not available for submission");
       }
 
-      // Add other validation rules as needed
-      // - Maximum attempts
-      // - Prerequisites
-      // - etc.
-
-      return { allowed: true };
-    } catch (error) {
-      console.error("Error validating submission:", error);
-      return { allowed: false, reason: "Validation failed" };
-    }
-  }
-
-  /**
-   * Submit an assignment
-   */
-  static async submitAssignment(
-    assignmentId: string,
-    data: {
-      content?: string;
-      fileUrl?: string;
-    }
-  ): Promise<Submission> {
-    try {
-      const response = await fetch(`/api/assignments/${assignmentId}/submit`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
+      // Check if student is enrolled in the course
+      const enrollment = await prisma.enrollment.findUnique({
+        where: {
+          studentId_courseId: {
+            studentId,
+            courseId: assignment.courseId,
+          },
         },
-        body: JSON.stringify(data),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.error ||
-            errorData.message ||
-            `Failed to submit assignment: ${response.statusText}`
-        );
+      if (!enrollment) {
+        throw new Error("You are not enrolled in this course");
       }
 
-      const submission = await response.json();
+      // Check if submission is late
+      const isLate = new Date() > new Date(assignment.dueDate);
+
+      // Check if late submissions are allowed
+      if (isLate && !assignment.allowLateSubmission) {
+        throw new Error("Late submissions are not allowed for this assignment");
+      }
+
+      // Check if the student has exceeded the allowed attempts
+      const existingSubmissions = await prisma.assignmentSubmission.findMany({
+        where: {
+          studentId,
+          assignmentId,
+        },
+      });
+
+      if (existingSubmissions.length >= assignment.allowedAttempts) {
+        throw new Error(`You have exceeded the maximum number of attempts (${assignment.allowedAttempts})`);
+      }
+
+      // Create submission
+      const submission = await prisma.assignmentSubmission.create({
+        data: {
+          studentId,
+          assignmentId,
+          content,
+          submissionUrl,
+          attemptNumber: attemptNumber || existingSubmissions.length + 1,
+          isLate,
+        },
+        include: {
+          assignment: {
+            include: {
+              course: true,
+            },
+          },
+        },
+      });
+
+      // Log the submission
+      await prisma.auditLog.create({
+        data: {
+          action: "ASSIGNMENT_SUBMITTED",
+          resourceType: "ASSIGNMENT",
+          resourceId: assignmentId,
+          details: {
+            studentId,
+            assignmentId,
+            attemptNumber: submission.attemptNumber,
+            isLate,
+          },
+        },
+      });
 
       return {
-        ...submission,
-        submittedAt: new Date(submission.submittedAt),
-        createdAt: new Date(submission.createdAt),
-        updatedAt: new Date(submission.updatedAt),
+        success: true,
+        submission,
+        message: "Assignment submitted successfully",
       };
     } catch (error) {
       console.error("Error submitting assignment:", error);
       throw error;
     }
   }
-}
 
-// Export convenient methods
-export const {
-  getAssignmentsByUserId,
-  getAssignmentById,
-  getAssignmentsByCourseId,
-  calculateStats,
-  getAssignmentStatus,
-  getDaysLeft,
-  getSubmissionInfo,
-  extractCourses,
-  filterBySearchTerm,
-  filterByStatus,
-  filterByCourse,
-  applyFilters,
-  sortByDueDate,
-  submitAssignment,
-} = AssignmentService;
+  /**
+   * Get upcoming assignments (due in the future)
+   */
+  static async getUpcomingAssignments(studentId: string, days: number = 7) {
+    try {
+      // Get student enrollments to find their courses
+      const enrollments = await prisma.enrollment.findMany({
+        where: { studentId },
+        select: { courseId: true },
+      });
+
+      const courseIds = enrollments.map(e => e.courseId);
+
+      if (courseIds.length === 0) {
+        return [];
+      }
+
+      const assignments = await prisma.assignment.findMany({
+        where: {
+          courseId: { in: courseIds },
+          isPublished: true,
+          dueDate: {
+            gte: new Date(),
+            lte: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
+          },
+        },
+        include: {
+          course: true,
+          submissions: {
+            where: { studentId },
+            orderBy: { attemptNumber: "desc" },
+            take: 1, // Get only the latest submission
+          },
+        },
+        orderBy: { dueDate: "asc" },
+      });
+
+      return assignments as AssignmentWithSubmission[];
+    } catch (error) {
+      console.error("Error getting upcoming assignments:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get overdue assignments (past due date and not submitted)
+   */
+  static async getOverdueAssignments(studentId: string) {
+    try {
+      // Get student enrollments to find their courses
+      const enrollments = await prisma.enrollment.findMany({
+        where: { studentId },
+        select: { courseId: true },
+      });
+
+      const courseIds = enrollments.map(e => e.courseId);
+
+      if (courseIds.length === 0) {
+        return [];
+      }
+
+      // Get assignments that are past due date
+      const allPastDueAssignments = await prisma.assignment.findMany({
+        where: {
+          courseId: { in: courseIds },
+          isPublished: true,
+          dueDate: {
+            lt: new Date(),
+          },
+        },
+        include: {
+          course: true,
+          submissions: {
+            where: { studentId },
+          },
+        },
+      });
+
+      // Filter out assignments that have been submitted
+      const overdueAssignments = allPastDueAssignments.filter(
+        assignment => assignment.submissions.length === 0
+      );
+
+      return overdueAssignments as AssignmentWithSubmission[];
+    } catch (error) {
+      console.error("Error getting overdue assignments:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get submitted assignments
+   */
+  static async getSubmittedAssignments(studentId: string, page: number = 1, limit: number = 10) {
+    try {
+      const skip = (page - 1) * limit;
+
+      const [submissions, total] = await Promise.all([
+        prisma.assignmentSubmission.findMany({
+          where: { studentId },
+          skip,
+          take: limit,
+          include: {
+            assignment: {
+              include: {
+                course: true,
+              },
+            },
+          },
+          orderBy: { submittedAt: "desc" },
+        }),
+        prisma.assignmentSubmission.count({ where: { studentId } }),
+      ]);
+
+      // Transform the data to match AssignmentWithSubmission format
+      const assignments = submissions.map(submission => ({
+        ...submission.assignment,
+        submissions: [submission],
+      }));
+
+      return {
+        assignments: assignments as AssignmentWithSubmission[],
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      console.error("Error getting submitted assignments:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get graded assignments
+   */
+  static async getGradedAssignments(studentId: string, page: number = 1, limit: number = 10) {
+    try {
+      const skip = (page - 1) * limit;
+
+      const [submissions, total] = await Promise.all([
+        prisma.assignmentSubmission.findMany({
+          where: { 
+            studentId,
+            isGraded: true,
+          },
+          skip,
+          take: limit,
+          include: {
+            assignment: {
+              include: {
+                course: true,
+              },
+            },
+          },
+          orderBy: { submittedAt: "desc" },
+        }),
+        prisma.assignmentSubmission.count({ 
+          where: { 
+            studentId,
+            isGraded: true,
+          },
+        }),
+      ]);
+
+      // Transform the data to match AssignmentWithSubmission format
+      const assignments = submissions.map(submission => ({
+        ...submission.assignment,
+        submissions: [submission],
+      }));
+
+      return {
+        assignments: assignments as AssignmentWithSubmission[],
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      console.error("Error getting graded assignments:", error);
+      throw error;
+    }
+  }
+}

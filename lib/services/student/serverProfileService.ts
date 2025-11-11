@@ -1,556 +1,415 @@
 // lib/services/serverProfileService.ts
-import "server-only";
 
 import { prisma } from "@/lib/server/prisma";
-import {
-  protectData,
-  unprotectData,
-  validatePasswordStrength,
-} from "@/lib/security/dataProtection";
-
-// Import the shared interfaces from the client service
-import type {
-  UserProfile,
-  SecuritySettings,
-  NotificationSettings,
-  UpdateProfileData,
-} from "./profileService";
+import { StudentProfile } from "@/lib/types/student/index";
+import { protectData, unprotectData } from "@/lib/security/dataProtection";
+import { AuditAction } from "@prisma/client";
 
 export class ServerProfileService {
   /**
-   * Get complete user profile data with decrypted fields
+   * Get student profile by ID (server-side)
    */
-  static async getProfile(userId: string): Promise<UserProfile | null> {
+  static async getStudentProfileById(
+    studentId: string
+  ): Promise<StudentProfile | null> {
     try {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: {
-          student: true,
-        },
-      });
-
-      if (!user) {
-        return null;
-      }
-
-      // Decrypt protected student fields
-      let decryptedStudentData: any = {};
-      if (user.student) {
-        const [
-          decryptedPhone,
-          decryptedState,
-          decryptedLga,
-          decryptedLastName,
-          decryptedFirstName,
-          decryptedOtherName,
-        ] = await Promise.all([
-          unprotectData(user.student.phone, "phone"),
-          unprotectData(user.student.state, "location"),
-          unprotectData(user.student.lga, "location"),
-          unprotectData(user.student.lastName, "name"),
-          unprotectData(user.student.firstName, "name"),
-          unprotectData(user.student.otherName || "", "name"),
-        ]);
-
-        decryptedStudentData = {
-          matricNumber: user.student.matricNumber,
-          department: user.student.department,
-          college: user.student.college,
-          course: user.student.course,
-          phone: decryptedPhone,
-          state: decryptedState,
-          lga: decryptedLga,
-          dateOfBirth: user.student.dateOfBirth?.toISOString().split("T")[0],
-          gender: user.student.gender,
-          maritalStatus: user.student.maritalStatus,
-          admissionYear: user.student.admissionYear,
-          dateEnrolled: user.student.dateEnrolled?.toISOString().split("T")[0],
-        };
-      }
-
-      return {
-        id: user.id,
-        name: user.name || "",
-        email: user.email,
-        role: user.role,
-        isActive: user.isActive,
-        emailVerified: user.emailVerified,
-        lastLoginAt: user.lastLoginAt,
-        loginCount: user.loginCount,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-        ...decryptedStudentData,
-      };
-    } catch (error) {
-      console.error("Error fetching profile:", error);
-      return null;
-    }
-  }
-
-  /**
-   * Update user profile information
-   */
-  static async updateProfile(
-    userId: string,
-    profileData: UpdateProfileData
-  ): Promise<boolean> {
-    try {
-      // Get user to check if they have a student record
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: { student: true },
-      });
-
-      if (!user) {
-        throw new Error("User not found");
-      }
-
-      // Prepare user update data
-      const userUpdateData: any = {};
-      if (profileData.name) {
-        userUpdateData.name = profileData.name;
-      }
-
-      // Prepare student update data if student exists
-      let studentUpdateData: any = {};
-      if (user.student) {
-        const updateFields: any = {};
-
-        if (profileData.phone) {
-          const protectedPhone = await protectData(profileData.phone, "phone");
-          updateFields.phone = protectedPhone.encrypted;
-          updateFields.phoneSearchHash = protectedPhone.searchHash;
-        }
-
-        if (profileData.state) {
-          const protectedState = await protectData(
-            profileData.state,
-            "location"
-          );
-          updateFields.state = protectedState.encrypted;
-        }
-
-        if (profileData.lga) {
-          const protectedLga = await protectData(profileData.lga, "location");
-          updateFields.lga = protectedLga.encrypted;
-        }
-
-        if (profileData.dateOfBirth) {
-          updateFields.dateOfBirth = new Date(profileData.dateOfBirth);
-        }
-
-        if (profileData.gender) {
-          updateFields.gender = profileData.gender;
-        }
-
-        if (profileData.maritalStatus) {
-          updateFields.maritalStatus = profileData.maritalStatus;
-        }
-
-        studentUpdateData = updateFields;
-      }
-
-      // Perform updates in transaction
-      await prisma.$transaction(async (tx) => {
-        // Update user
-        if (Object.keys(userUpdateData).length > 0) {
-          await tx.user.update({
-            where: { id: userId },
-            data: userUpdateData,
-          });
-        }
-
-        // Update student if data exists
-        if (user.student && Object.keys(studentUpdateData).length > 0) {
-          await tx.student.update({
-            where: { id: user.student.id },
-            data: studentUpdateData,
-          });
-        }
-      });
-
-      // Create audit log
-      await prisma.auditLog.create({
-        data: {
-          userId: userId,
-          action: "PROFILE_UPDATED",
-          resourceType: "USER",
-          resourceId: userId,
-          details: {
-            updatedFields: Object.keys(profileData),
-          },
-          ipAddress: "profile_service",
-          userAgent: "profile_service",
-        },
-      });
-
-      return true;
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      throw new Error("Failed to update profile");
-    }
-  }
-
-  /**
-   * Get user statistics
-   */
-  static async getUserStats(userId: string): Promise<{
-    totalLogins: number;
-    lastLogin: string | null;
-    accountAge: number;
-    profileCompletion: number;
-  }> {
-    try {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
+      const student = await prisma.student.findUnique({
+        where: { id: studentId },
         select: {
-          loginCount: true,
-          lastLoginAt: true,
-          createdAt: true,
-          name: true,
-          student: {
+          id: true,
+          matricNumber: true,
+          firstName: true,
+          lastName: true,
+          otherName: true,
+          email: true,
+          phone: true,
+          passportUrl: true,
+          department: true,
+          course: true,
+          college: true,
+          dateEnrolled: true,
+          isActive: true,
+          user: {
             select: {
-              phone: true,
-              state: true,
-              lga: true,
-              dateOfBirth: true,
-              gender: true,
+              role: true,
             },
           },
         },
       });
 
-      if (!user) {
-        throw new Error("User not found");
-      }
+      if (!student) return null;
 
-      // Calculate profile completion
-      const profileFields = [
-        "name",
-        "phone",
-        "state",
-        "lga",
-        "dateOfBirth",
-        "gender",
-      ];
-
-      let completedFields = 0;
-
-      // Check name
-      if (user.name) completedFields++;
-
-      // Check student fields
-      if (user.student) {
-        if (user.student.phone) completedFields++;
-        if (user.student.state) completedFields++;
-        if (user.student.lga) completedFields++;
-        if (user.student.dateOfBirth) completedFields++;
-        if (user.student.gender) completedFields++;
-      }
-
-      const profileCompletion = Math.round(
-        (completedFields / profileFields.length) * 100
-      );
-
-      // Calculate account age in days
-      const accountAge = Math.floor(
-        (Date.now() - user.createdAt.getTime()) / (1000 * 60 * 60 * 24)
-      );
-
-      return {
-        totalLogins: user.loginCount,
-        lastLogin: user.lastLoginAt?.toISOString() || null,
-        accountAge,
-        profileCompletion,
+      // Decrypt sensitive data
+      const decryptedProfile = {
+        ...student,
+        email: await unprotectData(student.email, "email"),
+        phone: await unprotectData(student.phone, "phone"),
+        firstName: await unprotectData(student.firstName, "name"),
+        lastName: await unprotectData(student.lastName, "name"),
+        otherName: student.otherName
+          ? await unprotectData(student.otherName, "name")
+          : null,
+        role: student.user.role,
       };
+      return decryptedProfile as StudentProfile;
     } catch (error) {
-      console.error("Error fetching user stats:", error);
-      throw new Error("Failed to fetch user statistics");
-    }
-  }
-
-  /**
-   * Get user activity log
-   */
-  static async getActivityLog(
-    userId: string,
-    limit: number = 50
-  ): Promise<any[]> {
-    try {
-      const activities = await prisma.auditLog.findMany({
-        where: {
-          userId: userId,
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-        take: Math.min(limit, 100),
-        select: {
-          id: true,
-          action: true,
-          resourceType: true,
-          details: true,
-          createdAt: true,
-          ipAddress: true,
-        },
-      });
-
-      return activities;
-    } catch (error) {
-      console.error("Error fetching activity log:", error);
-      throw new Error("Failed to fetch activity log");
-    }
-  }
-
-  /**
-   * Export user data
-   */
-  static async exportUserData(userId: string): Promise<any> {
-    try {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: {
-          student: true,
-          auditLogs: {
-            take: 100,
-            orderBy: { createdAt: "desc" },
-          },
-        },
-      });
-
-      if (!user) {
-        throw new Error("User not found");
-      }
-
-      // Decrypt sensitive data for export
-      let decryptedStudentData: any = {};
-      if (user.student) {
-        const [
-          decryptedPhone,
-          decryptedState,
-          decryptedLga,
-          decryptedLastName,
-          decryptedFirstName,
-          decryptedOtherName,
-        ] = await Promise.all([
-          unprotectData(user.student.phone, "phone"),
-          unprotectData(user.student.state, "location"),
-          unprotectData(user.student.lga, "location"),
-          unprotectData(user.student.lastName, "name"),
-          unprotectData(user.student.firstName, "name"),
-          unprotectData(user.student.otherName || "", "name"),
-        ]);
-
-        decryptedStudentData = {
-          matricNumber: user.student.matricNumber,
-          department: user.student.department,
-          college: user.student.college,
-          course: user.student.course,
-          phone: decryptedPhone,
-          state: decryptedState,
-          lga: decryptedLga,
-          dateOfBirth: user.student.dateOfBirth,
-          gender: user.student.gender,
-          maritalStatus: user.student.maritalStatus,
-          admissionYear: user.student.admissionYear,
-          dateEnrolled: user.student.dateEnrolled,
-        };
-      }
-
-      const exportData = {
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          isActive: user.isActive,
-          emailVerified: user.emailVerified,
-          lastLoginAt: user.lastLoginAt,
-          loginCount: user.loginCount,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
-        },
-        student: decryptedStudentData,
-        activity: user.auditLogs,
-        exportedAt: new Date().toISOString(),
-      };
-
-      // Log the export
-      await prisma.auditLog.create({
-        data: {
-          userId: userId,
-          action: "DATA_EXPORT_REQUESTED",
-          resourceType: "USER",
-          resourceId: userId,
-          details: {
-            exportType: "user_data",
-            exportedAt: new Date().toISOString(),
-          },
-          ipAddress: "profile_service",
-          userAgent: "profile_service",
-        },
-      });
-
-      return exportData;
-    } catch (error) {
-      console.error("Error exporting user data:", error);
-      throw new Error("Failed to export user data");
-    }
-  }
-
-  /**
-   * Get notification settings - SIMPLE VERSION (NO DATABASE)
-   */
-  static async getNotificationSettings(
-    userId: string
-  ): Promise<NotificationSettings> {
-    // Simply return default settings - no database calls
-    return {
-      emailNotifications: true,
-      pushNotifications: true,
-      assignmentReminders: true,
-      gradeAlerts: true,
-      lectureReminders: true,
-    };
-  }
-
-  /**
-   * Update notification settings - SIMPLE VERSION (NO DATABASE)
-   */
-  static async updateNotificationSettings(
-    userId: string,
-    settings: NotificationSettings
-  ): Promise<boolean> {
-    try {
-      console.log(
-        `📧 Notification settings updated for user ${userId}:`,
-        settings
-      );
-
-      // Just log to console and return success
-      // The actual settings will be stored in client-side state
-      return true;
-    } catch (error) {
-      console.error("Error in updateNotificationSettings:", error);
-      return true; // Always return true to not break the UI
-    }
-  }
-
-  /**
-   * Change user password
-   */
-  static async changePassword(
-    userId: string,
-    securitySettings: SecuritySettings
-  ): Promise<boolean> {
-    try {
-      const { currentPassword, newPassword, confirmPassword } =
-        securitySettings;
-
-      // Validate new password matches confirmation
-      if (newPassword !== confirmPassword) {
-        throw new Error("New passwords do not match");
-      }
-
-      // Validate password strength
-      const passwordValidation = validatePasswordStrength(newPassword);
-      if (!passwordValidation.isValid) {
-        throw new Error(
-          passwordValidation.errors[0] ||
-            "Password does not meet security requirements"
-        );
-      }
-
-      // Get user with password hash
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { passwordHash: true, email: true },
-      });
-
-      if (!user || !user.passwordHash) {
-        throw new Error("User not found");
-      }
-
-      // Verify current password
-      const isCurrentPasswordValid = await this.verifyPasswordForAuth(
-        currentPassword,
-        user.passwordHash
-      );
-
-      if (!isCurrentPasswordValid) {
-        throw new Error("Current password is incorrect");
-      }
-
-      // Hash new password using your security system
-      const protectedPassword = await protectData(newPassword, "password");
-
-      // Update password
-      await prisma.user.update({
-        where: { id: userId },
-        data: { passwordHash: protectedPassword.encrypted },
-      });
-
-      // Create audit log
-      await prisma.auditLog.create({
-        data: {
-          userId: userId,
-          action: "PASSWORD_RESET",
-          resourceType: "USER",
-          resourceId: userId,
-          details: {
-            note: "Password changed via profile settings",
-          },
-          ipAddress: "profile_service",
-          userAgent: "profile_service",
-        },
-      });
-
-      return true;
-    } catch (error) {
-      console.error("Error changing password:", error);
+      console.error("Error getting student profile by ID:", error);
       throw error;
     }
   }
 
   /**
-   * Verify password for authentication
+   * Get student profile by matric number (server-side)
    */
-  private static async verifyPasswordForAuth(
-    password: string,
-    hashedPassword: string
-  ): Promise<boolean> {
-    // Import the verifyPassword function dynamically to avoid import chain
-    const { verifyPassword } = await import("@/lib/security/dataProtection");
-    return verifyPassword(password, hashedPassword);
-  }
-
-  /**
-   * Request account deletion
-   */
-  static async requestAccountDeletion(
-    userId: string,
-    reason?: string
-  ): Promise<boolean> {
+  static async getStudentProfileByMatricNumber(
+    matricNumber: string
+  ): Promise<StudentProfile | null> {
     try {
-      await prisma.auditLog.create({
-        data: {
-          userId: userId,
-          action: "ACCOUNT_DELETION_REQUESTED",
-          resourceType: "USER",
-          resourceId: userId,
-          details: {
-            reason: reason,
-            requestedAt: new Date().toISOString(),
+      const student = await prisma.student.findUnique({
+        where: { matricNumber },
+        select: {
+          id: true,
+          matricNumber: true,
+          firstName: true,
+          lastName: true,
+          otherName: true,
+          email: true,
+          phone: true,
+          passportUrl: true,
+          department: true,
+          course: true,
+          college: true,
+          dateEnrolled: true,
+          isActive: true,
+          user: {
+            select: {
+              role: true,
+            },
           },
-          ipAddress: "profile_service",
-          userAgent: "profile_service",
         },
       });
 
-      return true;
+      if (!student) return null;
+
+      // Decrypt sensitive data
+      const decryptedProfile = {
+        ...student,
+        email: await unprotectData(student.email, "email"),
+        phone: await unprotectData(student.phone, "phone"),
+        firstName: await unprotectData(student.firstName, "name"),
+        lastName: await unprotectData(student.lastName, "name"),
+        otherName: student.otherName
+          ? await unprotectData(student.otherName, "name")
+          : null,
+        role: student.user.role,
+      };
+
+      return decryptedProfile as StudentProfile;
     } catch (error) {
-      console.error("Error requesting account deletion:", error);
-      throw new Error("Failed to request account deletion");
+      console.error("Error getting student profile by matric number:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update student profile (server-side)
+   */
+  static async updateStudentProfile(
+    studentId: string,
+    profileData: Partial<{
+      firstName: string;
+      lastName: string;
+      otherName: string;
+      phone: string;
+      passportUrl: string;
+      department: string;
+      course: string;
+      college: string;
+    }>
+  ) {
+    try {
+      // Get current student data
+      const currentStudent = await prisma.student.findUnique({
+        where: { id: studentId },
+      });
+
+      if (!currentStudent) {
+        throw new Error("Student not found");
+      }
+
+      // Prepare update data
+      const updateData: any = {};
+
+      // Update fields if provided
+      if (profileData.firstName) {
+        updateData.firstName = (
+          await protectData(profileData.firstName, "name")
+        ).encrypted;
+      }
+
+      if (profileData.lastName) {
+        updateData.lastName = (
+          await protectData(profileData.lastName, "name")
+        ).encrypted;
+      }
+
+      if (profileData.otherName !== undefined) {
+        updateData.otherName = profileData.otherName
+          ? (await protectData(profileData.otherName, "name")).encrypted
+          : null;
+      }
+
+      if (profileData.phone) {
+        const protectedPhone = await protectData(profileData.phone, "phone");
+        updateData.phone = protectedPhone.encrypted;
+        updateData.phoneSearchHash = protectedPhone.searchHash;
+      }
+
+      if (profileData.passportUrl !== undefined) {
+        updateData.passportUrl = profileData.passportUrl;
+      }
+
+      if (profileData.department) {
+        updateData.department = profileData.department;
+      }
+
+      if (profileData.course) {
+        updateData.course = profileData.course;
+      }
+
+      if (profileData.college) {
+        updateData.college = profileData.college;
+      }
+
+      // Update the student profile
+      const updatedStudent = await prisma.student.update({
+        where: { id: studentId },
+        data: {
+          ...updateData,
+          updatedAt: new Date(),
+        },
+        select: {
+          id: true,
+          matricNumber: true,
+          firstName: true,
+          lastName: true,
+          otherName: true,
+          email: true,
+          phone: true,
+          passportUrl: true,
+          department: true,
+          course: true,
+          college: true,
+          dateEnrolled: true,
+          isActive: true,
+          user: {
+            select: {
+              role: true,
+            },
+          },
+        },
+      });
+
+      // Decrypt sensitive data for response
+      const decryptedProfile = {
+        ...updatedStudent,
+        email: await unprotectData(updatedStudent.email, "email"),
+        phone: await unprotectData(updatedStudent.phone, "phone"),
+        firstName: await unprotectData(updatedStudent.firstName, "name"),
+        lastName: await unprotectData(updatedStudent.lastName, "name"),
+        otherName: updatedStudent.otherName
+          ? await unprotectData(updatedStudent.otherName, "name")
+          : null,
+        role: updatedStudent.user.role,
+      };
+
+      // Log the profile update
+      await prisma.auditLog.create({
+        data: {
+          userId: updatedStudent.id,
+          action: "PROFILE_UPDATED",
+          resourceType: "USER",
+          resourceId: updatedStudent.id,
+          details: {
+            updatedFields: Object.keys(profileData),
+          },
+        },
+      });
+
+      return {
+        success: true,
+        profile: decryptedProfile as StudentProfile,
+        message: "Profile updated successfully",
+      };
+    } catch (error) {
+      console.error("Error updating student profile:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Deactivate student account (server-side)
+   */
+  static async deactivateStudentAccount(studentId: string, reason?: string) {
+    try {
+      const student = await prisma.student.findUnique({
+        where: { id: studentId },
+      });
+
+      if (!student) {
+        throw new Error("Student not found");
+      }
+
+      // Deactivate the user account
+      await prisma.user.update({
+        where: { id: student.userId },
+        data: {
+          isActive: false,
+        },
+      });
+
+      // Log the account deactivation
+      await prisma.auditLog.create({
+        data: {
+          userId: student.userId,
+          action: "ACCOUNT_DELETION_REQUESTED",
+          resourceType: "USER",
+          resourceId: student.userId,
+          details: {
+            reason,
+          },
+        },
+      });
+
+      return {
+        success: true,
+        message: "Student account deactivated successfully",
+      };
+    } catch (error) {
+      console.error("Error deactivating student account:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Activate student account (server-side)
+   */
+  static async activateStudentAccount(studentId: string) {
+    try {
+      const student = await prisma.student.findUnique({
+        where: { id: studentId },
+      });
+
+      if (!student) {
+        throw new Error("Student not found");
+      }
+
+      // Activate the user account
+      await prisma.user.update({
+        where: { id: student.userId },
+        data: {
+          isActive: true,
+        },
+      });
+
+      // Log the account activation
+      await prisma.auditLog.create({
+        data: {
+          userId: student.userId,
+          action: "USER_PROFILE_VIEWED",
+          resourceType: "USER",
+          resourceId: student.userId,
+          details: {
+            action: "account_activated",
+          },
+        },
+      });
+
+      return {
+        success: true,
+        message: "Student account activated successfully",
+      };
+    } catch (error) {
+      console.error("Error activating student account:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all students with pagination (server-side)
+   */
+  static async getAllStudents(
+    page: number = 1,
+    limit: number = 10,
+    filters?: {
+      department?: string;
+      college?: string;
+      isActive?: boolean;
+    }
+  ) {
+    try {
+      const skip = (page - 1) * limit;
+
+      // Build where clause
+      const where: any = {};
+      if (filters?.department) where.department = filters.department;
+      if (filters?.college) where.college = filters.college;
+      if (filters?.isActive !== undefined) where.isActive = filters.isActive;
+
+      const [students, total] = await Promise.all([
+        prisma.student.findMany({
+          where,
+          skip,
+          take: limit,
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                isActive: true,
+                emailVerified: true,
+                lastLoginAt: true,
+                createdAt: true,
+              },
+            },
+          },
+          orderBy: { dateEnrolled: "desc" },
+        }),
+        prisma.student.count({ where }),
+      ]);
+
+      // Decrypt sensitive data
+      const decryptedStudents = await Promise.all(
+        students.map(async (student) => ({
+          ...student,
+          email: await unprotectData(student.email, "email"),
+          phone: await unprotectData(student.phone, "phone"),
+          firstName: await unprotectData(student.firstName, "name"),
+          lastName: await unprotectData(student.lastName, "name"),
+          otherName: student.otherName
+            ? await unprotectData(student.otherName, "name")
+            : null,
+          state: await unprotectData(student.state, "location"),
+          lga: await unprotectData(student.lga, "location"),
+          user: {
+            ...student.user,
+            email: await unprotectData(student.user.email, "email"),
+          },
+        }))
+      );
+
+      return {
+        students: decryptedStudents,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      console.error("Error getting all students:", error);
+      throw error;
     }
   }
 }

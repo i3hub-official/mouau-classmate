@@ -1,53 +1,78 @@
+// app/api/auth/reset-password/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import {
-  StudentRegistrationService,
-  ValidationError,
-  StudentRegistrationError,
-} from "@/lib/services/student/studentRegistrationService";
+import { prisma } from "@/lib/server/prisma";
+import { StudentPasswordService } from "@/lib/services/student/passwordService";
+import { TeacherPasswordService } from "@/lib/services/teacher/passwordService";
+import { AdminPasswordService } from "@/lib/services/admin/passwordService";
+import { AuditAction } from "@prisma/client";
 
 export async function POST(request: NextRequest) {
   try {
     const { token, encodedEmail, password, confirmPassword } =
       await request.json();
 
-    const result = await StudentRegistrationService.resetPasswordWithToken(
-      token,
-      encodedEmail,
-      password,
-      confirmPassword
-    );
+    // Validate input
+    if (!token || !encodedEmail || !password || !confirmPassword) {
+      return NextResponse.json(
+        { success: false, error: "All fields are required" },
+        { status: 400 }
+      );
+    }
 
-    return NextResponse.json(result);
+    if (password !== confirmPassword) {
+      return NextResponse.json(
+        { success: false, error: "Passwords do not match" },
+        { status: 400 }
+      );
+    }
+
+    // Try to verify token and reset password for each user type
+    let resetResult;
+
+    // Try student service first
+    try {
+      resetResult = await StudentPasswordService.resetPassword(token, password);
+    } catch (error) {
+      // Not a student, try teacher
+      try {
+        resetResult = await TeacherPasswordService.resetPassword(
+          token,
+          password
+        );
+      } catch (error) {
+        // Not a teacher, try admin
+        try {
+          resetResult = await AdminPasswordService.resetPassword(
+            token,
+            password
+          );
+        } catch (error) {
+          return NextResponse.json(
+            { success: false, error: "Invalid or expired reset token" },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    // Log the password reset
+    await prisma.auditLog.create({
+      data: {
+        action: "PASSWORD_RESET",
+        resourceType: "USER",
+        details: { encodedEmail },
+        ipAddress: request.headers.get("x-forwarded-for"),
+        userAgent: request.headers.get("user-agent"),
+      },
+    });
+
+    return NextResponse.json(resetResult);
   } catch (error) {
     console.error("Password reset error:", error);
-
-    if (error instanceof ValidationError) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: error.code,
-          message: error.message,
-        },
-        { status: 400 }
-      );
-    }
-
-    if (error instanceof StudentRegistrationError) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: error.code,
-          message: error.message,
-        },
-        { status: 400 }
-      );
-    }
-
     return NextResponse.json(
       {
         success: false,
-        error: "SERVER_ERROR",
-        message: "Failed to reset password",
+        error: "An error occurred while processing your request",
       },
       { status: 500 }
     );

@@ -276,11 +276,11 @@ export default function ProjectStructure() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8">
+    <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8 md:mb-12">
-          <div className="inline-block mb-4 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-full text-sm font-semibold">
+          <div className="inline-block mb-4 px-4 py-2 bg-linear-to-r from-blue-500 to-purple-600 text-white rounded-full text-sm font-semibold">
             🎓 MOUAU CLASSMATE
           </div>
           <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
@@ -349,7 +349,7 @@ export default function ProjectStructure() {
             </div>
             <div className="w-full bg-gray-200 rounded-full h-4 mt-3">
               <div
-                className="bg-gradient-to-r from-purple-500 to-blue-500 h-4 rounded-full transition-all duration-500"
+                className="bg-linear-to-r from-purple-500 to-blue-500 h-4 rounded-full transition-all duration-500"
                 style={{ width: "77%" }}
               ></div>
             </div>
@@ -368,7 +368,7 @@ export default function ProjectStructure() {
                 <div
                   className={`${section.color} text-white px-4 md:px-6 py-4 flex items-center gap-3`}
                 >
-                  <Icon className="w-5 h-5 md:w-6 md:h-6 flex-shrink-0" />
+                  <Icon className="w-5 h-5 md:w-6 md:h-6 shrink-0" />
                   <h2 className="text-lg md:text-xl font-bold">
                     {section.name}
                   </h2>
@@ -401,7 +401,7 @@ export default function ProjectStructure() {
         </div>
 
         {/* Key Features */}
-        <div className="mt-12 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 rounded-xl shadow-xl p-6 md:p-8 text-white">
+        <div className="mt-12 bg-linear-to-r from-blue-600 via-purple-600 to-pink-600 rounded-xl shadow-xl p-6 md:p-8 text-white">
           <h3 className="text-2xl font-bold mb-6 text-center">
             ✨ Enterprise Features
           </h3>
@@ -454,7 +454,7 @@ export default function ProjectStructure() {
         {/* Remaining Tasks */}
         <div className="mt-8 bg-amber-50 border-l-4 border-amber-400 p-4 md:p-6 rounded-r-lg">
           <div className="flex items-start gap-3">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <svg
                 className="h-6 w-6 text-amber-400"
                 fill="currentColor"

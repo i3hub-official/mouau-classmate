@@ -4,7 +4,7 @@
 // ===========================================================
 
 import { Gender, MaritalStatus, Grade, NotificationType } from "@prisma/client";
-
+import { BaseUser } from "@/lib/types/shared/index";
 // ===========================================================
 // Core Student Types
 // ===========================================================

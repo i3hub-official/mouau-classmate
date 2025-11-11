@@ -1,4 +1,6 @@
-// app/components/AcademicProgress.tsx
+// File: app/components/student/AcademicProgress.tsx
+"use client";
+
 import {
   Award,
   TrendingUp,

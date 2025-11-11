@@ -1,4 +1,5 @@
-// app/components/UpcomingDeadlines.tsx
+// app/components/student/UpcomingDeadlines.tsx
+"use client";
 import { Clock, Calendar, AlertCircle } from "lucide-react";
 
 interface Assignment {

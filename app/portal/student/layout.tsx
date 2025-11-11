@@ -91,8 +91,7 @@ export default function StudentLayout({
     return !publicPaths.some((publicPath) => path.startsWith(publicPath));
   };
 
-  // Mock authentication service
-  const authenticateStudent = async (): Promise<StudentProfile> => {
+    const authenticateStudent = async (): Promise<StudentProfile> => {
     // Check in-memory storage first
     if (sessionData.user && sessionData.token && !checkSessionExpiry()) {
       updateLastActivity();

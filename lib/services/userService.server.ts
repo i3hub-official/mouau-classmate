@@ -1,220 +1,446 @@
 // lib/services/userService.server.ts
 import { prisma } from "@/lib/server/prisma";
-import { cookies } from "next/headers";
-
-export interface UserData {
-  id: string;
-  email: string;
-  name: string | null;
-  role: string;
-  matricNumber?: string;
-  department?: string;
-  college?: string;
-  course?: string;
-}
+import { protectData, unprotectData } from "@/lib/security/dataProtection";
+import { AuditAction } from "@prisma/client";
 
 export class UserServiceServer {
   /**
-   * Get current user data from session (Server-side only)
+   * Find user by email (server-side)
    */
-  static async getCurrentUserFromSession(): Promise<UserData | null> {
+  static async findUserByEmail(email: string) {
     try {
-      // FIX: await the cookies() function
-      const cookieStore = await cookies();
-      const sessionToken = cookieStore.get("session-token")?.value;
+      const protectedEmail = await protectData(email, "email");
 
-      if (!sessionToken) {
-        console.log("❌ No session token found");
-        return null;
-      }
-
-      // Find session and user
-      const session = await prisma.session.findUnique({
-        where: { sessionToken },
+      const user = await prisma.user.findFirst({
+        where: {
+          email: protectedEmail.encrypted,
+        },
         include: {
-          user: {
-            include: {
-              student: true,
-              teacher: true,
+          student: {
+            select: {
+              id: true,
+              matricNumber: true,
+              firstName: true,
+              lastName: true,
+              department: true,
+            },
+          },
+          teacher: {
+            select: {
+              id: true,
+              employeeId: true,
+              firstName: true,
+              lastName: true,
+              department: true,
             },
           },
         },
       });
 
-      if (!session) {
-        console.log("❌ Session not found");
-        return null;
-      }
+      if (!user) return null;
 
-      if (session.expires < new Date()) {
-        console.log("❌ Session expired");
-        return null;
-      }
-
-      const user = session.user;
-
-      let userData: UserData = {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
+      // Decrypt sensitive data
+      const decryptedUser = {
+        ...user,
+        email: await unprotectData(user.email, "email"),
       };
 
-      // Add role-specific data
-      if (user.role === "STUDENT" && user.student) {
-        userData = {
-          ...userData,
-          matricNumber: user.student.matricNumber,
-          department: user.student.department,
-          college: user.student.college,
-          course: user.student.course,
-        };
-      } else if (user.role === "TEACHER" && user.teacher) {
-        userData = {
-          ...userData,
-          matricNumber: user.teacher.employeeId,
-          department: user.teacher.department,
-          course: "Lecturer",
+      if (user.student) {
+        decryptedUser.student = {
+          ...user.student,
+          firstName: await unprotectData(user.student.firstName, "name"),
+          lastName: await unprotectData(user.student.lastName, "name"),
         };
       }
 
-      // console.log("✅ User data retrieved successfully");
-      return userData;
+      if (user.teacher) {
+        decryptedUser.teacher = {
+          ...user.teacher,
+          firstName: await unprotectData(user.teacher.firstName, "name"),
+          lastName: await unprotectData(user.teacher.lastName, "name"),
+        };
+      }
+
+      return decryptedUser;
     } catch (error) {
-      console.error("Error fetching user from session:", error);
-      return null;
+      console.error("Error finding user by email:", error);
+      throw error;
     }
   }
 
   /**
-   * Enhanced verifyStudentAccess that handles both studentId and userId
+   * Find student by matric number (server-side)
    */
-  static async verifyStudentAccess(requestedId: string): Promise<boolean> {
+  static async findStudentByMatricNumber(matricNumber: string) {
     try {
-      const currentUser = await this.getCurrentUserFromSession();
-
-      console.log("🔍 verifyStudentAccess - Current User:", {
-        userId: currentUser?.id,
-        role: currentUser?.role,
-        requestedId: requestedId,
-      });
-
-      if (!currentUser) {
-        console.log("❌ No current user found");
-        return false;
-      }
-
-      // If user is a student, they can only access their own data
-      if (
-        currentUser.role === "STUDENT" ||
-        currentUser.role === "TEACHER" ||
-        currentUser.role === "ADMIN" ||
-        currentUser.role === "SUPERADMIN"
-      ) {
-        // Get the student record for the current user
-        const student = await prisma.student.findFirst({
-          where: {
-            userId: currentUser.id,
-          },
-          select: {
-            id: true,
-            userId: true,
-          },
-        });
-
-        console.log("🔍 Student record found for current user:", {
-          studentId: student?.id,
-          studentUserId: student?.userId,
-          currentUserId: currentUser.id,
-          requestedId: requestedId,
-          isUserIdMatch: requestedId === currentUser.id,
-          isStudentIdMatch: student?.id === requestedId,
-        });
-
-        // Check if the requested ID matches either:
-        // 1. The current student's ID, OR
-        // 2. The current user's ID (common mistake from frontend)
-        return student?.id === requestedId || currentUser.id === requestedId;
-      }
-
-      // Teachers and admins can access student data
-      console.log("✅ User is teacher/admin, granting access");
-      return true;
-    } catch (error) {
-      console.error("Error verifying student access:", error);
-      return false;
-    }
-  }
-
-  /**
-   * Get the correct student ID for API calls
-   */
-  static async getCorrectStudentId(
-    requestedId?: string
-  ): Promise<string | null> {
-    try {
-      const currentUser = await this.getCurrentUserFromSession();
-
-      if (!currentUser) {
-        return null;
-      }
-
-      // If user is a student, get their actual student ID
-      if (
-        currentUser.role === "STUDENT" ||
-        currentUser.role === "TEACHER" ||
-        currentUser.role === "ADMIN" ||
-        currentUser.role === "SUPERADMIN"
-      ) {
-        const student = await prisma.student.findFirst({
-          where: { userId: currentUser.id },
-          select: { id: true },
-        });
-
-        return student?.id || null;
-      }
-
-      // For teachers/admins, use the requested ID if provided
-      return requestedId || null;
-    } catch (error) {
-      console.error("Error getting correct student ID:", error);
-      return null;
-    }
-  }
-
-  /**
-   * Get current student data (Server-side only)
-   */
-  static async getCurrentStudent() {
-    try {
-      const currentUser = await this.getCurrentUserFromSession();
-
-      if (
-        !currentUser ||
-        (currentUser.role !== "STUDENT" &&
-          currentUser.role !== "TEACHER" &&
-          currentUser.role !== "ADMIN" &&
-          currentUser.role !== "SUPERADMIN")
-      ) {
-        return null;
-      }
-
-      const student = await prisma.student.findFirst({
-        where: { userId: currentUser.id },
+      const student = await prisma.student.findUnique({
+        where: { matricNumber },
         include: {
           user: {
             select: {
-              name: true,
+              id: true,
               email: true,
+              role: true,
+              isActive: true,
+              emailVerified: true,
             },
           },
         },
       });
 
-      return student;
+      if (!student) return null;
+
+      // Decrypt sensitive data
+      const decryptedStudent = {
+        ...student,
+        email: await unprotectData(student.email, "email"),
+        user: {
+          ...student.user,
+          email: await unprotectData(student.user.email, "email"),
+        },
+      };
+
+      return decryptedStudent;
     } catch (error) {
-      console.error("Error getting current student:", error);
-      return null;
+      console.error("Error finding student by matric number:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Find teacher by employee ID (server-side)
+   */
+  static async findTeacherByEmployeeId(employeeId: string) {
+    try {
+      const teacher = await prisma.teacher.findUnique({
+        where: { employeeId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              role: true,
+              isActive: true,
+              emailVerified: true,
+            },
+          },
+        },
+      });
+
+      if (!teacher) return null;
+
+      // Decrypt sensitive data
+      const decryptedTeacher = {
+        ...teacher,
+        email: await unprotectData(teacher.email, "email"),
+        user: {
+          ...teacher.user,
+          email: await unprotectData(teacher.user.email, "email"),
+        },
+      };
+
+      return decryptedTeacher;
+    } catch (error) {
+      console.error("Error finding teacher by employee ID:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update last login
+   */
+  static async updateLastLogin(
+    userId: string,
+    ipAddress?: string,
+    userAgent?: string
+  ) {
+    try {
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          lastLoginAt: new Date(),
+          loginCount: { increment: 1 },
+          failedLoginAttempts: 0,
+          accountLocked: false,
+          lockedUntil: null,
+        },
+      });
+
+      // Log successful login
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: "USER_LOGGED_IN",
+          resourceType: "USER",
+          resourceId: userId,
+          ipAddress,
+          userAgent,
+        },
+      });
+
+      return {
+        success: true,
+        message: "Last login updated successfully",
+      };
+    } catch (error) {
+      console.error("Error updating last login:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Increment failed login attempts
+   */
+  static async incrementFailedLogin(
+    userId: string,
+    ipAddress?: string,
+    userAgent?: string
+  ) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      const failedAttempts = user.failedLoginAttempts + 1;
+      const updateData: any = {
+        failedLoginAttempts: failedAttempts,
+        lastFailedLoginAt: new Date(),
+      };
+
+      // Lock account after 5 failed attempts
+      if (failedAttempts >= 5) {
+        updateData.accountLocked = true;
+        updateData.lockedUntil = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+      }
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: updateData,
+      });
+
+      // Log failed login
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: "USER_LOGIN_FAILED",
+          resourceType: "USER",
+          resourceId: userId,
+          details: {
+            failedAttempts,
+            locked: failedAttempts >= 5,
+          },
+          ipAddress,
+          userAgent,
+        },
+      });
+
+      return {
+        success: true,
+        failedAttempts,
+        locked: failedAttempts >= 5,
+        message:
+          failedAttempts >= 5
+            ? "Account locked due to too many failed attempts"
+            : "Failed login attempt recorded",
+      };
+    } catch (error) {
+      console.error("Error incrementing failed login:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Reset failed login attempts
+   */
+  static async resetFailedLoginAttempts(userId: string) {
+    try {
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          failedLoginAttempts: 0,
+          accountLocked: false,
+          lockedUntil: null,
+        },
+      });
+
+      return {
+        success: true,
+        message: "Failed login attempts reset successfully",
+      };
+    } catch (error) {
+      console.error("Error resetting failed login attempts:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create user activity log
+   */
+  static async logUserActivity(
+    userId: string,
+    action: string,
+    resourceType?: string,
+    resourceId?: string,
+    details?: any,
+    ipAddress?: string,
+    userAgent?: string
+  ) {
+    try {
+      await prisma.userActivity.create({
+        data: {
+          userId,
+          action,
+          resourceType,
+          resourceId,
+          details,
+          ipAddress,
+          userAgent,
+          createdAt: new Date(),
+        },
+      });
+
+      return {
+        success: true,
+        message: "User activity logged successfully",
+      };
+    } catch (error) {
+      console.error("Error logging user activity:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get user activities
+   */
+  static async getUserActivities(
+    userId: string,
+    page: number = 1,
+    limit: number = 10
+  ) {
+    try {
+      const skip = (page - 1) * limit;
+
+      const [activities, total] = await Promise.all([
+        prisma.userActivity.findMany({
+          where: { userId },
+          skip,
+          take: limit,
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.userActivity.count({ where: { userId } }),
+      ]);
+
+      return {
+        activities,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      console.error("Error getting user activities:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Search users (server-side)
+   */
+  static async searchUsers(
+    query: string,
+    page: number = 1,
+    limit: number = 10
+  ) {
+    try {
+      const skip = (page - 1) * limit;
+
+      // For a real implementation, you would need to implement proper search functionality
+      // This is a simplified version
+      const [users, total] = await Promise.all([
+        prisma.user.findMany({
+          where: {
+            OR: [
+              { name: { contains: query, mode: "insensitive" } },
+              // For encrypted fields, you would need to use search hashes
+            ],
+          },
+          skip,
+          take: limit,
+          include: {
+            student: {
+              select: {
+                id: true,
+                matricNumber: true,
+                firstName: true,
+                lastName: true,
+                department: true,
+              },
+            },
+            teacher: {
+              select: {
+                id: true,
+                employeeId: true,
+                firstName: true,
+                lastName: true,
+                department: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.user.count({
+          where: {
+            OR: [{ name: { contains: query, mode: "insensitive" } }],
+          },
+        }),
+      ]);
+
+      // Decrypt sensitive data
+      const decryptedUsers = await Promise.all(
+        users.map(async (user) => {
+          const decryptedUser = {
+            ...user,
+            email: await unprotectData(user.email, "email"),
+          };
+
+          if (user.student) {
+            decryptedUser.student = {
+              ...user.student,
+              firstName: await unprotectData(user.student.firstName, "name"),
+              lastName: await unprotectData(user.student.lastName, "name"),
+            };
+          }
+
+          if (user.teacher) {
+            decryptedUser.teacher = {
+              ...user.teacher,
+              firstName: await unprotectData(user.teacher.firstName, "name"),
+              lastName: await unprotectData(user.teacher.lastName, "name"),
+            };
+          }
+
+          return decryptedUser;
+        })
+      );
+
+      return {
+        users: decryptedUsers,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      console.error("Error searching users:", error);
+      throw error;
     }
   }
 }

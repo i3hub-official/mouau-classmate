@@ -1,4 +1,4 @@
-// app/components/NotificationDropdown.tsx
+// app/components/student/NotificationDropdown.tsx
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { Bell, Check, Trash2, ExternalLink, Loader, X } from "lucide-react";

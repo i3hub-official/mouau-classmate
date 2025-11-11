@@ -1,103 +1,401 @@
 // lib/services/userService.ts
-export interface UserData {
-  id: string;
-  email: string;
-  name: string | null;
-  role: string;
-  matricNumber?: string;
-  department?: string;
-  college?: string;
-  course?: string;
-}
+import { prisma } from "@/lib/server/prisma";
+import {
+  protectData,
+  unprotectData,
+  verifyPassword,
+  validatePasswordStrength,
+} from "@/lib/security/dataProtection";
+import { AuditAction } from "@prisma/client";
 
 export class UserService {
   /**
-   * Get current user data (Client-side)
+   * Get user by ID
    */
-  static async getCurrentUser(): Promise<UserData | null> {
+  static async getUserById(id: string) {
     try {
-      const response = await fetch("/api/user/me", {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
+      const user = await prisma.user.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          isActive: true,
+          emailVerified: true,
+          lastLoginAt: true,
+          createdAt: true,
+          student: {
+            select: {
+              id: true,
+              matricNumber: true,
+              firstName: true,
+              lastName: true,
+              department: true,
+            },
+          },
+          teacher: {
+            select: {
+              id: true,
+              employeeId: true,
+              firstName: true,
+              lastName: true,
+              department: true,
+            },
+          },
         },
       });
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          console.warn("User not authenticated");
-          return null;
-        }
-        throw new Error(`Failed to fetch user data: ${response.statusText}`);
+      if (!user) return null;
+
+      // Decrypt sensitive data
+      const decryptedUser = {
+        ...user,
+        email: await unprotectData(user.email, "email"),
+      };
+
+      if (user.student) {
+        decryptedUser.student = {
+          ...user.student,
+          firstName: await unprotectData(user.student.firstName, "name"),
+          lastName: await unprotectData(user.student.lastName, "name"),
+        };
       }
 
-      const userData = await response.json();
-      return userData;
+      if (user.teacher) {
+        decryptedUser.teacher = {
+          ...user.teacher,
+          firstName: await unprotectData(user.teacher.firstName, "name"),
+          lastName: await unprotectData(user.teacher.lastName, "name"),
+        };
+      }
+
+      return decryptedUser;
     } catch (error) {
-      console.error("Error fetching user data:", error);
-      return null;
+      console.error("Error getting user by ID:", error);
+      throw error;
     }
   }
 
   /**
-   * Get simplified user data for header display (Client-side)
+   * Update user profile
    */
-  static async getHeaderUserData(): Promise<{
-    name?: string;
-    matricNumber?: string;
-    department?: string;
-    email?: string;
-  } | null> {
+  static async updateProfile(
+    userId: string,
+    profileData: {
+      name?: string;
+      email?: string;
+      currentPassword?: string;
+      newPassword?: string;
+    }
+  ) {
     try {
-      const userData = await this.getCurrentUser();
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+      });
 
-      if (!userData) {
-        return null;
+      if (!user) {
+        throw new Error("User not found");
       }
+
+      const updateData: any = {};
+
+      // Update name
+      if (profileData.name) {
+        updateData.name = profileData.name;
+      }
+
+      // Update email
+      if (profileData.email) {
+        // Check if email is already in use
+        const existingUser = await prisma.user.findFirst({
+          where: {
+            email: (await protectData(profileData.email, "email")).encrypted,
+            id: { not: userId },
+          },
+        });
+
+        if (existingUser) {
+          throw new Error("Email is already in use");
+        }
+
+        const protectedEmail = await protectData(profileData.email, "email");
+        updateData.email = protectedEmail.encrypted;
+        updateData.emailVerified = null; // Require re-verification
+        updateData.emailVerificationRequired = true;
+      }
+
+      // Update password
+      if (profileData.newPassword) {
+        if (!profileData.currentPassword) {
+          throw new Error("Current password is required to set a new password");
+        }
+
+        // Verify current password
+        if (!user.passwordHash) {
+          throw new Error("No password set for this account");
+        }
+
+        const isCurrentPasswordValid = await verifyPassword(
+          profileData.currentPassword,
+          user.passwordHash
+        );
+
+        if (!isCurrentPasswordValid) {
+          throw new Error("Current password is incorrect");
+        }
+
+        // Validate new password
+        const passwordValidation = validatePasswordStrength(
+          profileData.newPassword
+        );
+        if (!passwordValidation.isValid) {
+          throw new Error(
+            `Password validation failed: ${passwordValidation.errors.join(
+              ", "
+            )}`
+          );
+        }
+
+        const hashedPassword = await protectData(
+          profileData.newPassword,
+          "password"
+        );
+        updateData.passwordHash = hashedPassword.encrypted;
+      }
+
+      // Update user
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: {
+          ...updateData,
+          updatedAt: new Date(),
+        },
+      });
+
+      // Log the update
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: "PROFILE_UPDATED",
+          resourceType: "USER",
+          resourceId: userId,
+          details: {
+            updatedFields: Object.keys(profileData),
+          },
+        },
+      });
 
       return {
-        name: userData.name || undefined,
-        matricNumber: userData.matricNumber,
-        department: userData.department,
-        email: userData.email,
+        success: true,
+        message: "Profile updated successfully",
       };
     } catch (error) {
-      console.error("Error fetching header user data:", error);
-      return null;
+      console.error("Error updating profile:", error);
+      throw error;
     }
   }
 
   /**
-   * Check if user is authenticated (Client-side)
+   * Change password
    */
-  static async isAuthenticated(): Promise<boolean> {
+  static async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string
+  ) {
     try {
-      const userData = await this.getCurrentUser();
-      return userData !== null;
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user || !user.passwordHash) {
+        throw new Error("User not found or no password set");
+      }
+
+      // Verify current password
+      const isCurrentPasswordValid = await verifyPassword(
+        currentPassword,
+        user.passwordHash
+      );
+      if (!isCurrentPasswordValid) {
+        throw new Error("Current password is incorrect");
+      }
+
+      // Validate new password
+      const passwordValidation = validatePasswordStrength(newPassword);
+      if (!passwordValidation.isValid) {
+        throw new Error(
+          `Password validation failed: ${passwordValidation.errors.join(", ")}`
+        );
+      }
+
+      // Check if new password is the same as current
+      const isSamePassword = await verifyPassword(
+        newPassword,
+        user.passwordHash
+      );
+      if (isSamePassword) {
+        throw new Error(
+          "New password cannot be the same as the current password"
+        );
+      }
+
+      // Hash new password
+      const hashedPassword = await protectData(newPassword, "password");
+
+      // Update password
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          passwordHash: hashedPassword.encrypted,
+        },
+      });
+
+      // Log password change
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: "PASSWORD_CHANGED",
+          resourceType: "USER",
+          resourceId: userId,
+        },
+      });
+
+      return {
+        success: true,
+        message: "Password changed successfully",
+      };
     } catch (error) {
-      console.error("Error checking authentication:", error);
-      return false;
+      console.error("Error changing password:", error);
+      throw error;
     }
   }
 
   /**
-   * Get user role (Client-side)
+   * Delete user account
    */
-  static async getUserRole(): Promise<string | null> {
+  static async deleteAccount(userId: string, password: string) {
     try {
-      const userData = await this.getCurrentUser();
-      return userData?.role || null;
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user || !user.passwordHash) {
+        throw new Error("User not found or no password set");
+      }
+
+      // Verify password
+      const isPasswordValid = await verifyPassword(password, user.passwordHash);
+      if (!isPasswordValid) {
+        throw new Error("Invalid password");
+      }
+
+      // Delete user (this will cascade delete related records)
+      await prisma.user.delete({
+        where: { id: userId },
+      });
+
+      // Log account deletion
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: "ACCOUNT_DELETION",
+          resourceType: "USER",
+          resourceId: userId,
+        },
+      });
+
+      return {
+        success: true,
+        message: "Account deleted successfully",
+      };
     } catch (error) {
-      console.error("Error fetching user role:", error);
-      return null;
+      console.error("Error deleting account:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get user preferences
+   */
+  static async getUserPreferences(userId: string) {
+    try {
+      let preferences = await prisma.userPreferences.findUnique({
+        where: { userId },
+      });
+
+      // If preferences don't exist, create default preferences
+      if (!preferences) {
+        preferences = await prisma.userPreferences.create({
+          data: {
+            userId,
+            emailNotifications: true,
+            pushNotifications: true,
+            assignmentReminders: true,
+            gradeAlerts: true,
+            lectureReminders: true,
+          },
+        });
+      }
+
+      return preferences;
+    } catch (error) {
+      console.error("Error getting user preferences:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update user preferences
+   */
+  static async updateUserPreferences(
+    userId: string,
+    preferences: {
+      emailNotifications?: boolean;
+      pushNotifications?: boolean;
+      assignmentReminders?: boolean;
+      gradeAlerts?: boolean;
+      lectureReminders?: boolean;
+    }
+  ) {
+    try {
+      await prisma.userPreferences.upsert({
+        where: { userId },
+        update: {
+          ...preferences,
+          updatedAt: new Date(),
+        },
+        create: {
+          userId,
+          emailNotifications: preferences.emailNotifications ?? true,
+          pushNotifications: preferences.pushNotifications ?? true,
+          assignmentReminders: preferences.assignmentReminders ?? true,
+          gradeAlerts: preferences.gradeAlerts ?? true,
+          lectureReminders: preferences.lectureReminders ?? true,
+        },
+      });
+
+      // Log preferences update
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: "NOTIFICATION_SETTINGS_UPDATED",
+          resourceType: "USER",
+          resourceId: userId,
+          details: {
+            updatedFields: Object.keys(preferences),
+          },
+        },
+      });
+
+      return {
+        success: true,
+        message: "Preferences updated successfully",
+      };
+    } catch (error) {
+      console.error("Error updating user preferences:", error);
+      throw error;
     }
   }
 }
-
-export const {
-  getCurrentUser,
-  getHeaderUserData,
-  isAuthenticated,
-  getUserRole,
-} = UserService;

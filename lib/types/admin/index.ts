@@ -11,14 +11,36 @@ import {
   SessionSecurityLevel,
   NotificationType,
 } from "@prisma/client";
-
+import { BaseUser } from "@/lib/types/shared/index";
 // ===========================================================
 // User Management Types
 // ===========================================================
 
+export interface AdminUser extends BaseUser {
+  role: "ADMIN"; // Use enum instead of string literal
+  firstName: string;
+  lastName: string;
+  otherName?: string | null;
+  gender: Gender;
+  employeeId: string;
+  department: string;
+  institution: string;
+  dateJoined: Date;
+  isActive: boolean;
+  photo?: string | null;
+  address?: string | null;
+  phone?: string | null;
+
+  // Admin specific fields can be added here
+  qualification?: string | null;
+  specialization?: string | null;
+  experience?: string | null;
+}
+
 export interface User {
   id: string;
   name?: string | null;
+  phone?: string | null;
   email: string;
   emailVerified?: Date | null;
   image?: string | null;

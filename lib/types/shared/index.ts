@@ -24,6 +24,29 @@ export interface AuthSession {
   expires: Date;
 }
 
+export interface BaseUser {
+  id: string;
+  email: string;
+  name: string;
+  role: "STUDENT" | "TEACHER" | "ADMIN";
+  isActive: boolean;
+  emailVerified: Date | null;
+  lastLoginAt: Date | null;
+  createdAt: Date;
+}
+
+export interface StudentUser extends BaseUser {
+  role: "STUDENT";
+  matricNumber: string;
+  department: string;
+  college: string;
+  course: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  admissionYear?: number;
+}
+
 export interface SignInCredentials {
   email: string;
   password: string;

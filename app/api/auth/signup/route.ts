@@ -1,6 +1,7 @@
 // app/portal/student/signup/student/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { StudentRegistrationService } from "@/lib/services/student/studentRegistrationService";
+import { StudentEmailService } from "@/lib/services/student/emailService";
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,18 +23,16 @@ export async function POST(request: NextRequest) {
     );
 
     // Send verification email
-    await StudentRegistrationService.sendVerificationEmail(
-      registrationData.studentData.email,
-      result.user.id,
-      result.user.name || "Student"
+    await StudentEmailService.sendEmailVerificationEmail(
+      result.userId,
+      result.verificationToken
     );
 
     return NextResponse.json({
       success: true,
       message:
         "Registration successful. Please check your email for verification.",
-      userId: result.user.id,
-      requiresVerification: result.requiresVerification,
+      userId: result.userId,
     });
   } catch (error) {
     console.error("Student registration error:", error);

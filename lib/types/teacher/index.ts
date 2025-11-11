@@ -4,10 +4,27 @@
 // ===========================================================
 
 import { Gender, Grade } from "@prisma/client";
-
+import { BaseUser } from "@/lib/types/shared/index";
 // ===========================================================
 // Core Teacher Types
 // ===========================================================
+
+export interface TeacherUser extends BaseUser {
+  role: "TEACHER";
+  employeeId: string;
+  department: string;
+  institution: string;
+  firstName: string;
+  lastName: string;
+  otherName?: string | null;
+  phone: string;
+  qualification?: string;
+  specialization?: string;
+  experience?: string | null;
+  dateJoined: Date;
+  isActive: boolean;
+  photo?: string | null;
+}
 
 export interface Teacher {
   id: string;
@@ -266,6 +283,7 @@ export interface AttendanceFormData {
     studentId: string;
     status: "present" | "absent" | "excused" | "late";
     remarks?: string;
+    lectureId: string;
   }[];
 }
 

@@ -1,260 +1,252 @@
-// lib/services/courseService.ts
+// lib/services/student/courseService.ts
 import { prisma } from "@/lib/server/prisma";
+import { Course, Enrollment, EnrollmentWithCourse } from "@/lib/types/student/index";
+import { AuditAction } from "@prisma/client";
 
-interface CourseWithDetails {
-  id: string;
-  code: string;
-  title: string;
-  description: string | null;
-  credits: number;
-  level: number;
-  semester: number;
-  courseOutline: string | null;
-  isActive: boolean;
-  instructor: {
-    firstName: string;
-    lastName: string;
-    otherName: string | null;
-  } | null;
-  enrollments: {
-    progress: number;
-    isCompleted: boolean;
-    studentId: string;
-  }[];
-  assignments: {
-    dueDate: Date;
-    isPublished: boolean;
-    submissions: {
-      submittedAt: Date | null;
-      isGraded: boolean;
-    }[];
-  }[];
-  _count: {
-    lectures: number;
-    assignments: number;
-  };
-}
-
-interface StudentCoursesResponse {
-  enrolledCourses: CourseWithDetails[];
-  availableCourses: CourseWithDetails[];
-  departmentCourses: CourseWithDetails[];
-}
-
-export class CourseService {
+export class StudentCourseService {
   /**
-   * Get courses for a student based on their department and college
+   * Get all available courses
    */
-  static async getStudentCourses(
-    userId: string
-  ): Promise<StudentCoursesResponse> {
+  static async getAllCourses(page: number = 1, limit: number = 10) {
     try {
-      // Get student information
-      const student = await prisma.student.findFirst({
-        where: { userId },
-        select: {
-          id: true,
-          department: true,
-          college: true,
-          enrollments: {
-            select: {
-              courseId: true,
-            },
-          },
-        },
-      });
+      const skip = (page - 1) * limit;
 
-      if (!student) {
-        throw new Error("Student not found");
-      }
-
-      // Get all active courses with all required relations
-      const allCourses = await prisma.course.findMany({
-        where: {
-          isActive: true,
-        },
-        include: {
-          // Include instructor relation
-          instructor: {
-            select: {
-              firstName: true,
-              lastName: true,
-              otherName: true,
-            },
-          },
-          // Include enrollments relation
-          enrollments: {
-            where: {
-              studentId: student.id,
-            },
-            select: {
-              progress: true,
-              isCompleted: true,
-              studentId: true,
-            },
-          },
-          // Include assignments relation
-          assignments: {
-            where: {
-              isPublished: true,
-            },
-            include: {
-              submissions: {
-                where: {
-                  studentId: student.id,
-                },
-                select: {
-                  submittedAt: true,
-                  isGraded: true,
-                },
-              },
-            },
-          },
-          // Include counts
-          _count: {
-            select: {
-              lectures: {
-                where: {
-                  isPublished: true,
-                },
-              },
-              assignments: {
-                where: {
-                  isPublished: true,
-                },
-              },
-            },
-          },
-        },
-        orderBy: [{ level: "asc" }, { semester: "asc" }, { code: "asc" }],
-      });
-
-      // Cast the result to CourseWithDetails to satisfy TypeScript
-      const coursesWithDetails = allCourses as unknown as CourseWithDetails[];
-
-      // Separate enrolled and available courses
-      const enrolledCourses = coursesWithDetails.filter(
-        (course) => course.enrollments.length > 0
-      );
-
-      const availableCourses = coursesWithDetails.filter(
-        (course) => course.enrollments.length === 0
-      );
+      const [courses, total] = await Promise.all([
+        prisma.course.findMany({
+          where: { isActive: true },
+          skip,
+          take: limit,
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.course.count({ where: { isActive: true } }),
+      ]);
 
       return {
-        enrolledCourses,
-        availableCourses,
-        departmentCourses: coursesWithDetails,
+        courses: courses as Course[],
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
       };
     } catch (error) {
-      console.error("Error fetching student courses:", error);
+      console.error("Error getting all courses:", error);
       throw error;
     }
   }
 
   /**
-   * Get course details by ID
+   * Get course by ID
    */
-  static async getCourseById(courseId: string, userId?: string) {
+  static async getCourseById(id: string): Promise<Course | null> {
     try {
       const course = await prisma.course.findUnique({
-        where: { id: courseId },
-        include: {
-          instructor: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              otherName: true,
-              email: true,
-              department: true,
-            },
-          },
-          creator: {
-            select: {
-              firstName: true,
-              lastName: true,
-              otherName: true,
-            },
-          },
-          lectures: {
-            where: {
-              isPublished: true,
-            },
-            orderBy: {
-              orderIndex: "asc",
-            },
-            include: {
-              submissions: userId
-                ? {
-                    where: {
-                      student: {
-                        userId: userId,
-                      },
-                    },
-                  }
-                : false,
-            },
-          },
-          assignments: {
-            where: {
-              isPublished: true,
-            },
-            orderBy: {
-              dueDate: "asc",
-            },
-            include: {
-              submissions: userId
-                ? {
-                    where: {
-                      student: {
-                        userId: userId,
-                      },
-                    },
-                    orderBy: {
-                      submittedAt: "desc",
-                    },
-                    take: 1,
-                  }
-                : false,
-              teacher: {
-                select: {
-                  firstName: true,
-                  lastName: true,
-                },
-              },
-            },
-          },
-          enrollments: userId
-            ? {
-                where: {
-                  student: {
-                    userId: userId,
-                  },
-                },
-              }
-            : false,
-          _count: {
-            select: {
-              lectures: {
-                where: {
-                  isPublished: true,
-                },
-              },
-              assignments: {
-                where: {
-                  isPublished: true,
-                },
-              },
-              enrollments: true,
-            },
-          },
-        },
+        where: { id },
       });
 
-      return course;
+      return course as Course;
     } catch (error) {
-      console.error("Error fetching course:", error);
+      console.error("Error getting course by ID:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get courses by department
+   */
+  static async getCoursesByDepartment(department: string, page: number = 1, limit: number = 10) {
+    try {
+      const skip = (page - 1) * limit;
+
+      const [courses, total] = await Promise.all([
+        prisma.course.findMany({
+          where: { 
+            isActive: true,
+            // Note: In a real implementation, you might need to join with a department table
+            // or have a department field in the course table
+          },
+          skip,
+          take: limit,
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.course.count({ where: { isActive: true } }),
+      ]);
+
+      return {
+        courses: courses as Course[],
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      console.error("Error getting courses by department:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get courses by level and semester
+   */
+  static async getCoursesByLevelAndSemester(level: number, semester: number, page: number = 1, limit: number = 10) {
+    try {
+      const skip = (page - 1) * limit;
+
+      const [courses, total] = await Promise.all([
+        prisma.course.findMany({
+          where: { 
+            isActive: true,
+            level,
+            semester,
+          },
+          skip,
+          take: limit,
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.course.count({ 
+          where: { 
+            isActive: true,
+            level,
+            semester,
+          },
+        }),
+      ]);
+
+      return {
+        courses: courses as Course[],
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      console.error("Error getting courses by level and semester:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get student enrollments
+   */
+  static async getStudentEnrollments(studentId: string, page: number = 1, limit: number = 10) {
+    try {
+      const skip = (page - 1) * limit;
+
+      const [enrollments, total] = await Promise.all([
+        prisma.enrollment.findMany({
+          where: { studentId },
+          skip,
+          take: limit,
+          include: {
+            course: true,
+          },
+          orderBy: { dateEnrolled: "desc" },
+        }),
+        prisma.enrollment.count({ where: { studentId } }),
+      ]);
+
+      return {
+        enrollments: enrollments as EnrollmentWithCourse[],
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      console.error("Error getting student enrollments:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get active student enrollments
+   */
+  static async getActiveStudentEnrollments(studentId: string, page: number = 1, limit: number = 10) {
+    try {
+      const skip = (page - 1) * limit;
+
+      const [enrollments, total] = await Promise.all([
+        prisma.enrollment.findMany({
+          where: { 
+            studentId,
+            isCompleted: false,
+          },
+          skip,
+          take: limit,
+          include: {
+            course: true,
+          },
+          orderBy: { dateEnrolled: "desc" },
+        }),
+        prisma.enrollment.count({ 
+          where: { 
+            studentId,
+            isCompleted: false,
+          },
+        }),
+      ]);
+
+      return {
+        enrollments: enrollments as EnrollmentWithCourse[],
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      console.error("Error getting active student enrollments:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get completed student enrollments
+   */
+  static async getCompletedStudentEnrollments(studentId: string, page: number = 1, limit: number = 10) {
+    try {
+      const skip = (page - 1) * limit;
+
+      const [enrollments, total] = await Promise.all([
+        prisma.enrollment.findMany({
+          where: { 
+            studentId,
+            isCompleted: true,
+          },
+          skip,
+          take: limit,
+          include: {
+            course: true,
+          },
+          orderBy: { completionDate: "desc" },
+        }),
+        prisma.enrollment.count({ 
+          where: { 
+            studentId,
+            isCompleted: true,
+          },
+        }),
+      ]);
+
+      return {
+        enrollments: enrollments as EnrollmentWithCourse[],
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      console.error("Error getting completed student enrollments:", error);
       throw error;
     }
   }
@@ -262,247 +254,176 @@ export class CourseService {
   /**
    * Enroll student in a course
    */
-  static async enrollInCourse(courseId: string, userId: string) {
+  static async enrollStudent(studentId: string, courseId: string) {
     try {
-      // Get student ID
-      const student = await prisma.student.findFirst({
-        where: { userId },
-        select: { id: true },
-      });
-
-      if (!student) {
-        throw new Error("Student not found");
-      }
-
-      // Check if already enrolled
+      // Check if student is already enrolled
       const existingEnrollment = await prisma.enrollment.findUnique({
         where: {
           studentId_courseId: {
-            studentId: student.id,
-            courseId: courseId,
+            studentId,
+            courseId,
           },
         },
       });
 
       if (existingEnrollment) {
-        throw new Error("Already enrolled in this course");
+        throw new Error("Student is already enrolled in this course");
+      }
+
+      // Check if course exists and is active
+      const course = await prisma.course.findUnique({
+        where: { id: courseId },
+      });
+
+      if (!course) {
+        throw new Error("Course not found");
+      }
+
+      if (!course.isActive) {
+        throw new Error("Course is not available for enrollment");
       }
 
       // Create enrollment
       const enrollment = await prisma.enrollment.create({
         data: {
-          studentId: student.id,
-          courseId: courseId,
+          studentId,
+          courseId,
           dateEnrolled: new Date(),
         },
         include: {
-          course: {
-            include: {
-              instructor: true,
-            },
-          },
+          course: true,
         },
       });
 
-      // Log enrollment activity
+      // Log the enrollment
       await prisma.auditLog.create({
         data: {
-          userId: userId,
           action: "ENROLLMENT_CREATED",
           resourceType: "ENROLLMENT",
           resourceId: enrollment.id,
           details: {
-            courseCode: enrollment.course.code,
-            courseTitle: enrollment.course.title,
-          },
-          ipAddress: "system",
-          userAgent: "CourseService",
-        },
-      });
-
-      return enrollment;
-    } catch (error) {
-      console.error("Error enrolling in course:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get course progress for a student
-   */
-  static async getCourseProgress(courseId: string, userId: string) {
-    try {
-      const student = await prisma.student.findFirst({
-        where: { userId },
-        select: { id: true },
-      });
-
-      if (!student) {
-        throw new Error("Student not found");
-      }
-
-      const enrollment = await prisma.enrollment.findUnique({
-        where: {
-          studentId_courseId: {
-            studentId: student.id,
-            courseId: courseId,
-          },
-        },
-        include: {
-          course: {
-            include: {
-              lectures: {
-                where: { isPublished: true },
-                include: {
-                  submissions: {
-                    where: { studentId: student.id },
-                  },
-                },
-              },
-              assignments: {
-                where: { isPublished: true },
-                include: {
-                  submissions: {
-                    where: { studentId: student.id },
-                  },
-                },
-              },
-            },
+            studentId,
+            courseId,
+            courseCode: course.code,
           },
         },
       });
-
-      if (!enrollment) {
-        return null;
-      }
-
-      const totalLectures = enrollment.course.lectures.length;
-      const completedLectures = enrollment.course.lectures.filter(
-        (lecture) => lecture.submissions.length > 0
-      ).length;
-
-      const totalAssignments = enrollment.course.assignments.length;
-      const submittedAssignments = enrollment.course.assignments.filter(
-        (assignment) => assignment.submissions.length > 0
-      ).length;
-      const gradedAssignments = enrollment.course.assignments.filter(
-        (assignment) => assignment.submissions.some((sub) => sub.isGraded)
-      ).length;
-
-      const lectureProgress =
-        totalLectures > 0 ? (completedLectures / totalLectures) * 100 : 0;
-      const assignmentProgress =
-        totalAssignments > 0
-          ? (submittedAssignments / totalAssignments) * 100
-          : 0;
-
-      const overallProgress = (lectureProgress + assignmentProgress) / 2;
 
       return {
-        enrollment,
-        progress: {
-          overall: overallProgress,
-          lectures: {
-            completed: completedLectures,
-            total: totalLectures,
-            percentage: lectureProgress,
-          },
-          assignments: {
-            submitted: submittedAssignments,
-            graded: gradedAssignments,
-            total: totalAssignments,
-            percentage: assignmentProgress,
-          },
-        },
+        success: true,
+        enrollment: enrollment as EnrollmentWithCourse,
+        message: "Successfully enrolled in course",
       };
     } catch (error) {
-      console.error("Error fetching course progress:", error);
+      console.error("Error enrolling student:", error);
       throw error;
     }
   }
 
   /**
-   * Search courses by department and filters
+   * Update enrollment progress
    */
-  static async searchCourses(filters: {
-    department?: string;
-    level?: number;
-    semester?: number;
-    searchTerm?: string;
-  }) {
+  static async updateEnrollmentProgress(enrollmentId: string, progress: number) {
     try {
-      const where: any = {
-        isActive: true,
-      };
-
-      if (filters.level) {
-        where.level = filters.level;
+      // Validate progress value
+      if (progress < 0 || progress > 100) {
+        throw new Error("Progress must be between 0 and 100");
       }
 
-      if (filters.semester) {
-        where.semester = filters.semester;
-      }
-
-      if (filters.searchTerm) {
-        where.OR = [
-          { code: { contains: filters.searchTerm, mode: "insensitive" } },
-          { title: { contains: filters.searchTerm, mode: "insensitive" } },
-          {
-            description: { contains: filters.searchTerm, mode: "insensitive" },
-          },
-        ];
-      }
-
-      const courses = await prisma.course.findMany({
-        where,
-        include: {
-          instructor: {
-            select: {
-              firstName: true,
-              lastName: true,
-              otherName: true,
-            },
-          },
-          enrollments: {
-            select: {
-              progress: true,
-              isCompleted: true,
-              studentId: true,
-            },
-          },
-          assignments: {
-            where: {
-              isPublished: true,
-            },
-            include: {
-              submissions: {
-                select: {
-                  submittedAt: true,
-                  isGraded: true,
-                },
-              },
-            },
-          },
-          _count: {
-            select: {
-              lectures: {
-                where: {
-                  isPublished: true,
-                },
-              },
-              assignments: {
-                where: {
-                  isPublished: true,
-                },
-              },
-              enrollments: true,
-            },
-          },
+      const enrollment = await prisma.enrollment.update({
+        where: { id: enrollmentId },
+        data: { 
+          progress,
+          lastAccessedAt: new Date(),
         },
-        orderBy: [{ level: "asc" }, { semester: "asc" }, { code: "asc" }],
+        include: {
+          course: true,
+        },
       });
 
-      return courses as unknown as CourseWithDetails[];
+      // Check if enrollment is now complete
+      if (progress >= 100 && !enrollment.isCompleted) {
+        await prisma.enrollment.update({
+          where: { id: enrollmentId },
+          data: { 
+            isCompleted: true,
+            completionDate: new Date(),
+          },
+        });
+
+        // Log the completion 
+        await prisma.auditLog.create({
+          data: {
+            action: "COURSE_COMPLETED",
+            resourceType: "ENROLLMENT",
+            resourceId: enrollmentId,
+            details: {
+              courseId: enrollment.courseId,
+              courseCode: enrollment.course.code,
+              studentId: enrollment.studentId,
+            },
+          },
+        });
+      }
+
+      return {
+        success: true,
+        enrollment: {
+          ...enrollment,
+          progress,
+          isCompleted: progress >= 100 ? true : enrollment.isCompleted,
+          completionDate: progress >= 100 ? new Date() : enrollment.completionDate,
+        } as EnrollmentWithCourse,
+        message: "Progress updated successfully",
+      };
+    } catch (error) {
+      console.error("Error updating enrollment progress:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Search courses
+   */
+  static async searchCourses(query: string, page: number = 1, limit: number = 10) {
+    try {
+      const skip = (page - 1) * limit;
+
+      const [courses, total] = await Promise.all([
+        prisma.course.findMany({
+          where: {
+            isActive: true,
+            OR: [
+              { code: { contains: query, mode: "insensitive" } },
+              { title: { contains: query, mode: "insensitive" } },
+              { description: { contains: query, mode: "insensitive" } },
+            ],
+          },
+          skip,
+          take: limit,
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.course.count({
+          where: {
+            isActive: true,
+            OR: [
+              { code: { contains: query, mode: "insensitive" } },
+              { title: { contains: query, mode: "insensitive" } },
+              { description: { contains: query, mode: "insensitive" } },
+            ],
+          },
+        }),
+      ]);
+
+      return {
+        courses: courses as Course[],
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
     } catch (error) {
       console.error("Error searching courses:", error);
       throw error;

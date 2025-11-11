@@ -1,4 +1,5 @@
-// app/components/QuickActions.tsx
+// File: app/components/student/QuickActions.tsx
+"use client";
 import { FileText, BookOpen, Users, Calendar, Upload, Download } from "lucide-react";
 
 interface QuickAction {

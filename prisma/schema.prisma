@@ -95,6 +95,9 @@ enum AuditAction {
   NOTIFICATION_SETTINGS_RESET
   LECTURE_CREATED
   TEACHER_REGISTERED
+  COURSE_COMPLETED
+  ADMIN_REGISTERED
+  ATTENDANCE_MARKED
   // Add any other missing actions you need
 }
 
@@ -102,6 +105,7 @@ enum ResourceType {
   USER
   STUDENT
   TEACHER
+  ADMIN
   COURSE
   LECTURE
   ASSIGNMENT
@@ -109,6 +113,7 @@ enum ResourceType {
   PORTFOLIO
   SESSION
   NOTIFICATION
+  ATTENDANCE
 }
 
 enum SessionSecurityLevel {
@@ -151,6 +156,7 @@ model User {
   // Role-specific profiles
   student Student?
   teacher Teacher?
+  admin   Admin?
 
   // Related data
   auditLogs       AuditLog[]
@@ -300,6 +306,7 @@ model Student {
   portfolios            Portfolio[]
   submissions           Submission[]
   assignmentSubmissions AssignmentSubmission[]
+  attendances           Attendance[]
 
   @@unique([userId], map: "students_user_id_key")
   @@unique([matricNumber], map: "students_matric_number_alt_key")
@@ -337,16 +344,17 @@ model Teacher {
   // Security fields
   lastActivityAt DateTime?
 
-  // Relationships
-  userId               String
-  user                 User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  instructedCourses    Course[]     @relation("CourseInstructor")
-  createdCourses       Course[]     @relation("CourseCreator")
-  assignments          Assignment[]
   // Search hashes for encrypted field queries
-  emailSearchHash      String?      @unique(map: "teachers_email_search_hash_key")
-  phoneSearchHash      String?      @unique(map: "teachers_phone_search_hash_key")
-  employeeIdSearchHash String?      @unique(map: "teachers_employee_id_search_hash_key")
+  emailSearchHash      String? @unique(map: "teachers_email_search_hash_key")
+  phoneSearchHash      String? @unique(map: "teachers_phone_search_hash_key")
+  employeeIdSearchHash String? @unique(map: "teachers_employee_id_search_hash_key")
+
+  // Relationships
+  userId            String
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instructedCourses Course[]     @relation("CourseInstructor")
+  createdCourses    Course[]     @relation("CourseCreator")
+  assignments       Assignment[]
 
   @@unique([userId], map: "teachers_user_id_key")
   @@unique([employeeId], map: "teachers_employee_id_alt_key")
@@ -359,7 +367,52 @@ model Teacher {
 }
 
 // ===========================================================
-// 3. ACADEMIC STRUCTURE
+// 3. ADMIN PROFILE
+// ===========================================================
+
+model Admin {
+  id             String   @id @default(uuid())
+  employeeId     String   @unique(map: "admins_employee_id_key")
+  firstName      String
+  lastName       String
+  otherName      String?
+  gender         Gender?
+  phone          String   @unique(map: "admins_phone_key")
+  email          String   @unique(map: "admins_email_key")
+  department     String
+  institution    String
+  qualification  String?
+  specialization String?
+  experience     String?
+  dateJoined     DateTime @default(now())
+  isActive       Boolean  @default(true)
+  photo          String?
+  updatedAt      DateTime @updatedAt
+
+  // Security fields
+  lastActivityAt DateTime?
+
+  // Search hashes for encrypted field queries
+  emailSearchHash      String? @unique(map: "admins_email_search_hash_key")
+  phoneSearchHash      String? @unique(map: "admins_phone_search_hash_key")
+  employeeIdSearchHash String? @unique(map: "admins_employee_id_search_hash_key")
+
+  // Relationships
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId], map: "admins_user_id_key")
+  @@unique([employeeId], map: "admins_employee_id_alt_key")
+  @@index([employeeId])
+  @@index([email])
+  @@index([phone])
+  @@index([department])
+  @@index([lastActivityAt])
+  @@map("admins")
+}
+
+// ===========================================================
+// 4. ACADEMIC STRUCTURE
 // ===========================================================
 
 model Course {
@@ -387,6 +440,7 @@ model Course {
   enrollments Enrollment[]
   portfolios  Portfolio[]
   assignments Assignment[]
+  attendances Attendance[]
 
   @@index([code])
   @@index([level])
@@ -412,6 +466,7 @@ model Lecture {
   courseId    String
   course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
   submissions Submission[]
+  attendances Attendance[]
 
   @@index([courseId])
   @@index([orderIndex])
@@ -420,7 +475,7 @@ model Lecture {
 }
 
 // ===========================================================
-// 4. ENROLLMENTS & PROGRESS TRACKING
+// 5. ENROLLMENTS & PROGRESS TRACKING
 // ===========================================================
 
 model Enrollment {
@@ -449,7 +504,7 @@ model Enrollment {
 }
 
 // ===========================================================
-// 5. ASSESSMENTS & SUBMISSIONS
+// 6. ASSESSMENTS & SUBMISSIONS
 // ===========================================================
 
 model Assignment {
@@ -525,7 +580,7 @@ model Submission {
 }
 
 // ===========================================================
-// 6. PORTFOLIO & PROJECTS
+// 7. PORTFOLIO & PROJECTS
 // ===========================================================
 
 model Portfolio {
@@ -553,7 +608,7 @@ model Portfolio {
 }
 
 // ===========================================================
-// 7. AUDIT LOGGING & NOTIFICATIONS
+// 8. AUDIT LOGGING & NOTIFICATIONS
 // ===========================================================
 
 model AuditLog {
@@ -599,7 +654,7 @@ model Notification {
 }
 
 // ===========================================================
-// 8. SYSTEM CONFIGURATION & METRICS
+// 9. SYSTEM CONFIGURATION & METRICS
 // ===========================================================
 
 model SystemConfig {
@@ -633,7 +688,7 @@ model Metric {
 }
 
 // ===========================================================
-// 9. RATE LIMITING & SECURITY
+// 10. RATE LIMITING & SECURITY
 // ===========================================================
 
 model RateLimit {
@@ -676,7 +731,7 @@ model SecurityEvent {
 }
 
 // ===========================================================
-// 10. ACTIVITY TRACKING
+// 11. ACTIVITY TRACKING
 // ===========================================================
 
 model UserActivity {
@@ -699,7 +754,7 @@ model UserActivity {
 }
 
 // ===========================================================
-// 11. USER PREFERENCES & SETTINGS
+// 12. USER PREFERENCES & SETTINGS
 // ===========================================================
 model UserPreferences {
   id     String @id @default(cuid())
@@ -717,4 +772,45 @@ model UserPreferences {
   updatedAt DateTime @updatedAt
 
   @@map("user_preferences")
+}
+
+// ===========================================================
+// 13. ATTENDANCE TRACKING
+// ===========================================================
+
+model Attendance {
+  id        String           @id @default(uuid())
+  studentId String
+  courseId  String
+  lectureId String
+  status    AttendanceStatus @default(PRESENT)
+  markedAt  DateTime         @default(now())
+  markedBy  String? // User ID of who marked the attendance
+  notes     String?
+  verified  Boolean          @default(false) // If attendance was verified (e.g., biometric, QR code)
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  // Relations
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lecture Lecture @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, lectureId], map: "attendance_student_lecture_key")
+  @@index([studentId])
+  @@index([courseId])
+  @@index([lectureId])
+  @@index([status])
+  @@index([markedAt])
+  @@index([verified])
+  @@map("attendance")
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
 }
