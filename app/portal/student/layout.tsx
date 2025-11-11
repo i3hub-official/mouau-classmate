@@ -19,8 +19,8 @@ interface AuthState {
   isAuthenticated: boolean;
 }
 
-// In-memory session management
-const SESSION_TIMEOUT = 60 * 60 * 1000; // 1 hour in milliseconds
+// Session timeout in milliseconds (e.g., 30 minutes)
+const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 
 // In-memory storage for session data
 let sessionData = {
@@ -91,7 +91,7 @@ export default function StudentLayout({
     return !publicPaths.some((publicPath) => path.startsWith(publicPath));
   };
 
-    const authenticateStudent = async (): Promise<StudentProfile> => {
+  const authenticateStudent = async (): Promise<StudentProfile> => {
     // Check in-memory storage first
     if (sessionData.user && sessionData.token && !checkSessionExpiry()) {
       updateLastActivity();
