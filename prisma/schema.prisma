@@ -490,6 +490,7 @@ model Enrollment {
   progress       Float     @default(0)
   lastAccessedAt DateTime?
   updatedAt      DateTime  @updatedAt
+  color          String? // For UI categorization
 
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)

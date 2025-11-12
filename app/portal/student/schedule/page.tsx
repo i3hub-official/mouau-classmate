@@ -17,6 +17,9 @@ import {
   AlertTriangle,
   RefreshCw,
   Users,
+  Plus,
+  X,
+  CheckCircle,
 } from "lucide-react";
 import { format, isToday, isPast, isFuture, addDays, startOfWeek, endOfWeek, isSameDay } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -53,6 +56,20 @@ interface DaySchedule {
   items: ScheduleItem[];
 }
 
+interface ScheduleData {
+  currentWeek: number;
+  currentView: "week" | "day" | "month";
+  selectedDate?: Date;
+  courses: Array<{
+    id: string;
+    code: string;
+    title: string;
+    color?: string;
+  }>;
+  items: ScheduleItem[];
+  hasMore: boolean;
+}
+
 export default async function StudentSchedulePage({
   searchParams,
 }: {
@@ -71,7 +88,7 @@ export default async function StudentSchedulePage({
   }
 
   // Parse search params
-  const week = searchParams.week ? parseInt(searchParams.week) : getCurrentWeek();
+  const week = searchParams.week ? parseInt(searchParams.week, 10) : getCurrentWeek();
   const course = searchParams.course;
   const type = searchParams.type;
   const view = searchParams.view || "week";
@@ -99,59 +116,8 @@ export default async function StudentSchedulePage({
           </div>
         </div>
 
-        {/* Week Navigation */}
-        <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Week {week}</h2>
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => {
-                  const params = new URLSearchParams(window.location.search);
-                  params.set("week", (week - 1).toString());
-                  window.location.href = `/portal/student/schedule?${params.toString()}`;
-                }}
-                disabled={week <= 1}
-                className="inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 py-2 disabled:opacity-50"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Previous
-              </button>
-              <button
-                onClick={() => {
-                  const params = new URLSearchParams(window.location.search);
-                  params.set("week", (week + 1).toString());
-                  window.location.href = `/portal/student/schedule?${params.toString()}`;
-                }}
-                disabled={week >= getCurrentWeek()}
-                className="inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 py-2 disabled:opacity-50"
-              >
-                Next
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-muted-foreground">
-                {format(startOfWeek(new Date()), "PPP")} - {format(endOfWeek(new Date()), "PPP")}
-              </span>
-              <button
-                onClick={() => {
-                  const params = new URLSearchParams(window.location.search);
-                  params.set("week", getCurrentWeek().toString());
-                  window.location.href = `/portal/student/schedule?${params.toString()}`;
-                }}
-                className={cn(
-                  "inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 py-2",
-                  week === getCurrentWeek() && "bg-blue-600 text-white hover:bg-blue-700"
-                )}
-              >
-                Today
-              </button>
-            </div>
-          </div>
-        </div>
-
         {/* Filters */}
-        <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
           <h2 className="text-lg font-semibold mb-4 flex items-center">
             <FilterIcon className="h-5 w-5 mr-2" />
             Filters
@@ -162,7 +128,9 @@ export default async function StudentSchedulePage({
             className="grid grid-cols-1 md:grid-cols-4 gap-4"
           >
             <div className="space-y-2">
-              <label htmlFor="course" className="text-sm font-medium">Course</label>
+              <label htmlFor="course" className="text-sm font-medium">
+                Course
+              </label>
               <select
                 id="course"
                 name="course"
@@ -177,7 +145,9 @@ export default async function StudentSchedulePage({
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="type" className="text-sm font-medium">Type</label>
+              <label htmlFor="type" className="text-sm font-medium">
+                Type
+              </label>
               <select
                 id="type"
                 name="type"
@@ -193,7 +163,9 @@ export default async function StudentSchedulePage({
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="view" className="text-sm font-medium">View</label>
+              <label htmlFor="view" className="text-sm font-medium">
+                View
+              </label>
               <select
                 id="view"
                 name="view"
@@ -209,7 +181,11 @@ export default async function StudentSchedulePage({
             <div className="flex items-end md:col-span-2 lg:col-span-4">
               <button
                 type="button"
-                onClick={() => (window.location.href = "/portal/student/schedule")}
+                onClick={() => {
+                  const params = new URLSearchParams(window.location.search);
+                  params.delete("page");
+                  window.location.href = `/portal/student/schedule?${params.toString()}`;
+                }}
                 className="inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
@@ -217,6 +193,60 @@ export default async function StudentSchedulePage({
               </button>
             </div>
           </form>
+        </div>
+
+        {/* Week Navigation */}
+        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold mb-4">Week {week}</h2>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => {
+                  const params = new URLSearchParams(window.location.search);
+                  params.set("week", (week - 1).toString());
+                  window.location.href = `/portal/student/schedule?${params.toString()}`;
+                }}
+                disabled={week <= 1}
+                className="inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2 disabled:opacity-50"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </button>
+              <span className="px-3 py-1 border rounded bg-gray-100 text-center min-w-[80px]">
+                Page {page}
+              </span>
+              <button
+                onClick={() => {
+                  const params = new URLSearchParams(window.location.search);
+                  params.set("week", (week + 1).toString());
+                  window.location.href = `/portal/student/schedule?${params.toString()}`;
+                }}
+                disabled={week >= getCurrentWeek()}
+                className="inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2 disabled:opacity-50"
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-muted-foreground">
+                {format(startOfWeek(new Date(), { week: 1 }), "PPP")} - {format(endOfWeek(new Date(), { week: 1 }), "PPP")}
+              </span>
+              <button
+                onClick={() => {
+                  const params = new URLSearchParams(window.location.search);
+                  params.set("week", getCurrentWeek().toString());
+                  window.location.href = `/portal/student/schedule?${params.toString()}`;
+                }}
+                className={cn(
+                  "inline-flex items-center justify-center rounded-md px-3 py-1 text-sm",
+                  week === getCurrentWeek() && "bg-blue-600 text-white hover:bg-blue-700"
+                )}
+              >
+                Today
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Schedule Content */}
@@ -238,20 +268,19 @@ async function getScheduleData(
   type?: string,
   view: string = "week"
 ) {
-  const startDate = startOfWeek(new Date(), { weekStartsOn: 1 });
-  const endDate = endOfWeek(new Date(), { weekStartsOn: 1 });
+  const startDate = startOfWeek(new Date(), { week: 1 });
+  const endDate = endOfWeek(new Date(), { week: 1 });
 
   // Get enrolled courses
   const enrollments = await prisma.enrollment.findMany({
-    where: {
-      studentId,
-    },
+    where: { studentId },
     include: {
       course: {
         select: {
           id: true,
           code: true,
           title: true,
+          color: true,
         },
       },
     },
@@ -260,139 +289,250 @@ async function getScheduleData(
   // Get schedule items based on filters
   let scheduleItems: ScheduleItem[] = [];
 
-  for (const enrollment of enrollments) {
-    if (course && enrollment.course.id !== course) continue;
-
-    // Get lectures for the week
-    const lectures = await prisma.lecture.findMany({
-      where: {
-        courseId: enrollment.course.id,
-        createdAt: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      orderBy: { createdAt: "asc" },
-      include: {
-        course: {
-          select: {
-            id: true,
-            code: true,
-            title: true,
-            instructor: {
-              select: {
-                firstName: true,
-                lastName: true,
-                email: true,
-                photo: true,
-              },
-            },
+  // Get lectures for the week
+  const lectures = await prisma.lecture.findMany({
+    where: {
+      course: {
+        enrollments: {
+          some: {
+            studentId,
           },
         },
       },
-    });
-
-    // Add lectures to schedule
-    lectures.forEach((lecture) => {
-      scheduleItems.push({
-        id: lecture.id,
-        courseId: enrollment.course.id,
-        courseCode: enrollment.course.code,
-        courseTitle: enrollment.course.title,
-        instructorName: `${lecture.course.instructor?.firstName || ""} ${lecture.course.instructor?.lastName || ""}`,
-        instructorEmail: lecture.course.instructor?.email || "",
-        instructorPhoto: lecture.course.instructor?.photo || "",
-        startTime: lecture.createdAt,
-        endTime: new Date(lecture.createdAt.getTime() + 60 * 60 * 1000), // 1 hour duration
-        location: lecture.course.title || "TBD",
-        type: "lecture",
-        status: isPast(lecture.createdAt) ? "completed" : "scheduled",
-        description: lecture.description ?? undefined,
-        resources: lecture.content ? [{
-          type: "video",
-          title: "Lecture Video",
-          url:
-            typeof lecture.content === "object" &&
-            lecture.content !== null &&
-            "videoUrl" in lecture.content
-              ? (lecture.content as { videoUrl?: string }).videoUrl || "#"
-              : "#",
-        }] : [],
-      });
-    });
-
-    // Get assignments for the week
-    const assignments = await prisma.assignment.findMany({
-      where: {
-        courseId: enrollment.course.id,
-        dueDate: {
-          gte: startDate,
-          lte: endDate,
-        },
+      createdAt: {
+        gte: startDate,
+        lte: endDate,
       },
-      orderBy: { dueDate: "asc" },
-      include: {
-        course: {
+    },
+    include: {
+      course: {
+        instructor: {
           select: {
             id: true,
-            code: true,
-            title: true,
-            instructor: {
-              select: {
-                firstName: true,
-                lastName: true,
-                email: true,
-                photo: true,
-              },
-            },
+            firstName: true,
+            lastName: true,
+            email: true,
+            photo: true,
           },
         },
       },
-    });
+    },
+    orderBy: { createdAt: "asc" },
+  });
 
-    // Add assignments to schedule
-    assignments.forEach((assignment) => {
-      scheduleItems.push({
-        id: assignment.id,
-        courseId: enrollment.course.id,
-        courseCode: enrollment.course.code,
-        courseTitle: enrollment.course.title,
-                instructorName: `${assignment.course.instructor?.firstName || ""} ${assignment.course.instructor?.lastName || ""}`,
-        instructorEmail: assignment.course.instructor?.email || "",
-        instructorPhoto: assignment.course.instructor?.photo || "",
-        startTime: assignment.dueDate,
-        endTime: assignment.dueDate,
-        location: assignment.course.title || "Online",
-        type: "assignment",
-        status: isPast(assignment.dueDate) ? "overdue" : "pending",
-        description: assignment.description,
-        resources: [{
-          type: "link",
-          title: "Submit Assignment",
-          url: `/portal/student/assignments/${assignment.id}`,
-        }],
-      });
-    });
+  // Get assignments for the week
+  const assignments = await prisma.assignment.findMany({
+    where: {
+      course: {
+        enrollments: {
+          some: {
+            studentId,
+          },
+        },
+      },
+      dueDate: {
+        gte: startDate,
+        lte: endDate,
+      },
+    },
+    include: {
+      course: {
+        instructor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            photo: true,
+          },
+        },
+      },
+    },
+    orderBy: { dueDate: "asc" },
+  });
+
+  // Get exams for the week
+  const exams = await prisma.exam.findMany({
+    where: {
+      course: {
+        enrollments: {
+          some: {
+            studentId,
+          },
+        },
+      },
+      examDate: {
+        gte: startDate,
+        lte: endDate,
+      },
+    },
+    include: {
+      course: {
+        instructor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            photo: true,
+          },
+        },
+      },
+    },
+    orderBy: { examDate: "asc" },
+  });
+
+  // Get events for the week
+  const events = await prisma.event.findMany({
+    where: {
+      course: {
+        enrollments: {
+          some: {
+            studentId,
+          },
+        },
+      },
+      eventDate: {
+        gte: startDate,
+        lte: endDate,
+      },
+    },
+    include: {
+      course: {
+        instructor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            photo: true,
+          },
+        },
+      },
+    },
+    orderBy: { eventDate: "asc" },
+  });
+
+  // Combine and sort all items by date and time
+  const allItems = [
+    ...lectures.map((lecture) => ({
+      id: lecture.id,
+      courseId: lecture.courseId,
+      courseCode: lecture.course.code,
+      courseTitle: lecture.course.title,
+      courseColor: lecture.course.color,
+      instructorName: `${lecture.course.instructor?.firstName || ""} ${lecture.course.instructor?.lastName || ""}`,
+      instructorEmail: lecture.course.instructor?.email || "",
+      instructorPhoto: lecture.course.instructor?.photo || "",
+      startTime: lecture.createdAt,
+      endTime: new Date(lecture.createdAt.getTime() + 60 * 60 * 1000), // 1 hour duration
+      type: "lecture",
+      status: isPast(lecture.createdAt) ? "completed" : "scheduled",
+      description: lecture.description,
+      resources: lecture.content ? [{
+        type: "video",
+        title: "Lecture Video",
+        url: lecture.content?.videoUrl || "#",
+      }] : [],
+    })),
+    ...assignments.map((assignment) => ({
+      id: assignment.id,
+      courseId: assignment.courseId,
+      courseCode: assignment.course.code,
+      courseTitle: assignment.course.title,
+      courseColor: assignment.course.color,
+      instructorName: `${assignment.course.instructor?.firstName || ""} ${assignment.course.instructor?.lastName || ""}`,
+      instructorEmail: assignment.course.instructor?.email || "",
+      instructorPhoto: assignment.course.instructor?.photo || "",
+      startTime: assignment.dueDate,
+      endTime: assignment.dueDate,
+      type: "assignment",
+      status: isPast(assignment.dueDate) ? "overdue" : "pending",
+      description: assignment.description,
+      resources: [{
+        type: "link",
+        title: "Submit Assignment",
+        url: `/portal/student/assignments/${assignment.id}`,
+      }] : [],
+    })),
+    ...exams.map((exam) => ({
+      id: exam.id,
+      courseId: exam.courseId,
+      courseCode: exam.course.code,
+      courseTitle: exam.course.title,
+      courseColor: exam.course.color,
+      instructorName: `${exam.course.instructor?.firstName || ""} ${exam.course.instructor?.lastName || ""}`,
+      instructorEmail: exam.course.instructor?.email || "",
+      instructorPhoto: exam.course.instructor?.photo || "",
+      startTime: exam.examDate,
+      endTime: new Date(exam.examDate.getTime() + 2 * 60 * 60 * 1000), // 2 hour duration
+      type: "exam",
+      status: isPast(exam.examDate) ? "completed" : "scheduled",
+      description: exam.description,
+      resources: [{
+        type: "link",
+        title: "Exam Details",
+        url: `/portal/student/exams/${exam.id}`,
+      }] : [],
+    })),
+    ...events.map((event) => ({
+      id: event.id,
+      courseId: event.courseId,
+      courseCode: event.course.code,
+      courseTitle: event.course.title,
+      courseColor: event.course.color,
+      instructorName: `${event.course.instructor?.firstName || ""} ${event.course.instructor?.lastName || ""}`,
+      instructorEmail: event.course.instructor?.email || "",
+      instructorPhoto: event.course.instructor?.photo || "",
+      startTime: event.eventDate,
+      endTime: new Date(event.eventDate.getTime() + 60 * 60 * 1000), // 1 hour duration
+      type: "event",
+      status: isPast(event.eventDate) ? "completed" : "scheduled",
+      description: event.description,
+      resources: event.resources ? event.resources.map((resource) => ({
+        type: resource.type,
+        title: resource.title,
+        url: resource.url,
+      })) : [],
+    })),
+  ];
+
+  // Filter by course if specified
+  if (course) {
+    allItems = allItems.filter((item) => item.courseId === course);
   }
 
   // Filter by type if specified
   if (type) {
-    scheduleItems = scheduleItems.filter((item) => item.type === type);
+    allItems = allItems.filter((item) => item.type === type);
   }
 
   // Sort by date and time
-  scheduleItems.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  allItems.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
   // Paginate results
   const startIndex = (page - 1) * 10;
-  const paginatedItems = scheduleItems.slice(startIndex, startIndex + 10);
+  const paginatedItems = allItems.slice(startIndex, startIndex + 10);
+
+  // Get unique courses for display
+  const courses = Array.from(
+    new Set(enrollments.map((e) => e.courseId))
+  ).map((courseId) => {
+    const enrollment = enrollments.find((e) => e.courseId === courseId);
+    return {
+      id: courseId,
+      code: enrollment.course.code,
+      title: enrollment.course.title,
+      color: enrollment.course.color,
+    };
+  });
 
   return {
     currentWeek: week,
     currentView: view,
-    courses: enrollments.map((e) => e.course),
+    courses: courses,
     items: paginatedItems,
-    hasMore: scheduleItems.length > page * 10,
+    hasMore: allItems.length > page * 10,
   };
 }
 
@@ -400,8 +540,7 @@ function getCurrentWeek(): number {
   const date = new Date();
   const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
   const pastDaysOfYear = date.getTime() - firstDayOfYear.getTime();
-  const currentWeek = Math.ceil(pastDaysOfYear / 7);
-  return currentWeek;
+  return Math.ceil(pastDaysOfYear / 7) + 1;
 }
 
 // Week View Component
@@ -419,161 +558,112 @@ function WeekScheduleView({ scheduleData, page }: { scheduleData: any; page: num
               key={index}
               className={cn(
                 "p-4 rounded-lg border",
-                isToday(day.date) ? "bg-blue-100 border-blue-300" : "bg-white border-gray-200",
-                isFuture(day.date) ? "opacity-50" : ""
+                isToday(day.date) && "bg-blue-100 border-blue-300"
               )}
             >
               <div className="text-center mb-2">
-                <div className="text-sm font-medium">{day.day}</div>
-                <div className="text-xs text-muted-foreground">{format(day.date, "MMM d")}</div>
+                <div className="text-lg font-bold">{format(day.date, "EEEE")}</div>
+                <div className="text-sm text-gray-600">{day.day}</div>
               </div>
-              <div className="space-y-1">
+              <div className="space-y-2">
                 {day.items.map((item, itemIndex) => (
                   <div
                     key={itemIndex}
-                    className={cn(
-                      "p-2 rounded border",
-                      item.status === "completed" && "bg-green-50 border-green-200",
-                      item.status === "in_progress" && "bg-blue-50 border-blue-200",
-                      item.status === "overdue" && "bg-red-50 border-red-200"
-                    )}
+                    className="border-b hover:bg-gray-50 transition-colors"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <div className={cn(
-                            "w-2 h-2 rounded-full",
-                            item.type === "lecture" && "bg-purple-500",
-                            item.type === "assignment" && "bg-orange-500",
-                            item.type === "exam" && "bg-red-500"
-                          )} />
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {format(item.startTime, "HH:mm")}
-                        </div>
-                      </div>
-                      <div className="text-sm font-medium truncate">
-                        {item.courseCode}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {item.instructorName}
+                        <div className="text-sm font-medium text-gray-900">{item.startTime && format(item.startTime, "HH:mm")}</div>
+                        <div className="text-xs text-gray-500">{item.courseCode}</div>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      {item.status === "completed" && (
-                        <CheckCircle className="h-4 w-4 text-green-500" />
-                      )}
-                      {item.status === "in_progress" && (
-                        <Play className="h-4 w-4 text-blue-500" />
-                      )}
-                      {item.status === "overdue" && (
-                        <AlertTriangle className="h-4 w-4 text-red-500" />
-                      )}
+                    <div className="flex items-center">
+                      <div className={cn(
+                        "w-3 h-3 rounded-full",
+                        item.type === "lecture" && "bg-purple-500",
+                        item.type === "assignment" && "bg-orange-500",
+                        item.type === "exam" && "bg-red-500"
+                      )} />
+                      <div className="text-sm text-gray-900 ml-2">
+                        <div className="font-medium">{item.courseTitle}</div>
+                        <div className="text-xs text-gray-500">{item.startTime && format(item.startTime, "HH:mm")}</div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-
-    {/* Schedule Items List */}
-    <div className="bg-white rounded-xl shadow-sm p-6">
-      <h2 className="text-2xl font-bold mb-4">Schedule Details</h2>
-      <div className="space-y-4">
-        {scheduleData.items.map((item) => (
-          <div
-            key={item.id}
-            className="border rounded-lg p-4 hover:shadow-md transition-shadow"
-          >
-            <div className="flex items-start justify-between mb-2">
-              <div className="flex-1">
-                <div className="flex items-center space-x-3">
-                  <div className={cn(
-                    "w-3 h-3 rounded-full",
-                    item.type === "lecture" && "bg-purple-500",
-                    item.type === "assignment" && "bg-orange-500",
-                    item.type === "exam" && "bg-red-500"
-                  )} />
-                </div>
-                <div>
-                  <div className="text-sm font-medium">{item.courseCode}</div>
-                  <div className="text-xs text-muted-foreground">{item.instructorName}</div>
-                </div>
               </div>
-              <div className="text-right">
-                <div className="text-xs text-muted-foreground">
-                  {format(item.startTime, "EEE, MMM d")}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  {format(item.endTime, "HH:mm")}
-                </div>
-              </div>
-            </div>
-
-            <div className="mb-2">
-              <h3 className="text-lg font-semibold">{item.courseTitle}</h3>
-              <p className="text-sm text-gray-600 mb-2">{item.description}</p>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <span className={cn(
-                  "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold",
-                  item.status === "completed" && "bg-green-100 text-green-800",
-                  item.status === "in_progress" && "bg-blue-100 text-blue-800",
-                  item.status === "overdue" && "bg-red-100 text-red-800"
-                )}>
-                  {item.status}
-                </span>
-              </div>
-              <div className="text-sm text-gray-600">
-                {item.location}
-              </div>
-            </div>
-
-            {item.resources && item.resources.length > 0 && (
-              <div className="mt-4 pt-4 border-t">
-                <h4 className="text-sm font-medium mb-2">Resources</h4>
-                <div className="flex flex-wrap gap-2">
-                  {item.resources.map((resource, index) => (
-                    <button
-                      key={index}
-                      onClick={() => {
-                        window.open(resource.url || "#", "_blank");
-                      }}
-                      className="inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 py-2"
-                    >
-                      {resource.type === "video" && <Video className="h-4 w-4 mr-2" />}
-                      {resource.type === "link" && <BookOpen className="h-4 w-4 mr-2" />}
-                      {resource.type === "file" && <FileText className="h-4 w-4 mr-2" />}
-                      <span className="text-sm">{resource.title}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Pagination */}
-      {scheduleData.hasMore && (
-        <div className="flex items-center justify-center py-6">
-          <button
-            onClick={() => {
-              const params = new URLSearchParams(window.location.search);
-              params.set("page", (page + 1).toString());
-              window.location.href = `/portal/student/schedule?${params.toString()}`;
-            }}
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
-          >
-            Load More
-          </button>
+      {/* Schedule Items List */}
+      <div className="bg-white rounded-xl shadow-sm p-6">
+        <h2 className="text-2xl font-semibold mb-4">Schedule Details</h2>
+        <div className="space-y-4">
+          {scheduleData.items.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-gray-400 mb-4">
+                <Calendar className="h-16 w-16 mx-auto text-gray-400 mb-4" />
+                <p className="text-gray-500">No schedule found for this week</p>
+              </div>
+            </div>
+          ) : (
+            scheduleData.items.map((item) => (
+              <div
+                key={item.id}
+                className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3 mb-2">
+                      <div className={cn(
+                        "w-3 h-3 rounded-full",
+                        item.type === "lecture" && "bg-purple-500",
+                        item.type === "assignment" && "bg-orange-500",
+                        item.type === "exam" && "bg-red-500"
+                      )} />
+                      <div className="text-sm text-gray-900">
+                        <div className="font-medium">{item.courseCode}</div>
+                        <div className="text-xs text-gray-500">{item.startTime && format(item.startTime, "HH:mm")}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => {
+                          window.location.href = `/portal/student/schedule/item/${item.id}`;
+                        }}
+                        className="text-blue-600 hover:text-blue-800 text-sm"
+                      >
+                        View Details
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-      )}
+
+        {/* Pagination */}
+        {scheduleData.hasMore && (
+          <div className="flex items-center justify-center py-6">
+            <button
+              onClick={() => {
+                const params = new URLSearchParams(window.location.search);
+                params.set("page", (page + 1).toString());
+                window.location.href = `/portal/student/schedule?${params.toString()}`;
+              }}
+              disabled={page >= Math.ceil(scheduleData.items.length / 10)}
+              className="inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
+            >
+              Load More
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -581,115 +671,81 @@ function WeekScheduleView({ scheduleData, page }: { scheduleData: any; page: num
 // Day View Component
 function DayScheduleView({ scheduleData, page }: { scheduleData: any; page: number }) {
   const selectedDate = scheduleData.selectedDate || new Date();
-  const daySchedule = scheduleData.items.filter((item) => 
-    isSameDay(new Date(item.startTime), selectedDate)
-  );
 
   return (
     <div className="space-y-6">
       {/* Date Selector */}
       <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-        <h2 className="text-2xl font-bold mb-4">Select Date</h2>
-        <input
-          type="date"
-          value={format(selectedDate, "yyyy-MM-dd")}
-          onChange={(e) => {
-            const params = new URLSearchParams(window.location.search);
-            params.set("date", e.target.value);
-            window.location.href = `/portal/student/schedule?${params.toString()}`;
-          }}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-        />
-      </div>
-
-      {/* Day Schedule */}
-      <div className="bg-white rounded-xl shadow-sm p-6">
-        <h2 className="text-2xl font-bold mb-4">
+        <h2 className="text-2xl font-semibold mb-4">
           Schedule for {format(selectedDate, "EEEE, MMMM d, yyyy")}
         </h2>
+        <div className="flex justify-center">
+          <button
+            onClick={() => {
+              const params = new URLSearchParams(window.location.search);
+              params.set("date", format(selectedDate, "yyyy-MM-dd"));
+              window.location.href = `/portal/student/schedule?${params.toString()}`;
+            }}
+            className="text-blue-600 hover:text-blue-800 text-sm px-4 py-2 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground"
+          >
+            <Calendar className="h-4 w-4 mr-2" />
+            Change Date
+          </button>
+        </div>
+      </div>
+
+      {/* Schedule Items for the selected date */}
+      <div className="bg-white rounded-xl shadow-sm p-6">
+        <h2 className="text-2xl font-semibold mb-4">
+          Classes for {format(selectedDate, "EEEE, MMMM d, yyyy")}
+        </h2>
         <div className="space-y-4">
-          {daySchedule.length === 0 ? (
+          {scheduleData.items.length === 0 ? (
             <div className="text-center py-12">
               <Calendar className="h-16 w-16 mx-auto text-gray-400 mb-4" />
-              <p className="text-gray-500">No schedule found for this date</p>
+              <p className="text-gray-500">No classes scheduled for this date</p>
             </div>
           ) : (
-            daySchedule.map((item, index) => (
-              <div
-                key={item.id}
-                className="border rounded-lg p-4 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-3">
-                      <div className={cn(
-                        "w-3 h-3 rounded-full",
-                        item.type === "lecture" && "bg-purple-500",
-                        item.type === "assignment" && "bg-orange-500",
-                        item.type === "exam" && "bg-red-500"
-                      )} />
+            scheduleData.items
+              .filter((item) => isSameDay(new Date(item.startTime), selectedDate))
+              .map((item) => (
+                <div
+                  key={item.id}
+                  className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 mb-2">
+                        <div className={cn(
+                          "w-3 h-3 rounded-full",
+                          item.type === "lecture" && "bg-purple-500",
+                          item.type === "assignment" && "bg-orange-500",
+                          item.type === "exam" && "bg-red-500"
+                        )} />
+                        <div className="text-sm text-gray-900">
+                          <div className="font-medium">{item.courseCode}</div>
+                          <div className="text-xs text-gray-500">{format(item.startTime, "HH:mm")}</div>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-sm font-medium">{format(item.startTime, "HH:mm")}</div>
-                      <div className="text-xs text-muted-foreground">{item.courseCode}</div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs text-muted-foreground">
-                      {format(item.startTime, "EEE, MMM d")}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {format(item.endTime, "HH:mm")}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mb-2">
-                  <h3 className="text-lg font-semibold">{item.courseTitle}</h3>
-                  <p className="text-sm text-gray-600 mb-2">{item.description}</p>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <span className={cn(
-                      "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold",
-                      item.status === "completed" && "bg-green-100 text-green-800",
-                      item.status === "in_progress" && "bg-blue-100 text-blue-800",
-                      item.status === "overdue" && "bg-red-100 text-red-800"
-                    )}>
-                      {item.status}
-                    </span>
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    {item.location}
-                  </div>
-                </div>
-
-                {item.resources && item.resources.length > 0 && (
-                  <div className="mt-4 pt-4 border-t">
-                    <h4 className="text-sm font-medium mb-2">Resources</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {item.resources.map((resource, index) => (
+                    <div className="text-right">
+                      <div className="flex items-center space-x-2">
                         <button
-                          key={index}
                           onClick={() => {
-                            window.open(resource.url || "#", "_blank");
+                            window.location.href = `/portal/student/schedule/item/${item.id}`;
                           }}
-                          className="inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 py-2"
+                          className="text-blue-600 hover:text-blue-800 text-sm"
                         >
-                          {resource.type === "video" && <Video className="h-4 w-4 mr-2" />}
-                          {resource.type === "link" && <BookOpen className="h-4 w-4 mr-2" />}
-                          {resource.type === "file" && <FileText className="h-4 w-4 mr-2" />}
-                          <span className="text-sm">{resource.title}</span>
+                          View Details
                         </button>
-                      ))}
+                      </div>
                     </div>
                   </div>
-                )}
+                </div>
               </div>
-            </div>
-          ))
-        )}
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
@@ -697,15 +753,15 @@ function DayScheduleView({ scheduleData, page }: { scheduleData: any; page: numb
 
 // Helper functions
 function generateWeekDays(weekNumber: number) {
-  const startOfWeek = startOfWeek(new Date(), { week: 1 });
+  const startDate = startOfWeek(new Date(), { week: 1 });
   const days = [];
 
   for (let i = 0; i < 7; i++) {
-    const date = new Date(startOfWeek);
-    date.setDate(date.getDate() + i);
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + i);
     days.push({
       date,
-      day: format(date, "EEE"),
+      day: format(date, "EEEE"),
       items: [], // Will be populated by the main function
     });
   }
