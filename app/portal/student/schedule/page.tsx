@@ -131,7 +131,7 @@ export default async function StudentSchedulePage({
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-muted-foreground">
-                {format(startOfWeek(new Date(), { week: 1 }), "PPP")} - {format(endOfWeek(new Date(), { week: 1 }), "PPP")}
+                {format(startOfWeek(new Date()), "PPP")} - {format(endOfWeek(new Date()), "PPP")}
               </span>
               <button
                 onClick={() => {
@@ -238,8 +238,8 @@ async function getScheduleData(
   type?: string,
   view: string = "week"
 ) {
-  const startDate = startOfWeek(new Date(), { week: 1 });
-  const endDate = endOfWeek(new Date(), { week: 1 });
+  const startDate = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const endDate = endOfWeek(new Date(), { weekStartsOn: 1 });
 
   // Get enrolled courses
   const enrollments = await prisma.enrollment.findMany({
@@ -252,7 +252,6 @@ async function getScheduleData(
           id: true,
           code: true,
           title: true,
-          color: true,
         },
       },
     },
@@ -273,13 +272,13 @@ async function getScheduleData(
           lte: endDate,
         },
       },
+      orderBy: { createdAt: "asc" },
       include: {
         course: {
           select: {
             id: true,
             code: true,
             title: true,
-            color: true,
             instructor: {
               select: {
                 firstName: true,
@@ -288,9 +287,9 @@ async function getScheduleData(
                 photo: true,
               },
             },
+          },
         },
       },
-      orderBy: { createdAt: "asc" },
     });
 
     // Add lectures to schedule
@@ -300,7 +299,6 @@ async function getScheduleData(
         courseId: enrollment.course.id,
         courseCode: enrollment.course.code,
         courseTitle: enrollment.course.title,
-        courseColor: enrollment.course.color,
         instructorName: `${lecture.course.instructor?.firstName || ""} ${lecture.course.instructor?.lastName || ""}`,
         instructorEmail: lecture.course.instructor?.email || "",
         instructorPhoto: lecture.course.instructor?.photo || "",
@@ -309,11 +307,16 @@ async function getScheduleData(
         location: lecture.course.title || "TBD",
         type: "lecture",
         status: isPast(lecture.createdAt) ? "completed" : "scheduled",
-        description: lecture.description,
+        description: lecture.description ?? undefined,
         resources: lecture.content ? [{
           type: "video",
           title: "Lecture Video",
-          url: lecture.content?.videoUrl || "#",
+          url:
+            typeof lecture.content === "object" &&
+            lecture.content !== null &&
+            "videoUrl" in lecture.content
+              ? (lecture.content as { videoUrl?: string }).videoUrl || "#"
+              : "#",
         }] : [],
       });
     });
@@ -327,13 +330,13 @@ async function getScheduleData(
           lte: endDate,
         },
       },
+      orderBy: { dueDate: "asc" },
       include: {
         course: {
           select: {
             id: true,
             code: true,
             title: true,
-            color: true,
             instructor: {
               select: {
                 firstName: true,
@@ -342,9 +345,9 @@ async function getScheduleData(
                 photo: true,
               },
             },
+          },
         },
       },
-      orderBy: { dueDate: "asc" },
     });
 
     // Add assignments to schedule
@@ -354,8 +357,7 @@ async function getScheduleData(
         courseId: enrollment.course.id,
         courseCode: enrollment.course.code,
         courseTitle: enrollment.course.title,
-        courseColor: enrollment.course.color,
-        instructorName: `${assignment.course.instructor?.firstName || ""} ${assignment.course.instructor?.lastName || ""}`,
+                instructorName: `${assignment.course.instructor?.firstName || ""} ${assignment.course.instructor?.lastName || ""}`,
         instructorEmail: assignment.course.instructor?.email || "",
         instructorPhoto: assignment.course.instructor?.photo || "",
         startTime: assignment.dueDate,
