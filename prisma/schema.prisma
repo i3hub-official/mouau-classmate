@@ -427,6 +427,7 @@ model Course {
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  color         String? // Hex color code for UI representation
 
   // Instructor relationships
   instructorId String?
@@ -490,7 +491,6 @@ model Enrollment {
   progress       Float     @default(0)
   lastAccessedAt DateTime?
   updatedAt      DateTime  @updatedAt
-  color          String? // For UI categorization
 
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)

@@ -29,7 +29,7 @@ export default function HomePage() {
     const checkAuthStatus = async () => {
       try {
         // Attempt to get the current user
-        const user = await UserService.getCurrentUser();
+        const user = await UserService.getUserById();
 
         if (user && user.id) {
           // User is authenticated, redirect to the dashboard
@@ -97,7 +97,7 @@ export default function HomePage() {
 
           <div className="flex items-center gap-3 sm:gap-4">
             <Link
-              href="/select-role"
+              href="/auth/signin"
               className="hidden md:block px-4 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
             >
               Sign In
