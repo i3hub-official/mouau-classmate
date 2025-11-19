@@ -30,7 +30,7 @@ export class UserService {
               id: true,
               matricNumber: true,
               firstName: true,
-              lastName: true,
+              surname: true,
               department: true,
             },
           },
@@ -39,7 +39,7 @@ export class UserService {
               id: true,
               employeeId: true,
               firstName: true,
-              lastName: true,
+              surname: true,
               department: true,
             },
           },
@@ -58,7 +58,7 @@ export class UserService {
         decryptedUser.student = {
           ...user.student,
           firstName: await unprotectData(user.student.firstName, "name"),
-          lastName: await unprotectData(user.student.lastName, "name"),
+          surname: await unprotectData(user.student.surname, "name"),
         };
       }
 
@@ -66,7 +66,7 @@ export class UserService {
         decryptedUser.teacher = {
           ...user.teacher,
           firstName: await unprotectData(user.teacher.firstName, "name"),
-          lastName: await unprotectData(user.teacher.lastName, "name"),
+          surname: await unprotectData(user.teacher.surname, "name"),
         };
       }
 

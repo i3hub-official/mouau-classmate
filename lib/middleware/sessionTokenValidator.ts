@@ -697,7 +697,7 @@ export class SessionTokenValidator {
       );
     }
 
-    const loginUrl = new URL("/auth/signin", request.url);
+    const loginUrl = new URL("/signin", request.url);
     loginUrl.searchParams.set("reason", "session_expired");
 
     if (validationResult.errorCode) {
@@ -729,8 +729,8 @@ export class SessionTokenValidator {
   private static redirectToLogin(request: NextRequest): NextResponse {
     console.log("[SESSION VALIDATOR] 🔄 Redirecting to login");
 
-    const loginUrl = new URL("/auth/signin", request.url);
-    if (request.nextUrl.pathname !== "/auth/signin") {
+    const loginUrl = new URL("/signin", request.url);
+    if (request.nextUrl.pathname !== "/signin") {
       loginUrl.searchParams.set("redirect", request.nextUrl.pathname);
     }
 
@@ -773,9 +773,7 @@ export class SessionTokenValidator {
       "[SESSION VALIDATOR] ⚠️ Validation error, redirecting to login"
     );
 
-    const response = NextResponse.redirect(
-      new URL("/auth/signin", request.url)
-    );
+    const response = NextResponse.redirect(new URL("/signin", request.url));
 
     // Clear potentially corrupted cookies
     const cookiesToClear = ["session-token", "refresh-token", "userId"];
@@ -936,9 +934,7 @@ export class SessionTokenValidator {
   ): NextResponse {
     console.log("[SESSION VALIDATOR] 🚫 Rate limit exceeded");
 
-    const response = NextResponse.redirect(
-      new URL("/auth/signin", request.url)
-    );
+    const response = NextResponse.redirect(new URL("/signin", request.url));
     response.cookies.set("session-token", "", {
       expires: new Date(0),
       path: "/",
@@ -1071,7 +1067,10 @@ export class SessionTokenValidator {
     ]);
 
     // Add type annotation to concurrentData
-    const concurrentDataTyped = concurrentData as Array<{ userId: string; _count: { id: number } }>;
+    const concurrentDataTyped = concurrentData as Array<{
+      userId: string;
+      _count: { id: number };
+    }>;
     const concurrentSessions: { [userId: string]: number } = {};
     concurrentDataTyped.forEach((item) => {
       concurrentSessions[item.userId] = item._count.id;
@@ -1164,4 +1163,3 @@ export class SessionTokenValidator {
     }
   }
 }
-

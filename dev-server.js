@@ -1,402 +1,450 @@
 // server.js
-import { createServer } from 'https';
-import { createServer as createHttpServer } from 'http';
-import next from 'next';
-import fs from 'fs';
-import os from 'os';
-import dotenv from 'dotenv';
-import path from 'path';
+// Development-friendly custom Next.js server with robust graceful shutdown
+// Usage: NODE_ENV=development node server.js
+// (In production, don't use this custom dev server file.)
 
-// ===== Environment Check =====
-if (process.env.NODE_ENV === "production") {
-  console.error("❌ server.js is for development use only.");
-  process.exit(1);
-}
+import { createServer as createHttpsServer } from "https";
+import { createServer as createHttpServer } from "http";
+import next from "next";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import dotenv from "dotenv";
+import { exec } from "child_process";
 
-// ===== Load Environment Variables FIRST =====
+// ==============================
+// Basic environment setup
+// ==============================
 const envPath = path.resolve(process.cwd(), ".env");
 if (fs.existsSync(envPath)) {
   dotenv.config({ path: envPath });
-  console.log("✅ Loaded environment from .env");
+  console.log("[INFO] Loaded .env");
 } else {
-  console.warn("⚠️ .env not found, using system environment variables");
+  console.log("[WARN] .env not found, relying on environment variables");
 }
 
-// ===== Logging Utilities =====
-const logLevels = {
-  INFO: '\x1b[36m[INFO]\x1b[0m',
-  WARN: '\x1b[33m[WARN]\x1b[0m',
-  ERROR: '\x1b[31m[ERROR]\x1b[0m',
-  SUCCESS: '\x1b[32m[SUCCESS]\x1b[0m',
-  DEBUG: '\x1b[35m[DEBUG]\x1b[0m'
-};
-
-function log(level, message, data = null) {
-  const timestamp = new Date().toISOString();
-  const prefix = `${logLevels[level]} ${timestamp}`;
-
-  if (data) {
-    console.log(`${prefix} ${message}`, data);
-  } else {
-    console.log(`${prefix} ${message}`);
-  }
-}
-
-// ===== Verify Critical Environment Variables =====
-log('INFO', 'Verifying environment variables...');
-const requiredEnvVars = ['ENCRYPTION_KEY', 'DATABASE_URL'];
-const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
-
-if (missingEnvVars.length > 0) {
-  log('ERROR', `Missing required environment variables: ${missingEnvVars.join(', ')}`);
+if (process.env.NODE_ENV === "production") {
+  console.error("[ERROR] server.js is intended for development only.");
   process.exit(1);
 }
 
-log('SUCCESS', 'All required environment variables are loaded');
+const dev = process.env.NODE_ENV !== "production";
+const HTTP_PORT = parseInt(process.env.HTTP_PORT || "3001", 10);
+const HTTPS_PORT = parseInt(process.env.HTTPS_PORT || "3002", 10);
+const CERT_PATH = process.env.SSL_CERTIFICATE || "";
+const KEY_PATH = process.env.SSL_KEY || "";
+const FORCE_KILL_NODE = process.env.FORCE_KILL_NODE === "true"; // opt-in
 
-// ===== Configuration =====
-const dev = process.env.NODE_ENV !== 'production';
-const httpPort = process.env.HTTP_PORT || 3001;
-const httpsPort = process.env.HTTPS_PORT || 3002;
-const certPath = process.env.SSL_CERTIFICATE;
-const keyPath = process.env.SSL_KEY;
+// ==============================
+// Logging helpers
+// ==============================
+const colors = {
+  RESET: "\x1b[0m",
+  CYAN: "\x1b[36m",
+  YELLOW: "\x1b[33m",
+  RED: "\x1b[31m",
+  GREEN: "\x1b[32m",
+  MAG: "\x1b[35m",
+};
 
-log('INFO', `Server configuration:`, {
-  mode: dev ? 'development' : 'production',
-  httpPort,
-  httpsPort,
-  sslEnabled: !!(certPath && keyPath)
-});
+function log(level, message, meta) {
+  const now = new Date().toISOString();
+  const prefix = {
+    INFO: `${colors.CYAN}[INFO]${colors.RESET}`,
+    WARN: `${colors.YELLOW}[WARN]${colors.RESET}`,
+    ERROR: `${colors.RED}[ERROR]${colors.RESET}`,
+    SUCCESS: `${colors.GREEN}[SUCCESS]${colors.RESET}`,
+    DEBUG: `${colors.MAG}[DEBUG]${colors.RESET}`,
+  }[level] || `[${level}]`;
 
+  if (meta !== undefined) {
+    try {
+      console.log(`${prefix} ${now} - ${message}`, meta);
+    } catch {
+      console.log(`${prefix} ${now} - ${message} (meta unprintable)`);
+    }
+  } else {
+    console.log(`${prefix} ${now} - ${message}`);
+  }
+}
+
+// ==============================
+// Utility: get LAN IPv4 addresses
+// ==============================
+function getLanIPs() {
+  try {
+    const interfaces = os.networkInterfaces();
+    return Object.values(interfaces)
+      .flat()
+      .filter((i) => i && i.family === "IPv4" && !i.internal)
+      .map((i) => i.address)
+      .sort();
+  } catch (err) {
+    log("ERROR", "Failed to enumerate network interfaces", err);
+    return [];
+  }
+}
+
+// ==============================
+// Next.js app setup
+// ==============================
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
-// ===== Request Logging Middleware =====
+// ==============================
+// Server state
+// ==============================
+let httpServer = null;
+let httpsServer = null;
+let networkMonitorInterval = null;
+let currentIPs = getLanIPs();
+let isRestarting = false;
+let isShuttingDown = false;
+const activeSockets = new Set(); // track sockets to force destroy if needed
+
+// ==============================
+// Connection tracking helpers
+// ==============================
+function trackServerConnections(server, serverName) {
+  if (!server) return;
+  server.on("connection", (socket) => {
+    activeSockets.add(socket);
+    socket.on("close", () => activeSockets.delete(socket));
+  });
+
+  server.on("close", () => {
+    log("INFO", `${serverName} closed - clearing any tracked sockets for it`);
+  });
+
+  server.on("error", (err) => {
+    log("ERROR", `${serverName} encountered an error`, err);
+  });
+}
+
+function destroyTrackedSockets() {
+  if (activeSockets.size === 0) return;
+  log("WARN", `Destroying ${activeSockets.size} tracked sockets to allow process exit`);
+  for (const s of Array.from(activeSockets)) {
+    try {
+      // unref/destroy to break the event loop
+      s.destroy();
+    } catch (e) {
+      // ignore per-socket errors
+    } finally {
+      activeSockets.delete(s);
+    }
+  }
+}
+
+// ==============================
+// Graceful close with timeout
+// ==============================
+function forceCloseServer(server, name, timeout = 2500) {
+  return new Promise((resolve) => {
+    if (!server) {
+      log("DEBUG", `${name} not running`);
+      return resolve();
+    }
+
+    let finished = false;
+
+    server.close((err) => {
+      if (finished) return;
+      finished = true;
+      if (err) log("ERROR", `${name} close error`, err);
+      else log("SUCCESS", `${name} closed gracefully`);
+      resolve();
+    });
+
+    // Failsafe timeout to avoid hanging forever
+    setTimeout(() => {
+      if (finished) return;
+      finished = true;
+      try {
+        // attempt to close underlying handles by destroying sockets
+        destroyTrackedSockets();
+      } catch (e) {
+        log("WARN", `Error while force-destroying sockets for ${name}`, e);
+      }
+      log("WARN", `${name} close timed out; proceeding`);
+      resolve();
+    }, timeout);
+  });
+}
+
+// ==============================
+// Optional: kill leftover node processes (Windows)
+// Only invoked when explicitly enabled via FORCE_KILL_NODE=true
+// ==============================
+function killLeftoverNodeProcesses() {
+  if (!FORCE_KILL_NODE) {
+    log("DEBUG", "FORCE_KILL_NODE not set — skipping force kill of node processes");
+    return;
+  }
+  if (process.platform === "win32") {
+    log("WARN", "FORCE_KILL_NODE enabled — will run `taskkill /F /IM node.exe /T` (Windows)");
+    exec("taskkill /F /IM node.exe /T", (err, stdout, stderr) => {
+      if (err) {
+        log("ERROR", "taskkill returned an error", { err: err.message, stderr });
+      } else {
+        log("SUCCESS", "Ran taskkill to clean leftover node processes", stdout.trim());
+      }
+    });
+  } else {
+    log("WARN", "FORCE_KILL_NODE only implemented for Windows in this script");
+  }
+}
+
+// ==============================
+// Remove Next.js dev lockfile (dev mode only)
+// ==============================
+function removeNextLock() {
+  if (!dev) return;
+  try {
+    const lockPath = path.join(process.cwd(), ".next", "dev", "lock");
+    if (fs.existsSync(lockPath)) {
+      fs.unlinkSync(lockPath);
+      log("SUCCESS", "Removed .next/dev/lock");
+    } else {
+      log("DEBUG", "No Next.js lockfile present");
+    }
+  } catch (e) {
+    log("WARN", "Failed to remove .next/dev/lock (it might be held by a process)", e.message);
+  }
+}
+
+// ==============================
+// Request logging wrapper
+// ==============================
 function createLoggingHandler(handler) {
   return async (req, res) => {
     const start = Date.now();
     const timestamp = new Date().toISOString();
 
-    // Log incoming request
-    log('DEBUG', `Incoming request:`, {
+    log("DEBUG", "Incoming request", {
       method: req.method,
       url: req.url,
-      headers: {
-        'user-agent': req.headers['user-agent'],
-        'x-forwarded-for': req.headers['x-forwarded-for'],
-        'referer': req.headers['referer']
-      },
-      timestamp
+      timestamp,
+      "user-agent": req.headers["user-agent"],
     });
 
-    // Capture response
     const originalEnd = res.end;
     res.end = function (...args) {
       const duration = Date.now() - start;
-
-      // Log response
-      log('INFO', `Request completed:`, {
+      log("INFO", "Request completed", {
         method: req.method,
         url: req.url,
         statusCode: res.statusCode,
         duration: `${duration}ms`,
-        timestamp: new Date().toISOString()
       });
-
-      originalEnd.apply(this, args);
+      return originalEnd.apply(this, args);
     };
 
-    // Handle errors
-    res.on('error', (err) => {
-      log('ERROR', `Response error:`, {
-        error: err.message,
-        stack: err.stack,
-        url: req.url,
-        method: req.method
-      });
+    // safety: catch response errors
+    res.on("error", (err) => {
+      log("ERROR", "Response error", { error: err?.message || err });
     });
 
     return handler(req, res);
   };
 }
 
-// ===== Utility: Get all LAN IPv4 addresses =====
-function getLanIPs() {
-  try {
-    const interfaces = os.networkInterfaces();
-    const ips = Object.values(interfaces)
-      .flat()
-      .filter(i => i.family === 'IPv4' && !i.internal)
-      .map(i => i.address)
-      .sort();
-
-    log('DEBUG', `Detected LAN IPs: ${ips.join(', ') || 'none'}`);
-    return ips;
-  } catch (error) {
-    log('ERROR', 'Failed to get LAN IPs:', error);
-    return [];
-  }
-}
-
-// ===== Server references =====
-let httpServer = null;
-let httpsServer = null;
-let currentIPs = getLanIPs();
-let isRestarting = false;
-let restartCount = 0;
-let networkMonitorInterval = null;
-let isShuttingDown = false;
-
-// ===== Helper: Graceful Restart =====
-async function restartServers() {
-  if (isRestarting || isShuttingDown) {
-    log('DEBUG', 'Restart skipped (already in progress or shutting down)');
-    return;
-  }
-
-  isRestarting = true;
-  restartCount++;
-
-  log('INFO', `🔄 Restarting servers due to network change... (Restart #${restartCount})`);
-
-  // Close servers gracefully
-  const closePromises = [];
-
-  if (httpServer) {
-    log('INFO', 'Closing HTTP server...');
-    closePromises.push(
-      new Promise(res => {
-        httpServer.close(res);
-        httpServer = null;
-      })
-    );
-  }
-
-  if (httpsServer) {
-    log('INFO', 'Closing HTTPS server...');
-    closePromises.push(
-      new Promise(res => {
-        httpsServer.close(res);
-        httpsServer = null;
-      })
-    );
-  }
-
-  try {
-    await Promise.all(closePromises);
-    log('SUCCESS', 'All servers closed successfully');
-  } catch (error) {
-    log('ERROR', 'Error closing servers:', error);
-  }
-
-  // Wait a moment to release Next.js dev lock
-  await new Promise(res => setTimeout(res, 1500));
-
-  // Remove stale Next.js lock file (only in dev mode)
-  if (dev) {
-    const lockFile = path.join(process.cwd(), '.next', 'dev', 'lock');
-    if (fs.existsSync(lockFile)) {
-      try {
-        fs.unlinkSync(lockFile);
-        log('SUCCESS', '🧹 Removed stale Next.js lock file');
-      } catch (err) {
-        log('WARN', `Could not remove .next/dev/lock: ${err.message}`);
-      }
-    }
-  }
-
-  // Restart servers
-  try {
-    await startServers();
-    log('SUCCESS', 'Servers restarted successfully');
-  } catch (err) {
-    log('ERROR', 'Error restarting servers:', err);
-  }
-
-  isRestarting = false;
-}
-
-// ===== Start servers =====
+// ==============================
+// Start servers
+// ==============================
 async function startServers() {
-  try {
-    log('INFO', 'Preparing Next.js app...');
-    await app.prepare();
-    log('SUCCESS', 'Next.js app prepared');
+  log("INFO", "Preparing Next.js app...");
+  await app.prepare();
+  log("SUCCESS", "Next.js prepared");
 
-    const loggingHandle = createLoggingHandler(handle);
+  const loggingHandle = createLoggingHandler(handle);
 
-    // Start HTTP server
-    httpServer = createHttpServer(loggingHandle)
-      .listen(httpPort, '0.0.0.0', () => {
-        log('SUCCESS', `🌐 HTTP server ready on http://localhost:${httpPort}`);
-        currentIPs.forEach(ip =>
-          log('INFO', `📱 Accessible via LAN: http://${ip}:${httpPort}`)
-        );
+  // HTTP server
+  httpServer = createHttpServer(loggingHandle);
+  trackServerConnections(httpServer, "HTTP server");
+
+  httpServer.listen(HTTP_PORT, "0.0.0.0", () => {
+    log("SUCCESS", `HTTP server listening on http://localhost:${HTTP_PORT}`);
+    const ips = currentIPs.length ? currentIPs : getLanIPs();
+    ips.forEach((ip) => log("INFO", `Accessible via LAN: http://${ip}:${HTTP_PORT}`));
+  });
+
+  httpServer.on("error", (err) => {
+    log("ERROR", "HTTP server error", err);
+  });
+
+  // HTTPS server (optional)
+  if (CERT_PATH && KEY_PATH && fs.existsSync(CERT_PATH) && fs.existsSync(KEY_PATH)) {
+    try {
+      const httpsOptions = {
+        key: fs.readFileSync(KEY_PATH),
+        cert: fs.readFileSync(CERT_PATH),
+      };
+      httpsServer = createHttpsServer(httpsOptions, loggingHandle);
+      trackServerConnections(httpsServer, "HTTPS server");
+
+      httpsServer.listen(HTTPS_PORT, "0.0.0.0", () => {
+        log("SUCCESS", `HTTPS server listening on https://localhost:${HTTPS_PORT}`);
+        const ips = currentIPs.length ? currentIPs : getLanIPs();
+        ips.forEach((ip) => log("INFO", `Accessible via LAN: https://${ip}:${HTTPS_PORT}`));
       });
 
-    httpServer.on('error', (err) => {
-      log('ERROR', 'HTTP server error:', err);
-    });
-
-    // Start HTTPS server if certificates are available
-    if (certPath && keyPath && fs.existsSync(certPath) && fs.existsSync(keyPath)) {
-      try {
-        const httpsOptions = {
-          key: fs.readFileSync(keyPath),
-          cert: fs.readFileSync(certPath),
-        };
-
-        httpsServer = createServer(httpsOptions, loggingHandle)
-          .listen(httpsPort, '0.0.0.0', () => {
-            log('SUCCESS', `✅ HTTPS server ready on https://localhost:${httpsPort}`);
-            currentIPs.forEach(ip =>
-              log('INFO', `🔐 Accessible via LAN: https://${ip}:${httpsPort}`)
-            );
-          });
-
-        httpsServer.on('error', (err) => {
-          log('ERROR', 'HTTPS server error:', err);
-        });
-
-      } catch (error) {
-        log('ERROR', 'Failed to start HTTPS server:', error);
-      }
-    } else {
-      log('WARN', '⚠️ SSL certs missing or invalid. HTTPS server not started');
+      httpsServer.on("error", (err) => {
+        log("ERROR", "HTTPS server error", err);
+      });
+    } catch (e) {
+      log("ERROR", "Failed to start HTTPS server", e);
     }
-
-  } catch (error) {
-    log('ERROR', 'Failed to start servers:', error);
-    throw error;
+  } else {
+    log("WARN", "SSL certificate or key missing — HTTPS server not started");
   }
 }
 
-// ===== Monitor IP changes =====
+// ==============================
+// Restart helper (on IP changes)
+// ==============================
+async function restartServers() {
+  if (isRestarting || isShuttingDown) {
+    log("DEBUG", "Restart skipped (already restarting or shutting down)");
+    return;
+  }
+  isRestarting = true;
+  log("INFO", "Restarting servers due to network change...");
+
+  await forceCloseServer(httpServer, "HTTP server");
+  await forceCloseServer(httpsServer, "HTTPS server");
+
+  httpServer = null;
+  httpsServer = null;
+
+  // small delay for OS to release ports
+  await new Promise((r) => setTimeout(r, 1000));
+
+  // clear tracked sockets in case
+  destroyTrackedSockets();
+
+  // remove Next lock just in case (dev)
+  removeNextLock();
+
+  // restart
+  try {
+    await startServers();
+    log("SUCCESS", "Servers restarted");
+  } catch (e) {
+    log("ERROR", "Failed to restart servers", e);
+  } finally {
+    isRestarting = false;
+  }
+}
+
+// ==============================
+// Network watcher
+// ==============================
 function watchNetworkChanges(interval = 5000) {
-  let debounceTimer = null;
-  let lastCheckTime = Date.now();
-
-  log('INFO', `Starting network monitoring (interval: ${interval}ms)`);
-
+  let debounce = null;
   networkMonitorInterval = setInterval(() => {
-    // Stop monitoring if shutting down
     if (isShuttingDown) {
       clearInterval(networkMonitorInterval);
       networkMonitorInterval = null;
-      log('INFO', 'Network monitoring stopped');
       return;
     }
-
     const newIPs = getLanIPs();
-
-    // Skip restart if temporarily offline
     if (newIPs.length === 0) {
-      log('WARN', 'Network temporarily lost, skipping restart');
+      log("WARN", "No LAN addresses detected — skipping restart");
       return;
     }
-
     if (JSON.stringify(newIPs) !== JSON.stringify(currentIPs)) {
-      const now = Date.now();
-      const timeSinceLastCheck = now - lastCheckTime;
-
-      log('INFO', '⚠️ Detected network change:');
-      log('INFO', `Old IPs: ${currentIPs.join(', ') || 'none'}`);
-      log('INFO', `New IPs: ${newIPs.join(', ') || 'none'}`);
-      log('DEBUG', `Time since last check: ${timeSinceLastCheck}ms`);
-
+      log("INFO", "Network change detected", { old: currentIPs, new: newIPs });
       currentIPs = newIPs;
-      lastCheckTime = now;
-
-      // Debounce restart
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        restartServers().catch(err =>
-          log('ERROR', 'Error restarting servers:', err)
-        );
+      clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        restartServers().catch((err) => log("ERROR", "Restart error", err));
       }, 1000);
-    } else {
-      log('DEBUG', 'Network unchanged');
     }
   }, interval);
 }
 
-// ===== Graceful Shutdown =====
+// ==============================
+// Graceful shutdown
+// ==============================
 async function gracefulShutdown(signal) {
   if (isShuttingDown) {
-    log('DEBUG', 'Shutdown already in progress...');
+    log("DEBUG", "Shutdown already in progress");
     return;
   }
-
   isShuttingDown = true;
-  log('INFO', `Received ${signal}, shutting down gracefully...`);
+  log("INFO", `Received ${signal}. Beginning graceful shutdown...`);
 
-  // Stop network monitoring
+  // Immediately stop network watcher
   if (networkMonitorInterval) {
     clearInterval(networkMonitorInterval);
     networkMonitorInterval = null;
-    log('INFO', 'Network monitoring stopped');
+    log("INFO", "Network monitor stopped");
   }
 
-  // Close servers
-  const closePromises = [];
-
-  if (httpServer) {
-    log('INFO', 'Closing HTTP server...');
-    closePromises.push(
-      new Promise((resolve) => {
-        httpServer.close(() => {
-          log('SUCCESS', 'HTTP server closed');
-          resolve();
-        });
-      })
-    );
-  }
-
-  if (httpsServer) {
-    log('INFO', 'Closing HTTPS server...');
-    closePromises.push(
-      new Promise((resolve) => {
-        httpsServer.close(() => {
-          log('SUCCESS', 'HTTPS server closed');
-          resolve();
-        });
-      })
-    );
-  }
-
+  // Attempt to call Next.js app.close() if available (helps dev server release watchers)
   try {
-    await Promise.all(closePromises);
-    log('SUCCESS', 'All servers closed. Goodbye! 👋');
-    process.exit(0);
-  } catch (error) {
-    log('ERROR', 'Error during shutdown:', error);
-    process.exit(1);
+    if (typeof app.close === "function") {
+      log("INFO", "Calling app.close() on Next.js (if implemented)");
+      await app.close();
+      log("SUCCESS", "app.close() completed");
+    } else {
+      log("DEBUG", "app.close() not available on this Next.js version");
+    }
+  } catch (e) {
+    log("WARN", "app.close() threw an error (continuing shutdown)", e.message);
   }
+
+  // Close HTTP/HTTPS servers gracefully with timeout
+  await forceCloseServer(httpServer, "HTTP server");
+  await forceCloseServer(httpsServer, "HTTPS server");
+
+  httpServer = null;
+  httpsServer = null;
+
+  // Destroy any remaining sockets to ensure Node can exit
+  destroyTrackedSockets();
+
+  // Remove Next lock file (dev only)
+  removeNextLock();
+
+  // Optional: force kill node child processes on Windows (opt-in)
+  if (FORCE_KILL_NODE) {
+    killLeftoverNodeProcesses();
+  }
+
+  log("SUCCESS", "Shutdown complete — exiting process.");
+  // give logs a moment then exit
+  setTimeout(() => process.exit(0), 50);
 }
 
-// ===== Error Handling =====
-process.on('uncaughtException', (error) => {
-  log('ERROR', 'Uncaught Exception:', error);
-  gracefulShutdown('uncaughtException');
+// ==============================
+// Process event handlers
+// ==============================
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+
+process.on("uncaughtException", (err) => {
+  log("ERROR", "Uncaught exception", err);
+  gracefulShutdown("uncaughtException");
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-  log('ERROR', 'Unhandled Rejection at:', promise, 'reason:', reason);
-  gracefulShutdown('unhandledRejection');
+process.on("unhandledRejection", (reason) => {
+  log("ERROR", "Unhandled rejection", reason);
+  gracefulShutdown("unhandledRejection");
 });
 
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-
-// ===== Start everything =====
-log('INFO', 'Starting MOUAU Classmate servers...');
+// ==============================
+// Start everything
+// ==============================
+log("INFO", "Starting custom Next.js development server...");
 startServers()
   .then(() => {
-    log('SUCCESS', '🚀 All servers started successfully');
-    log('INFO', `Server restart count: ${restartCount}`);
-    watchNetworkChanges(5000); // check every 5 seconds
+    log("SUCCESS", "Servers started");
+    watchNetworkChanges(5000);
   })
-  .catch(err => {
-    log('ERROR', 'Failed to start servers:', err);
-    process.exit(1);
+  .catch((err) => {
+    log("ERROR", "Failed to start servers", err);
+    // attempt a deterministic shutdown path
+    gracefulShutdown("startup-failure").catch(() => process.exit(1));
   });

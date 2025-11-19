@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+// Import Link for best practice navigation
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -19,35 +20,83 @@ import {
   Linkedin,
 } from "lucide-react";
 import { ThemeToggle } from "@/app/components/theme-toggle";
-import { UserService } from "@/lib/services/userService"; // Assuming this is the correct path
 
 export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  // 1. Define the signout handler
+  const handleSignOut = async () => {
+    try {
+      // Call your signout API route
+      await fetch("/api/auth/signout", { method: "POST" });
+
+      // After signing out, redirect the user to the homepage/signin page
+      router.replace("/signin");
+    } catch (error) {
+      console.error("Signout failed:", error);
+      // Even if signout fails, redirect to ensure the landing page loads
+      router.replace("/");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
-        // Attempt to get the current user
-        const user = await UserService.getUserById();
+        const response = await fetch("api/auth/status");
+        const data: {
+          authenticated: boolean;
+          role?: "admin" | "student" | "teacher";
+        } = await response.json();
 
-        if (user && user.id) {
-          // User is authenticated, redirect to the dashboard
-          // Use replace so the user can't click "back" to the landing page
-          router.replace("/student/dashboard");
+        if (data.authenticated) {
+          let redirectPath = "/s/dashboard";
+
+          // Check if the role is missing or invalid
+          if (
+            !data.role ||
+            (data.role !== "admin" &&
+              data.role !== "student" &&
+              data.role !== "teacher")
+          ) {
+            console.error(
+              "User authenticated but role is missing or invalid. Initiating signout."
+            );
+
+            // 🛑 CRITICAL ACTION: Call signout function
+            await handleSignOut();
+            return; // Exit the function to prevent further redirection logic
+          }
+
+          // 🚀 CONDITIONAL REDIRECTION LOGIC (Only runs if role is valid)
+          switch (data.role) {
+            case "admin":
+              redirectPath = "/a/dashboard";
+              break;
+            case "teacher":
+              redirectPath = "/t/dashboard";
+              break;
+            case "student":
+              redirectPath = "/s/dashboard";
+              break;
+            // The 'default' case is no longer necessary here because the primary check handles invalid roles.
+          }
+
+          // Use router.replace with the determined path
+          router.replace(redirectPath);
         } else {
-          // User is not authenticated, show the landing page
           setLoading(false);
         }
       } catch (error) {
         console.error("Error checking auth status:", error);
-        // If there's an error, assume user is not logged in
         setLoading(false);
       }
     };
 
     checkAuthStatus();
-  }, [router]); // Add router as a dependency
+  }, [router]); // Note: handleSignOut is not needed in the dependency array if defined outside useEffect
 
   if (loading) {
     return (
@@ -62,12 +111,15 @@ export default function HomePage() {
     );
   }
 
-  // If not loading and not redirected, render the landing page
+  // ================================
+  // RENDER LANDING PAGE
+  // ================================
   return (
     <div className="min-h-screen bg-linear-to-br from-background via-accent/5 to-primary/5 flex flex-col">
-      {/* Header */}
+      {/* HEADER */}
       <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur-xl shadow-sm">
         <div className="w-full px-4 sm:px-6 lg:px-12 py-4 flex justify-between items-center">
+          {/* LOGO LINK: Use Link for the logo for prefetching and simple route definition */}
           <Link
             href="/"
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
@@ -96,27 +148,30 @@ export default function HomePage() {
           </Link>
 
           <div className="flex items-center gap-3 sm:gap-4">
+            {/* SIGN IN BUTTON: Use Link for simple navigation */}
             <Link
-              href="/auth/signin"
+              href="/signin"
               className="hidden md:block px-4 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
             >
               Sign In
             </Link>
+
+            {/* GET STARTED BUTTON: Use Link for simple navigation */}
             <Link
-              href="/portal/student/signup"
+              href="/p/s/signup"
               className="hidden md:block px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
             >
               Get Started
             </Link>
+
             <ThemeToggle />
           </div>
         </div>
       </header>
 
-      {/* Hero Section */}
+      {/* HERO SECTION */}
       <section className="flex-1 w-full px-4 sm:px-6 lg:px-12 py-12 sm:py-16 lg:py-24">
         <div className="max-w-7xl mx-auto">
-          {/* Hero Content */}
           <div className="text-center mb-12 sm:mb-16 lg:mb-20">
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-foreground mb-6">
               Your Smarter
@@ -131,15 +186,24 @@ export default function HomePage() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+              {/* HERO GET STARTED: Use Link for simple navigation */}
               <Link
-                href="/select-role"
+                href="/sr"
                 className="px-8 py-3.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30"
               >
                 Get Started
               </Link>
+
+              {/* HERO LOGIN: Use Link for simple navigation */}
+              <Link
+                href="/signin"
+                className="px-8 py-3.5 border-2 border-primary/20 text-foreground font-semibold rounded-xl hover:border-primary/40 hover:bg-primary/5 transition-all"
+              >
+                Login
+              </Link>
             </div>
 
-            {/* Stats */}
+            {/* Stats (No change needed) */}
             <div className="flex flex-wrap justify-center gap-6 sm:gap-8 lg:gap-12 mb-16">
               <div className="text-center">
                 <div className="text-2xl sm:text-3xl font-bold text-primary mb-1">
@@ -164,7 +228,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Features Grid */}
+          {/* FEATURES (No change needed) */}
           <div className="mb-16">
             <div className="text-center mb-12">
               <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
@@ -227,29 +291,41 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* CTA Section */}
+          {/* CTA SECTION */}
           <div className="bg-linear-to-r from-primary/10 via-accent/10 to-primary/10 rounded-3xl p-8 sm:p-12 text-center border border-primary/20">
             <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
               Ready to Transform Your Learning?
             </h2>
+
             <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
               Join hundreds of MOUAU students already using ClassMate to achieve
               academic excellence
             </p>
-            <Link
-              href="/select-role"
-              className="inline-block px-8 py-3.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
-            >
-              Get Started Today
-            </Link>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              {/* CTA GET STARTED: Use Link for simple navigation */}
+              <Link
+                href="/sr"
+                className="px-8 py-3.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
+              >
+                Get Started Today
+              </Link>
+
+              {/* CTA LOGIN: Use Link for simple navigation */}
+              <Link
+                href="/signin"
+                className="px-8 py-3.5 border-2 border-primary/20 text-foreground font-semibold rounded-xl hover:border-primary/40 hover:bg-primary/5 transition-all"
+              >
+                Login to Your Account
+              </Link>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
+      {/* FOOTER (External links remain <a>) */}
       <footer className="border-t border-border bg-card/50 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-8">
-          {/* Social Media */}
           <div className="flex justify-center gap-4 mb-6">
             <a
               href="https://facebook.com"
@@ -285,7 +361,6 @@ export default function HomePage() {
             </a>
           </div>
 
-          {/* Copyright */}
           <p className="text-sm text-muted-foreground text-center">
             © 2025 MOUAU ClassMate. All rights reserved.
           </p>

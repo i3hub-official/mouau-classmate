@@ -183,7 +183,7 @@ export function decryptBasic(encryptedData: string): string {
 }
 
 /* ------------------------------------
- * Hashing Utilities
+ * Hashing Utilities (for system codes)
  * ------------------------------------ */
 export async function hashData(data: string): Promise<string> {
   const { SALT_ROUNDS, HASH_PEPPER } = getKeys();
@@ -191,14 +191,14 @@ export async function hashData(data: string): Promise<string> {
 }
 
 export async function verifyHash(data: string, hash: string): Promise<boolean> {
-  const { SALT_ROUNDS, HASH_PEPPER } = getKeys();
-  // Constant-time compare for safety
-  const hashed = await bcrypt.hash(data + HASH_PEPPER, SALT_ROUNDS);
-  return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(hashed));
+  const { HASH_PEPPER } = getKeys();
+  // Use bcrypt's built-in compare - it handles the salt correctly
+  return bcrypt.compare(data + HASH_PEPPER, hash);
 }
 
 /* ------------------------------------
  * Deterministic Search Hash (SHA-256)
+ * For duplicate detection
  * ------------------------------------ */
 export function generateSearchHash(data: string): string {
   const { HASH_PEPPER } = getKeys();

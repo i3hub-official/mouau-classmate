@@ -16,9 +16,9 @@ import {
 export default function NotFound() {
   const popularLinks = [
     { href: "/", label: "Home", icon: Home },
-    { href: "/auth/signin", label: "Sign In", icon: Users },
-    { href: "/student/courses", label: "Courses", icon: BookOpen },
-    { href: "/student/schedule", label: "Schedule", icon: Calendar },
+    { href: "/signin", label: "Sign In", icon: Users },
+    { href: "/s/courses", label: "Courses", icon: BookOpen },
+    { href: "/s/schedule", label: "Schedule", icon: Calendar },
     { href: "/support", label: "Support", icon: Mail },
   ];
 

@@ -122,7 +122,7 @@ export const NON_CACHEABLE_PATHS = [
   "/api/auth/*",
 
   // Admin endpoints
-  "/api/admin/*",
+  "/api/a/*",
 
   // Payment/transaction endpoints
   "/api/payments/*",

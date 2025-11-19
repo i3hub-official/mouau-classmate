@@ -22,7 +22,7 @@ export class EnhancedRateEnforcer {
     string,
     { interval: number; limit: number; namespace: string }
   > = {
-    "/auth/signin": {
+    "/signin": {
       interval: 15 * 60 * 1000,
       limit: 5,
       namespace: "signin",
@@ -35,7 +35,7 @@ export class EnhancedRateEnforcer {
     "/api/v1": { interval: 60 * 60 * 1000, limit: 1000, namespace: "api" }, // Default API limit
   };
 
-    private static async enforceRegularRateLimit(
+  private static async enforceRegularRateLimit(
     request: NextRequest,
     context: MiddlewareContext
   ): Promise<NextResponse> {

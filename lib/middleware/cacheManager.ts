@@ -126,7 +126,7 @@ export class CacheManager {
   // Blacklisted paths that should NEVER be cached
   private static readonly NEVER_CACHE_PATTERNS = [
     /^\/api\/auth/, // All auth endpoints
-    /^\/admin/, // Admin pages
+    /^\/a/, // Admin pages
     /^\/dashboard/, // User dashboards
     /^\/profile/, // User profiles
     /^\/settings/, // User settings
@@ -257,7 +257,7 @@ export class CacheManager {
       /^\/news/,
       /^\/events/,
       /^\/help/,
-        ];
+    ];
 
     return publicPatterns.some((pattern) => pattern.test(pathname));
   }

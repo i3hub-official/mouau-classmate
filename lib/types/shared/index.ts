@@ -42,7 +42,7 @@ export interface StudentUser extends BaseUser {
   college: string;
   course: string;
   firstName: string;
-  lastName: string;
+  surname: string;
   phone: string;
   admissionYear?: number;
 }

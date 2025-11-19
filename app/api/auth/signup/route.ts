@@ -1,7 +1,7 @@
-// app/portal/student/signup/student/route.ts
+// app/p/s/signup/s/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { StudentRegistrationService } from "@/lib/services/student/studentRegistrationService";
-import { StudentEmailService } from "@/lib/services/student/emailService";
+import { StudentRegistrationService } from "@/lib/services/s/studentRegistrationService";
+import { StudentEmailService } from "@/lib/services/s/emailService";
 
 export async function POST(request: NextRequest) {
   try {

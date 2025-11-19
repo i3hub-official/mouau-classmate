@@ -29,10 +29,10 @@ export interface AuthenticatedActionContext extends MiddlewareContext {
 
 export class AuthenticatedActionHandler {
   private static readonly AUTH_PATHS = {
-    "/auth/signin": { type: "signin", sensitivity: "critical" as const },
+    "/signin": { type: "signin", sensitivity: "critical" as const },
     "/auth/signout": { type: "signout", sensitivity: "high" as const },
     "/auth/signup": { type: "signup", sensitivity: "critical" as const },
-    "/auth/reset-password": {
+    "/reset-password": {
       type: "password_reset",
       sensitivity: "critical" as const,
     },

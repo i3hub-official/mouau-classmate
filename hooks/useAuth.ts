@@ -4,8 +4,8 @@
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { BaseUser, StudentUser } from "@/lib/types/shared/index";
-import { TeacherUser } from "@/lib/types/teacher/index";
-import { AdminUser } from "@/lib/types/admin/index";
+import { TeacherUser } from "@/lib/types/t/index";
+import { AdminUser } from "@/lib/types/a/index";
 
 type AuthUser = StudentUser | TeacherUser | AdminUser;
 
@@ -64,7 +64,7 @@ export function useAuth() {
     async (credentials: SignInCredentials): Promise<AuthResponse> => {
       setIsLoading(true);
       try {
-        const response = await fetch("/api/auth/signin", {
+        const response = await fetch("/api/signin", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -105,16 +105,16 @@ export function useAuth() {
         setTimeout(() => {
           switch (data.user.role) {
             case "STUDENT":
-              router.push("/portal/student/dashboard");
+              router.push("/p/s/dashboard");
               break;
             case "TEACHER":
-              router.push("/portal/teacher/dashboard");
+              router.push("/p/t/dashboard");
               break;
             case "ADMIN":
-              router.push("/portal/admin/dashboard");
+              router.push("/p/a/dashboard");
               break;
             default:
-              router.push("/select-role");
+              router.push("/sr");
           }
         }, 100);
 
@@ -146,7 +146,7 @@ export function useAuth() {
     } finally {
       setUser(null);
       setIsLoading(false);
-      router.push("/auth/signin");
+      router.push("/signin");
     }
   }, [router]);
 
@@ -245,10 +245,10 @@ export function useAuth() {
     switch (user.role) {
       case "STUDENT":
         const student = user as StudentUser;
-        return `${student.firstName} ${student.lastName}`;
+        return `${student.firstName} ${student.surname}`;
       case "TEACHER":
         const teacher = user as TeacherUser;
-        return `${teacher.firstName} ${teacher.lastName}`;
+        return `${teacher.firstName} ${teacher.surname}`;
       case "ADMIN":
         return user.name || user.email;
       default:
@@ -297,7 +297,7 @@ export function useRequireAuth(
 
   useEffect(() => {
     if (!auth.isInitializing && !auth.isAuthenticated) {
-      router.push("/auth/signin");
+      router.push("/signin");
       return;
     }
 
@@ -310,13 +310,13 @@ export function useRequireAuth(
         // Redirect to unauthorized or dashboard based on role
         switch (auth.currentRole) {
           case "STUDENT":
-            router.push("/portal/student/dashboard");
+            router.push("/p/s/dashboard");
             break;
           case "TEACHER":
-            router.push("/portal/teacher/dashboard");
+            router.push("/p/t/dashboard");
             break;
           case "ADMIN":
-            router.push("/portal/admin/dashboard");
+            router.push("/p/a/dashboard");
             break;
           default:
             router.push("/unauthorized");

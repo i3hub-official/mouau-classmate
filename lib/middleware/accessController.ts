@@ -29,7 +29,7 @@ export class AccessController {
       console.log(
         `[ACCESS] Unauthenticated user blocked from private path: ${request.nextUrl.pathname}`
       );
-      return NextResponse.redirect(new URL("/auth/signin", request.url));
+      return NextResponse.redirect(new URL("/signin", request.url));
     }
 
     // Handle public paths - always allow

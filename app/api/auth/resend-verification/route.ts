@@ -1,9 +1,9 @@
 // app/api/auth/resend-verification/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-import { StudentEmailService } from "@/lib/services/student/emailService";
-import { TeacherEmailService } from "@/lib/services/teacher/emailService";
-import { AdminEmailService } from "@/lib/services/admin/emailService";
+import { StudentEmailService } from "@/lib/services/s/emailService";
+import { TeacherEmailService } from "@/lib/services/t/emailService";
+import { AdminEmailService } from "@/lib/services/a/emailService";
 import { AuditAction, ResourceType } from "@prisma/client";
 
 export async function POST(request: NextRequest) {
@@ -77,7 +77,8 @@ export async function POST(request: NextRequest) {
       // Return a generic success message to prevent email enumeration attacks
       return NextResponse.json({
         success: true,
-        message: "If an account with this email exists, a verification email has been sent.",
+        message:
+          "If an account with this email exists, a verification email has been sent.",
       });
     }
 

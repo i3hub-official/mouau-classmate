@@ -2,7 +2,7 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/lib/server/prisma";
-import { StudentRegistrationService } from "@/lib/services/student/studentRegistrationService";
+import { StudentRegistrationService } from "@/lib/services/s/studentRegistrationService";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -230,7 +230,7 @@ export const authOptions: NextAuthOptions = {
     },
   },
   pages: {
-    signIn: "/auth/signin",
+    signIn: "/signin",
     verifyRequest: "/auth/verify-email",
     // REMOVE error page completely to prevent any redirects
     // error: "/auth/error",

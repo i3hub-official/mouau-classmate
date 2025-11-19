@@ -269,8 +269,8 @@ model Student {
   nin           String? @unique(map: "students_nin_key")
 
   // Personal information
+  surname     String
   firstName   String
-  lastName    String
   otherName   String?
   gender      Gender?
   phone       String  @unique(map: "students_phone_key")
@@ -279,7 +279,7 @@ model Student {
 
   // Academic information
   department    String
-  course        String
+  course        String         @default("")
   college       String
   state         String
   lga           String
@@ -325,8 +325,8 @@ model Student {
 model Teacher {
   id             String   @id @default(uuid())
   employeeId     String   @unique(map: "teachers_employee_id_key")
+  surname        String
   firstName      String
-  lastName       String
   otherName      String?
   gender         Gender?
   phone          String   @unique(map: "teachers_phone_key")
@@ -373,8 +373,8 @@ model Teacher {
 model Admin {
   id             String   @id @default(uuid())
   employeeId     String   @unique(map: "admins_employee_id_key")
+  surname        String
   firstName      String
-  lastName       String
   otherName      String?
   gender         Gender?
   phone          String   @unique(map: "admins_phone_key")

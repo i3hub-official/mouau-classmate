@@ -1,9 +1,9 @@
-// app/api/auth/forgot-password/route.ts
+// app/api/forgot-password/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-import { StudentPasswordService } from "@/lib/services/student/passwordService";
-import { TeacherPasswordService } from "@/lib/services/teacher/passwordService";
-import { AdminPasswordService } from "@/lib/services/admin/passwordService";
+import { StudentPasswordService } from "@/lib/services/s/passwordService";
+import { TeacherPasswordService } from "@/lib/services/t/passwordService";
+import { AdminPasswordService } from "@/lib/services/a/passwordService";
 import { AuditAction } from "@prisma/client";
 
 export async function POST(request: NextRequest) {

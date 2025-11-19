@@ -11,7 +11,7 @@ export class ActivityLogger {
   private static readonly SENSITIVE_PATHS = [
     "/auth/login",
     "/auth/signup",
-    "/auth/reset-password",
+    "/reset-password",
   ];
 
   static async log(

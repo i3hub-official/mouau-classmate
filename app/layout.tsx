@@ -2,8 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Poppins } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/app/components/theme-provider";
-import { InternetConnectionProvider } from "@/app/providers/internet-connection-provider";
-import { OfflineBanner } from "@/app/components/offline-banner";
 import { ServiceWorkerRegister } from "@/app/components/service-worker-register";
 
 // 🆒 Academic + modern font
@@ -152,11 +150,8 @@ export default function RootLayout({
           storageKey="mouau-cm-theme"
           disableTransitionOnChange={false}
         >
-          <InternetConnectionProvider>
-            <ServiceWorkerRegister />
-            <OfflineBanner />
-            <main>{children}</main>
-          </InternetConnectionProvider>
+          <ServiceWorkerRegister />
+          <main>{children}</main>
         </ThemeProvider>
       </body>
     </html>

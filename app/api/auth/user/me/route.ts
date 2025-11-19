@@ -1,9 +1,9 @@
 // app/api/auth/user/me/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-import { StudentService } from "@/lib/services/student/studentService";
-import { TeacherService } from "@/lib/services/teacher/teacherService";
-import { AdminService } from "@/lib/services/admin/adminService";
+import { StudentService } from "@/lib/services/s/studentService";
+import { TeacherService } from "@/lib/services/t/teacherService";
+import { AdminService } from "@/lib/services/a/adminService";
 import { AuditAction } from "@prisma/client";
 
 export async function GET(request: NextRequest) {

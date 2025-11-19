@@ -102,7 +102,7 @@ export const useRoleProtection = (config: RoleProtectionConfig) => {
         if (isSessionStorageAvailable()) {
           sessionStorage.removeItem("selectedRole");
         }
-        router.push(config.redirectTo || "/select-role");
+        router.push(config.redirectTo || "/sr");
       } finally {
         if (isMounted) {
           setIsLoading(false);
