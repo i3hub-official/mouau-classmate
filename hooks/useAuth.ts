@@ -13,7 +13,7 @@ interface SignInCredentials {
   // Common identifier fields
   email?: string;
   matricNumber?: string; // For students
-  employeeId?: string; // For teachers
+  teacherId?: string; // For teachers
   // Authentication
   password: string;
 }
@@ -231,7 +231,7 @@ export function useAuth() {
       case "STUDENT":
         return (user as StudentUser).matricNumber;
       case "TEACHER":
-        return (user as TeacherUser).employeeId;
+        return (user as TeacherUser).teacherId;
       case "ADMIN":
         return (user as AdminUser).email;
       default:

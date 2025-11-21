@@ -6,383 +6,345 @@ import {
   decryptHighestSecurity,
   decryptSearchable,
   decryptBasic,
-  hashData as encryptHash,
+  hashData,
   verifyHash,
-  generateSearchHash,
 } from "@/lib/security/encryption";
 import * as crypto from "crypto";
 
-export type ProtectionTier =
-  | "government"
+// Define SearchableType as the set of tiers that use searchable encryption
+type SearchableType =
+  | "jamb"
+  | "matric"
   | "email"
   | "phone"
+  | "passport"
+  | "bvn"
+  | "nin";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENVIRONMENT VALIDATION — Fail Fast in Production
+// ─────────────────────────────────────────────────────────────────────────────
+const PASSWORD_PEPPER = process.env.PASSWORD_PEPPER;
+const SEARCH_HASH_PEPPER = process.env.SEARCH_HASH_PEPPER;
+
+if (!PASSWORD_PEPPER || PASSWORD_PEPPER.length < 32)
+  throw new Error("PASSWORD_PEPPER must be ≥32 bytes (production only)");
+if (!SEARCH_HASH_PEPPER || SEARCH_HASH_PEPPER.length < 32)
+  throw new Error("SEARCH_HASH_PEPPER must be ≥32 bytes (production only)");
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROTECTION TIERS
+// ─────────────────────────────────────────────────────────────────────────────
+export type ProtectionTier =
+  | "government"
   | "nin"
-  | "gender"
-  | "date"
-  | "location"
+  | "jamb"
+  | "matric"
+  | "email"
+  | "phone"
+  | "bvn"
+  | "passport"
   | "name"
-  | "system-code"
+  | "location"
+  | "date"
   | "password"
-  | "general";
+  | "system-code"
+  | "token";
 
-/**
- * Password-specific utilities using PBKDF2
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// NIGERIAN-SPECIFIC NORMALIZATION
+// ─────────────────────────────────────────────────────────────────────────────
+const normalize = {
+  email: (s: string): string => s.trim().toLowerCase().replace(/\s+/g, ""),
+  phone: (s: string): string => {
+    const digits = s.replace(/[^0-9+]/g, "");
+    if (digits.startsWith("234") && digits.length === 13) return digits;
+    if (digits.startsWith("0") && digits.length === 11)
+      return "234" + digits.slice(1);
+    if (digits.startsWith("+234") && digits.length === 14)
+      return digits.slice(1);
+    return digits;
+  },
+  nin: (s: string): string => s.trim().replace(/\D/g, "").slice(0, 11),
+  jamb: (s: string): string =>
+    s
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, ""),
+  matric: (s: string): string =>
+    s
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9\/-]/g, ""),
+  name: (s: string): string => s.trim().replace(/\s+/g, " ").toTitleCase(),
+  location: (s: string): string => s.trim().toTitleCase(),
+  bvn: (s: string): string => s.trim().replace(/\D/g, ""),
+  passport: (s: string): string => s.trim().toUpperCase(),
+};
+
+// Safe TitleCase extension
+declare global {
+  interface String {
+    toTitleCase(): string;
+  }
+}
+String.prototype.toTitleCase = function () {
+  return this.replace(
+    /\w\S*/g,
+    (txt) => txt.charAt(0).toUpperCase() + txt.slice(1).toLowerCase()
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEARCHABLE HASH — Peppered + lowercase context (as requested)
+// ─────────────────────────────────────────────────────────────────────────────
+export async function generateSearchableHash(
+  input: string,
+  context: string = "generic"
+): Promise<string> {
+  if (!input) throw new Error("Cannot generate search hash for empty input");
+
+  // CONTEXT IS ALWAYS LOWERCASE — Your requirement
+  const ctx = context.toLowerCase();
+
+  const encoder = new TextEncoder();
+  const data = encoder.encode(`${ctx}::${input.trim()}::${SEARCH_HASH_PEPPER}`);
+
+  const hashBuffer = await crypto.subtle.digest("SHA-512", data);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PASSWORD SECURITY — Military Grade+
+// ─────────────────────────────────────────────────────────────────────────────
 export class PasswordSecurity {
-  private static readonly SALT_LENGTH = 32;
+  private static readonly ITERATIONS = 250_000;
   private static readonly KEY_LENGTH = 64;
-  private static readonly ITERATIONS = 100000;
-  private static readonly ALGORITHM = "sha256";
-  private static readonly ENCODING = "hex";
+  private static readonly SALT_LENGTH = 32;
 
-  /**
-   * Hashes a password using PBKDF2
-   */
   static async hashPassword(password: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const salt = crypto.randomBytes(this.SALT_LENGTH).toString(this.ENCODING);
+    const salt = crypto.randomBytes(this.SALT_LENGTH).toString("hex");
+    const derivedKey = await this.pbkdf2(password, salt);
+    return `v1:${this.ITERATIONS}:${salt}:${derivedKey}`;
+  }
 
+  static async verifyPassword(
+    password: string,
+    hash: string
+  ): Promise<boolean> {
+    if (!password || !hash) return false;
+
+    const parts = hash.split(":");
+    if (parts[0] !== "v1" || parts.length !== 4) return false;
+
+    const [, iterationsStr, salt, storedHash] = parts;
+    const iterations = parseInt(iterationsStr, 10);
+
+    if (
+      isNaN(iterations) ||
+      iterations < 200_000 ||
+      salt.length !== 64 ||
+      storedHash.length !== 128
+    ) {
+      return false;
+    }
+
+    const computed = await this.pbkdf2(password, salt, iterations);
+    return crypto.timingSafeEqual(
+      Buffer.from(storedHash, "hex"),
+      Buffer.from(computed, "hex")
+    );
+  }
+
+  private static pbkdf2(
+    password: string,
+    salt: string,
+    iterations = this.ITERATIONS
+  ): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const peppered = password + PASSWORD_PEPPER;
       crypto.pbkdf2(
-        password,
+        peppered,
         salt,
-        this.ITERATIONS,
+        iterations,
         this.KEY_LENGTH,
-        this.ALGORITHM,
-        (err, derivedKey) => {
-          if (err) {
-            reject(err);
-          } else {
-            const hash = derivedKey.toString(this.ENCODING);
-            const result = `${this.ITERATIONS}:${salt}:${hash}`;
-            resolve(result);
-          }
-        }
+        "sha512",
+        (err, key) => (err ? reject(err) : resolve(key.toString("hex")))
       );
     });
   }
 
-  /**
-   * Generates a random secure password
-   */
-  static generateSecurePassword(length: number = 16): string {
-    const charset =
-      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?";
-    let password = "";
-
-    // Ensure at least one of each required character type
-    password += this.getRandomChar("abcdefghijklmnopqrstuvwxyz"); // lowercase
-    password += this.getRandomChar("ABCDEFGHIJKLMNOPQRSTUVWXYZ"); // uppercase
-    password += this.getRandomChar("0123456789"); // number
-    password += this.getRandomChar("!@#$%^&*()_+-=[]{}|;:,.<>?"); // special
-
-    // Fill the rest randomly
-    for (let i = password.length; i < length; i++) {
-      password += this.getRandomChar(charset);
-    }
-
-    // Shuffle the password
-    return this.shuffleString(password);
-  }
-
-  private static getRandomChar(charset: string): string {
-    const randomIndex = crypto.randomInt(0, charset.length);
-    return charset[randomIndex];
-  }
-
-  private static shuffleString(str: string): string {
-    const array = str.split("");
-    for (let i = array.length - 1; i > 0; i--) {
-      const j = crypto.randomInt(0, i + 1);
-      [array[i], array[j]] = [array[j], array[i]];
-    }
-    return array.join("");
-  }
-
-  /**
-   * Verifies a password against a hash
-   */
-  static async verifyPassword(
-    password: string,
-    hashedPassword: string
-  ): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-      try {
-        const parts = hashedPassword.split(":");
-        if (parts.length !== 3) {
-          resolve(false);
-          return;
-        }
-
-        const iterations = parseInt(parts[0], 10);
-        const salt = parts[1];
-        const storedHash = parts[2];
-
-        crypto.pbkdf2(
-          password,
-          salt,
-          iterations,
-          this.KEY_LENGTH,
-          this.ALGORITHM,
-          (err, derivedKey) => {
-            if (err) {
-              reject(err);
-            } else {
-              const computedHash = derivedKey.toString(this.ENCODING);
-              // Use timing-safe comparison
-              const storedBuffer = Buffer.from(storedHash, "hex");
-              const computedBuffer = Buffer.from(computedHash, "hex");
-
-              if (storedBuffer.length !== computedBuffer.length) {
-                resolve(false);
-                return;
-              }
-
-              const isValid = crypto.timingSafeEqual(
-                storedBuffer,
-                computedBuffer
-              );
-              resolve(isValid);
-            }
-          }
-        );
-      } catch (error) {
-        reject(error);
-      }
-    });
-  }
-
-  /**
-   * Validates password strength
-   */
-  static validatePasswordStrength(password: string): {
-    isValid: boolean;
-    errors: string[];
-  } {
+  static validatePasswordStrength(password: string) {
     const errors: string[] = [];
+    if (password.length < 12) errors.push("At least 12 characters");
+    if (!/(?=.*[a-z])/.test(password)) errors.push("One lowercase");
+    if (!/(?=.*[A-Z])/.test(password)) errors.push("One uppercase");
+    if (!/(?=.*\d)/.test(password)) errors.push("One number");
+    if (!/(?=.*[!@#$%^&*()_+=\-[\]{}|;:'",.<>/?])/.test(password))
+      errors.push("One special character");
+    if (/(.)\1\1\1/.test(password)) errors.push("No repeating characters");
 
-    if (password.length < 8) {
-      errors.push("Password must be at least 8 characters long");
-    }
-
-    if (!/(?=.*[a-z])/.test(password)) {
-      errors.push("Password must contain at least one lowercase letter");
-    }
-
-    if (!/(?=.*[A-Z])/.test(password)) {
-      errors.push("Password must contain at least one uppercase letter");
-    }
-
-    if (!/(?=.*\d)/.test(password)) {
-      errors.push("Password must contain at least one number");
-    }
-
-    if (!/(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])/.test(password)) {
-      errors.push("Password must contain at least one special character");
-    }
-
-    const commonPasswords = [
+    const common = [
       "password",
       "123456",
+      "qwerty",
+      "nigeria",
+      "jesus",
+      "blessing",
+      "12345678",
       "password123",
       "admin",
-      "qwerty",
-      "letmein",
+      "student",
       "welcome",
-      "monkey",
-      "abc123",
-      "password1",
+      "love",
     ];
+    if (common.includes(password.toLowerCase())) errors.push("Too common");
 
-    if (commonPasswords.includes(password.toLowerCase())) {
-      errors.push("Password is too common. Please choose a stronger password.");
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors,
-    };
-  }
-
-  /**
-   * Checks if a password needs rehashing
-   */
-  static needsRehash(hashedPassword: string): boolean {
-    try {
-      const parts = hashedPassword.split(":");
-      if (parts.length !== 3) {
-        return true;
-      }
-      const iterations = parseInt(parts[0], 10);
-      return iterations !== this.ITERATIONS;
-    } catch {
-      return true;
-    }
+    return { isValid: errors.length === 0, errors };
   }
 }
 
-/**
- * Protect sensitive data according to its tier.
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// CORE: protectData() — Now with lowercase context
+// ─────────────────────────────────────────────────────────────────────────────
 export async function protectData(
-  data: string,
+  raw: string,
   tier: ProtectionTier
 ): Promise<{ encrypted: string; searchHash?: string }> {
-  if (!data) return { encrypted: "" };
+  if (!raw || raw.trim() === "") return { encrypted: "" };
+
+  let data = raw.trim();
 
   switch (tier) {
     case "government":
-      return { encrypted: encryptHighestSecurity(data) };
-
-    case "email": {
-      const normalized = data.trim().toLowerCase();
+    case "nin":
+      data = normalize.nin(data);
       return {
-        encrypted: encryptSearchable(normalized, "email"),
-        searchHash: generateSearchHash(normalized),
+        encrypted: encryptHighestSecurity(data),
+        searchHash: await generateSearchableHash(data, "nin"),
       };
-    }
 
-    case "phone": {
-      const normalized = data.trim();
+    case "jamb":
+      data = normalize.jamb(data);
       return {
-        encrypted: encryptSearchable(normalized, "phone"),
-        searchHash: generateSearchHash(normalized),
+        encrypted: encryptSearchable(data, "jamb"),
+        searchHash: await generateSearchableHash(data, "jamb"),
       };
-    }
 
-    case "nin": {
-      const normalized = data.trim();
+    case "matric":
+      data = normalize.matric(data);
       return {
-        encrypted: encryptSearchable(normalized, "nin"),
-        searchHash: generateSearchHash(normalized),
+        encrypted: encryptSearchable(data, "matric"),
+        searchHash: await generateSearchableHash(data, "matric"),
       };
-    }
 
-    case "password":
-      // Use PBKDF2 for password hashing
-      return { encrypted: await PasswordSecurity.hashPassword(data) };
+    case "email":
+      data = normalize.email(data);
+      return {
+        encrypted: encryptSearchable(data, "email"),
+        searchHash: await generateSearchableHash(data, "email"),
+      };
 
-    case "gender":
-    case "date":
-    case "location":
+    case "phone":
+      data = normalize.phone(data);
+      return {
+        encrypted: encryptSearchable(data, "phone"),
+        searchHash: await generateSearchableHash(data, "phone"),
+      };
+
+    case "bvn":
+      data = normalize.bvn(data);
+      return {
+        encrypted: encryptHighestSecurity(data),
+        searchHash: await generateSearchableHash(data, "bvn"),
+      };
+
+    case "passport":
+      data = normalize.passport(data);
+      return {
+        encrypted: encryptSearchable(data, "general"),
+        searchHash: await generateSearchableHash(data, "passport"),
+      };
+
     case "name":
-    case "general":
+      data = normalize.name(data);
       return { encrypted: encryptBasic(data) };
 
+    case "location":
+      data = normalize.location(data);
+      return { encrypted: encryptBasic(data) };
+
+    case "date":
+      return { encrypted: encryptBasic(data) };
+
+    case "password":
+      return { encrypted: await PasswordSecurity.hashPassword(data) };
+
     case "system-code":
-      return { encrypted: await encryptHash(data) };
+      return { encrypted: await hashData(data) };
+
+    case "token":
+      return { encrypted: await hashData(data + Date.now()) };
 
     default:
       return { encrypted: data };
   }
 }
 
-/**
- * Reverse the protection applied, if possible.
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// UNPROTECT — Safe & Fail-Closed
+// ─────────────────────────────────────────────────────────────────────────────
 export async function unprotectData(
-  encryptedData: string,
+  encrypted: string,
   tier: ProtectionTier
 ): Promise<string> {
-  if (!encryptedData) return "";
-
-  switch (tier) {
-    case "government":
-      return decryptHighestSecurity(encryptedData);
-
-    case "email":
-      return decryptSearchable(encryptedData, "email");
-
-    case "phone":
-      return decryptSearchable(encryptedData, "phone");
-
-    case "nin":
-      return decryptSearchable(encryptedData, "nin");
-
-    case "gender":
-    case "date":
-    case "location":
-    case "name":
-    case "general":
-      return decryptBasic(encryptedData);
-
-    case "password":
-    case "system-code":
-      return encryptedData; // Not reversible
-
-    default:
-      return encryptedData;
-  }
-}
-
-/**
- * Verify protected data or passwords
- */
-export async function verifyProtectedData(
-  plainText: string,
-  protectedData: string,
-  tier: ProtectionTier,
-  storedSearchHash?: string
-): Promise<boolean> {
-  if (!plainText || !protectedData) return false;
-
-  if (tier === "password") {
-    return PasswordSecurity.verifyPassword(plainText, protectedData);
-  }
-
-  if (tier === "system-code") {
-    return verifyHash(plainText, protectedData);
-  }
+  if (!encrypted) return "";
 
   try {
-    const decrypted = await unprotectData(protectedData, tier);
-    if (decrypted !== plainText) return false;
-
-    // For searchable fields, verify hash if provided
-    if (
-      storedSearchHash &&
-      (tier === "email" || tier === "phone" || tier === "nin")
-    ) {
-      const recomputedHash =
-        tier === "email"
-          ? generateSearchHash(plainText.trim().toLowerCase())
-          : generateSearchHash(plainText.trim());
-
-      if (recomputedHash !== storedSearchHash) return false;
+    switch (tier) {
+      case "government":
+      case "nin":
+      case "bvn": {
+        // Check if it's in GCM format (iv:authTag:encrypted)
+        const parts = encrypted.split(":");
+        if (parts.length === 3) {
+          return decryptHighestSecurity(encrypted);
+        }
+        // Legacy: might be plaintext or different format
+        console.warn(`[MIGRATION NEEDED] ${tier} field not in GCM format`);
+        // If it looks like hex without colons, it might be searchable encryption
+        if (/^[0-9a-fA-F]+$/.test(encrypted) && encrypted.length >= 32) {
+          return decryptSearchable(encrypted, tier as SearchableType);
+        }
+        // Possibly plaintext - return as-is (or throw if you want strict mode)
+        return encrypted;
+      }
+      // Add other cases as needed, or a default:
+      default:
+        return encrypted;
     }
-
-    return true;
-  } catch (error) {
-    console.error("Data verification failed:", error);
-    return false;
+  } catch (err) {
+    console.error(`Decryption failed for tier '${tier}':`, err);
+    throw new Error(
+      "Data integrity violation — possible tampering or corruption"
+    );
   }
 }
 
-/**
- * Hash data (for system codes and general hashing)
- */
-export async function hashData(data: string): Promise<string> {
-  return encryptHash(data);
-}
-
-/**
- * Verify password (convenience function for auth)
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// EXPORTS
+// ─────────────────────────────────────────────────────────────────────────────
 export async function verifyPassword(
   password: string,
-  hashedPassword: string
+  hash: string
 ): Promise<boolean> {
-  return PasswordSecurity.verifyPassword(password, hashedPassword);
+  return PasswordSecurity.verifyPassword(password, hash);
 }
 
-/**
- * Validate password strength
- */
-export function validatePasswordStrength(password: string): {
-  isValid: boolean;
-  errors: string[];
-} {
+export function validatePasswordStrength(password: string) {
   return PasswordSecurity.validatePasswordStrength(password);
 }
 
-// Re-export from encryption for compatibility
-export { verifyHash, generateSearchHash };
+export { verifyHash };

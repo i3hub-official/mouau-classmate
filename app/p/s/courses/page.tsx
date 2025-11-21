@@ -45,7 +45,7 @@ interface CourseWithDetails {
     firstName?: string | null;
     surname?: string | null;
     otherName?: string | null;
-    photo?: string | null;
+    passportUrl?: string | null;
   } | null;
   enrollment: {
     id: string;
@@ -104,7 +104,7 @@ export default async function StudentCoursesPage({
                   firstName: true,
                   surname: true,
                   otherName: true,
-                  photo: true,
+                  passportUrl: true,
                 },
               },
               _count: {
@@ -451,9 +451,9 @@ function CourseCard({ course }: { course: CourseWithDetails }) {
         {/* Instructor Info */}
         {course.instructor && (
           <div className="flex items-center space-x-3 p-3 rounded-lg bg-muted/50 mb-4">
-            {course.instructor.photo ? (
+            {course.instructor.passportUrl ? (
               <Image
-                src={course.instructor.photo}
+                src={course.instructor.passportUrl}
                 alt={course.instructor.firstName || "Instructor"}
                 width={40}
                 height={40}

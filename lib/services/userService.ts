@@ -8,11 +8,71 @@ import {
 } from "@/lib/security/dataProtection";
 import { AuditAction } from "@prisma/client";
 
+// Define response types
+export interface UserProfile {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string;
+  isActive: boolean;
+  emailVerified: Date | null;
+  lastLoginAt: Date | null;
+  createdAt: Date;
+  student?: {
+    id: string;
+    matricNumber: string;
+    firstName: string;
+    surname: string;
+    department: string;
+  };
+  teacher?: {
+    id: string;
+    teacherId: string;
+    firstName: string;
+    surname: string;
+    department: string;
+  };
+}
+
+export interface ProfileUpdateResponse {
+  success: boolean;
+  message: string;
+  requiresVerification?: boolean;
+}
+
+export interface PasswordChangeResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface AccountDeletionResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface UserPreferences {
+  id: string;
+  userId: string;
+  emailNotifications: boolean;
+  pushNotifications: boolean;
+  assignmentReminders: boolean;
+  gradeAlerts: boolean;
+  lectureReminders: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface PreferencesResponse {
+  success: boolean;
+  message: string;
+  preferences?: UserPreferences;
+}
+
 export class UserService {
   /**
    * Get user by ID
    */
-  static async getUserById(id: string) {
+  static async getUserById(id: string): Promise<UserProfile | null> {
     try {
       const user = await prisma.user.findUnique({
         where: { id },
@@ -37,7 +97,7 @@ export class UserService {
           teacher: {
             select: {
               id: true,
-              employeeId: true,
+              teacherId: true,
               firstName: true,
               surname: true,
               department: true,
@@ -49,24 +109,38 @@ export class UserService {
       if (!user) return null;
 
       // Decrypt sensitive data
-      const decryptedUser = {
+      const decryptedUser: UserProfile = {
         ...user,
         email: await unprotectData(user.email, "email"),
+        student: undefined,
+        teacher: undefined,
       };
 
+      // Decrypt student data if exists
       if (user.student) {
+        const [firstName, surname] = await Promise.all([
+          unprotectData(user.student.firstName, "name"),
+          unprotectData(user.student.surname, "name"),
+        ]);
+
         decryptedUser.student = {
           ...user.student,
-          firstName: await unprotectData(user.student.firstName, "name"),
-          surname: await unprotectData(user.student.surname, "name"),
+          firstName,
+          surname,
         };
       }
 
+      // Decrypt teacher data if exists
       if (user.teacher) {
+        const [firstName, surname] = await Promise.all([
+          unprotectData(user.teacher.firstName, "name"),
+          unprotectData(user.teacher.surname, "name"),
+        ]);
+
         decryptedUser.teacher = {
           ...user.teacher,
-          firstName: await unprotectData(user.teacher.firstName, "name"),
-          surname: await unprotectData(user.teacher.surname, "name"),
+          firstName,
+          surname,
         };
       }
 
@@ -88,7 +162,7 @@ export class UserService {
       currentPassword?: string;
       newPassword?: string;
     }
-  ) {
+  ): Promise<ProfileUpdateResponse> {
     try {
       const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -99,18 +173,26 @@ export class UserService {
       }
 
       const updateData: any = {};
+      const updatedFields: string[] = [];
+      let requiresVerification = false;
 
       // Update name
-      if (profileData.name) {
+      if (profileData.name !== undefined) {
         updateData.name = profileData.name;
+        updatedFields.push("name");
       }
 
       // Update email
       if (profileData.email) {
-        // Check if email is already in use
+        // Protect the new email to get search hash for uniqueness check
+        const protectedEmail = await protectData(profileData.email, "email");
+        
+        // Check if email is already in use using search hash
         const existingUser = await prisma.user.findFirst({
           where: {
-            email: (await protectData(profileData.email, "email")).encrypted,
+            student: {
+              emailSearchHash: protectedEmail.searchHash
+            },
             id: { not: userId },
           },
         });
@@ -119,10 +201,29 @@ export class UserService {
           throw new Error("Email is already in use");
         }
 
-        const protectedEmail = await protectData(profileData.email, "email");
         updateData.email = protectedEmail.encrypted;
         updateData.emailVerified = null; // Require re-verification
         updateData.emailVerificationRequired = true;
+        updatedFields.push("email");
+        requiresVerification = true;
+
+        // Also update student email if user is a student
+        if (user.role === 'STUDENT') {
+          const student = await prisma.student.findUnique({
+            where: { userId },
+          });
+
+          if (student) {
+            await prisma.student.update({
+              where: { userId },
+              data: {
+                email: protectedEmail.encrypted,
+                emailSearchHash: protectedEmail.searchHash,
+                updatedAt: new Date(),
+              },
+            });
+          }
+        }
       }
 
       // Update password
@@ -151,10 +252,17 @@ export class UserService {
         );
         if (!passwordValidation.isValid) {
           throw new Error(
-            `Password validation failed: ${passwordValidation.errors.join(
-              ", "
-            )}`
+            `Password validation failed: ${passwordValidation.errors.join(", ")}`
           );
+        }
+
+        // Check if new password is the same as current
+        const isSamePassword = await verifyPassword(
+          profileData.newPassword,
+          user.passwordHash
+        );
+        if (isSamePassword) {
+          throw new Error("New password cannot be the same as current password");
         }
 
         const hashedPassword = await protectData(
@@ -162,33 +270,40 @@ export class UserService {
           "password"
         );
         updateData.passwordHash = hashedPassword.encrypted;
+        updatedFields.push("password");
       }
 
-      // Update user
-      const updatedUser = await prisma.user.update({
-        where: { id: userId },
-        data: {
-          ...updateData,
-          updatedAt: new Date(),
-        },
-      });
-
-      // Log the update
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action: "PROFILE_UPDATED",
-          resourceType: "USER",
-          resourceId: userId,
-          details: {
-            updatedFields: Object.keys(profileData),
+      // Only update if there are changes
+      if (Object.keys(updateData).length > 0) {
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            ...updateData,
+            updatedAt: new Date(),
           },
-        },
-      });
+        });
+
+        // Log the update
+        await prisma.auditLog.create({
+          data: {
+            userId,
+            action: AuditAction.PROFILE_UPDATED,
+            resourceType: "USER",
+            resourceId: userId,
+            details: {
+              updatedFields,
+              requiresEmailVerification: requiresVerification,
+            },
+          },
+        });
+      }
 
       return {
         success: true,
-        message: "Profile updated successfully",
+        message: requiresVerification 
+          ? "Profile updated successfully. Please verify your new email address."
+          : "Profile updated successfully",
+        requiresVerification,
       };
     } catch (error) {
       console.error("Error updating profile:", error);
@@ -203,7 +318,7 @@ export class UserService {
     userId: string,
     currentPassword: string,
     newPassword: string
-  ) {
+  ): Promise<PasswordChangeResponse> {
     try {
       const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -236,9 +351,7 @@ export class UserService {
         user.passwordHash
       );
       if (isSamePassword) {
-        throw new Error(
-          "New password cannot be the same as the current password"
-        );
+        throw new Error("New password cannot be the same as the current password");
       }
 
       // Hash new password
@@ -249,6 +362,7 @@ export class UserService {
         where: { id: userId },
         data: {
           passwordHash: hashedPassword.encrypted,
+          updatedAt: new Date(),
         },
       });
 
@@ -256,9 +370,12 @@ export class UserService {
       await prisma.auditLog.create({
         data: {
           userId,
-          action: "PASSWORD_CHANGED",
+          action: AuditAction.PASSWORD_CHANGED,
           resourceType: "USER",
           resourceId: userId,
+          details: {
+            timestamp: new Date().toISOString(),
+          },
         },
       });
 
@@ -275,7 +392,10 @@ export class UserService {
   /**
    * Delete user account
    */
-  static async deleteAccount(userId: string, password: string) {
+  static async deleteAccount(
+    userId: string, 
+    password: string
+  ): Promise<AccountDeletionResponse> {
     try {
       const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -300,9 +420,12 @@ export class UserService {
       await prisma.auditLog.create({
         data: {
           userId,
-          action: "ACCOUNT_DELETION",
+          action: AuditAction.ACCOUNT_DELETED,
           resourceType: "USER",
           resourceId: userId,
+          details: {
+            timestamp: new Date().toISOString(),
+          },
         },
       });
 
@@ -319,7 +442,7 @@ export class UserService {
   /**
    * Get user preferences
    */
-  static async getUserPreferences(userId: string) {
+  static async getUserPreferences(userId: string): Promise<UserPreferences> {
     try {
       let preferences = await prisma.userPreferences.findUnique({
         where: { userId },
@@ -358,9 +481,9 @@ export class UserService {
       gradeAlerts?: boolean;
       lectureReminders?: boolean;
     }
-  ) {
+  ): Promise<PreferencesResponse> {
     try {
-      await prisma.userPreferences.upsert({
+      const updatedPreferences = await prisma.userPreferences.upsert({
         where: { userId },
         update: {
           ...preferences,
@@ -380,11 +503,12 @@ export class UserService {
       await prisma.auditLog.create({
         data: {
           userId,
-          action: "NOTIFICATION_SETTINGS_UPDATED",
+          action: AuditAction.NOTIFICATION_SETTINGS_UPDATED,
           resourceType: "USER",
           resourceId: userId,
           details: {
             updatedFields: Object.keys(preferences),
+            timestamp: new Date().toISOString(),
           },
         },
       });
@@ -392,9 +516,101 @@ export class UserService {
       return {
         success: true,
         message: "Preferences updated successfully",
+        preferences: updatedPreferences,
       };
     } catch (error) {
       console.error("Error updating user preferences:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Verify current password for sensitive operations
+   */
+  static async verifyCurrentPassword(
+    userId: string,
+    password: string
+  ): Promise<{ isValid: boolean; message?: string }> {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        return { isValid: false, message: "User not found" };
+      }
+
+      if (!user.passwordHash) {
+        return { isValid: false, message: "No password set for this account" };
+      }
+
+      const isValid = await verifyPassword(password, user.passwordHash);
+      return { 
+        isValid, 
+        message: isValid ? undefined : "Invalid password" 
+      };
+    } catch (error) {
+      console.error("Error verifying current password:", error);
+      return { isValid: false, message: "Error verifying password" };
+    }
+  }
+
+  /**
+   * Get user activity logs
+   */
+  static async getUserActivityLogs(
+    userId: string,
+    page: number = 1,
+    limit: number = 20
+  ): Promise<{
+    logs: any[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+      hasNext: boolean;
+      hasPrev: boolean;
+    };
+  }> {
+    try {
+      const skip = (page - 1) * limit;
+
+      const [logs, total] = await Promise.all([
+        prisma.auditLog.findMany({
+          where: { userId },
+          skip,
+          take: limit,
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            action: true,
+            resourceType: true,
+            resourceId: true,
+            details: true,
+            ipAddress: true,
+            userAgent: true,
+            createdAt: true,
+          },
+        }),
+        prisma.auditLog.count({ where: { userId } }),
+      ]);
+
+      const totalPages = Math.ceil(total / limit);
+
+      return {
+        logs,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages,
+          hasNext: page < totalPages,
+          hasPrev: page > 1,
+        },
+      };
+    } catch (error) {
+      console.error("Error getting user activity logs:", error);
       throw error;
     }
   }

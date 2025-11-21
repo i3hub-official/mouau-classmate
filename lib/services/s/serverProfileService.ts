@@ -1,13 +1,35 @@
 // lib/services/serverProfileService.ts
-
 import { prisma } from "@/lib/server/prisma";
 import { StudentProfile } from "@/lib/types/s/index";
 import { protectData, unprotectData } from "@/lib/security/dataProtection";
-import { AuditAction } from "@prisma/client";
+import { AuditAction, ResourceType } from "@prisma/client";
+
+export interface ProfileUpdateResponse {
+  success: boolean;
+  profile: StudentProfile;
+  message: string;
+}
+
+export interface AccountActionResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface StudentsListResponse {
+  students: StudentProfile[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
+}
 
 export class ServerProfileService {
   /**
-   * Get student profile by ID (server-side)
+   * Get decrypted student profile by ID
    */
   static async getStudentProfileById(
     studentId: string
@@ -25,13 +47,19 @@ export class ServerProfileService {
           phone: true,
           passportUrl: true,
           department: true,
-          course: true,
           college: true,
-          dateEnrolled: true,
+          course: true, // Added missing course field
+          admissionYear: true,
+          gender: true,
+          dateOfBirth: true,
+          state: true,
+          lga: true,
           isActive: true,
+          dateEnrolled: true,
+          createdAt: true,
           user: {
             select: {
-              role: true,
+              createdAt: true,
             },
           },
         },
@@ -39,377 +67,506 @@ export class ServerProfileService {
 
       if (!student) return null;
 
-      // Decrypt sensitive data
-      const decryptedProfile = {
-        ...student,
-        email: await unprotectData(student.email, "email"),
-        phone: await unprotectData(student.phone, "phone"),
-        firstName: await unprotectData(student.firstName, "name"),
-        surname: await unprotectData(student.surname, "name"),
-        otherName: student.otherName
-          ? await unprotectData(student.otherName, "name")
-          : null,
-        role: student.user.role,
+      // Decrypt all sensitive data in parallel
+      const [firstName, surname, otherName, email, phone, state, lga] =
+        await Promise.all([
+          unprotectData(student.firstName, "name"),
+          unprotectData(student.surname, "name"),
+          student.otherName
+            ? unprotectData(student.otherName, "name")
+            : Promise.resolve(null),
+          unprotectData(student.email, "email"),
+          unprotectData(student.phone, "phone"),
+          student.state
+            ? unprotectData(student.state, "location")
+            : Promise.resolve(""),
+          student.lga
+            ? unprotectData(student.lga, "location")
+            : Promise.resolve(""),
+        ]);
+
+      const fullName = [surname, firstName, otherName]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+
+      return {
+        id: student.id,
+        matricNumber: student.matricNumber,
+        firstName,
+        surname,
+        otherName,
+        fullName,
+        email,
+        phone,
+        passportUrl: student.passportUrl,
+        course: student.course || "", // Now properly available
+        department: student.department,
+        college: student.college,
+        admissionYear: student.admissionYear,
+        gender: student.gender,
+        dateOfBirth: student.dateOfBirth,
+        state: state || "",
+        lga: lga || "",
+        isActive: student.isActive,
+        createdAt:
+          student.user?.createdAt || student.dateEnrolled || student.createdAt,
+        role: "STUDENT" as const,
       };
-      return decryptedProfile as StudentProfile;
     } catch (error) {
       console.error("Error getting student profile by ID:", error);
-      throw error;
+      throw new Error("Failed to retrieve student profile");
     }
   }
 
   /**
-   * Get student profile by matric number (server-side)
+   * Get profile by matric number (case-insensitive)
    */
   static async getStudentProfileByMatricNumber(
     matricNumber: string
   ): Promise<StudentProfile | null> {
     try {
       const student = await prisma.student.findUnique({
-        where: { matricNumber },
+        where: { matricNumber: matricNumber.toUpperCase() },
         select: {
           id: true,
-          matricNumber: true,
-          firstName: true,
-          surname: true,
-          otherName: true,
-          email: true,
-          phone: true,
-          passportUrl: true,
-          department: true,
-          course: true,
-          college: true,
-          dateEnrolled: true,
-          isActive: true,
-          user: {
-            select: {
-              role: true,
-            },
-          },
         },
       });
 
       if (!student) return null;
 
-      // Decrypt sensitive data
-      const decryptedProfile = {
-        ...student,
-        email: await unprotectData(student.email, "email"),
-        phone: await unprotectData(student.phone, "phone"),
-        firstName: await unprotectData(student.firstName, "name"),
-        surname: await unprotectData(student.surname, "name"),
-        otherName: student.otherName
-          ? await unprotectData(student.otherName, "name")
-          : null,
-        role: student.user.role,
-      };
-
-      return decryptedProfile as StudentProfile;
+      return this.getStudentProfileById(student.id); // Reuse decrypted logic
     } catch (error) {
       console.error("Error getting student profile by matric number:", error);
-      throw error;
+      throw new Error("Failed to retrieve student profile");
     }
   }
 
   /**
-   * Update student profile (server-side)
+   * Update student profile — secure, atomic, audited
    */
   static async updateStudentProfile(
     studentId: string,
-    profileData: Partial<{
+    data: Partial<{
       firstName: string;
       surname: string;
-      otherName: string;
+      otherName?: string;
       phone: string;
-      passportUrl: string;
-      department: string;
-      course: string;
-      college: string;
+      passportUrl?: string;
+      department?: string;
+      college?: string;
+      course?: string; // Added course field
+      state?: string;
+      lga?: string;
     }>
-  ) {
+  ): Promise<ProfileUpdateResponse> {
     try {
-      // Get current student data
-      const currentStudent = await prisma.student.findUnique({
+      const student = await prisma.student.findUnique({
         where: { id: studentId },
       });
 
-      if (!currentStudent) {
-        throw new Error("Student not found");
-      }
+      if (!student) throw new Error("Student not found");
 
-      // Prepare update data
       const updateData: any = {};
+      const updatedFields: string[] = [];
 
-      // Update fields if provided
-      if (profileData.firstName) {
-        updateData.firstName = (
-          await protectData(profileData.firstName, "name")
-        ).encrypted;
+      if (data.firstName !== undefined) {
+        const { encrypted } = await protectData(data.firstName.trim(), "name");
+        updateData.firstName = encrypted;
+        updatedFields.push("firstName");
       }
 
-      if (profileData.surname) {
-        updateData.surname = (
-          await protectData(profileData.surname, "name")
-        ).encrypted;
+      if (data.surname !== undefined) {
+        const { encrypted } = await protectData(data.surname.trim(), "name");
+        updateData.surname = encrypted;
+        updatedFields.push("surname");
       }
 
-      if (profileData.otherName !== undefined) {
-        updateData.otherName = profileData.otherName
-          ? (await protectData(profileData.otherName, "name")).encrypted
+      if (data.otherName !== undefined) {
+        updateData.otherName = data.otherName
+          ? (await protectData(data.otherName.trim(), "name")).encrypted
           : null;
+        updatedFields.push("otherName");
       }
 
-      if (profileData.phone) {
-        const protectedPhone = await protectData(profileData.phone, "phone");
-        updateData.phone = protectedPhone.encrypted;
-        updateData.phoneSearchHash = protectedPhone.searchHash;
+      if (data.phone !== undefined) {
+        const { encrypted, searchHash } = await protectData(
+          data.phone.trim(),
+          "phone"
+        );
+        updateData.phone = encrypted;
+        updateData.phoneSearchHash = searchHash;
+        updatedFields.push("phone");
       }
 
-      if (profileData.passportUrl !== undefined) {
-        updateData.passportUrl = profileData.passportUrl;
+      if (data.passportUrl !== undefined) {
+        updateData.passportUrl = data.passportUrl || null;
+        updatedFields.push("passportUrl");
       }
 
-      if (profileData.department) {
-        updateData.department = profileData.department;
+      if (data.department !== undefined) {
+        updateData.department = data.department;
+        updatedFields.push("department");
       }
 
-      if (profileData.course) {
-        updateData.course = profileData.course;
+      if (data.college !== undefined) {
+        updateData.college = data.college;
+        updatedFields.push("college");
       }
 
-      if (profileData.college) {
-        updateData.college = profileData.college;
+      if (data.course !== undefined) {
+        updateData.course = data.course;
+        updatedFields.push("course");
       }
 
-      // Update the student profile
-      const updatedStudent = await prisma.student.update({
+      if (data.state !== undefined) {
+        const { encrypted } = await protectData(data.state.trim(), "location");
+        updateData.state = encrypted;
+        updatedFields.push("state");
+      }
+
+      if (data.lga !== undefined) {
+        const { encrypted } = await protectData(data.lga.trim(), "location");
+        updateData.lga = encrypted;
+        updatedFields.push("lga");
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        return {
+          success: true,
+          profile: (await this.getStudentProfileById(
+            studentId
+          )) as StudentProfile,
+          message: "No changes detected",
+        };
+      }
+
+      const updated = await prisma.student.update({
         where: { id: studentId },
         data: {
           ...updateData,
           updatedAt: new Date(),
         },
-        select: {
-          id: true,
-          matricNumber: true,
-          firstName: true,
-          surname: true,
-          otherName: true,
-          email: true,
-          phone: true,
-          passportUrl: true,
-          department: true,
-          course: true,
-          college: true,
-          dateEnrolled: true,
-          isActive: true,
-          user: {
-            select: {
-              role: true,
-            },
-          },
-        },
       });
 
-      // Decrypt sensitive data for response
-      const decryptedProfile = {
-        ...updatedStudent,
-        email: await unprotectData(updatedStudent.email, "email"),
-        phone: await unprotectData(updatedStudent.phone, "phone"),
-        firstName: await unprotectData(updatedStudent.firstName, "name"),
-        surname: await unprotectData(updatedStudent.surname, "name"),
-        otherName: updatedStudent.otherName
-          ? await unprotectData(updatedStudent.otherName, "name")
-          : null,
-        role: updatedStudent.user.role,
-      };
-
-      // Log the profile update
+      // Create audit log
       await prisma.auditLog.create({
         data: {
-          userId: updatedStudent.id,
-          action: "PROFILE_UPDATED",
-          resourceType: "USER",
-          resourceId: updatedStudent.id,
+          userId: student.userId,
+          action: AuditAction.PROFILE_UPDATED,
+          resourceType: ResourceType.STUDENT,
+          resourceId: studentId,
           details: {
-            updatedFields: Object.keys(profileData),
+            updatedFields,
+            by: "self",
+            timestamp: new Date().toISOString(),
           },
         },
       });
+
+      const profile = await this.getStudentProfileById(studentId);
+
+      if (!profile) {
+        throw new Error("Failed to retrieve updated profile");
+      }
 
       return {
         success: true,
-        profile: decryptedProfile as StudentProfile,
+        profile,
         message: "Profile updated successfully",
       };
     } catch (error) {
       console.error("Error updating student profile:", error);
-      throw error;
+      throw new Error("Failed to update student profile");
     }
   }
 
   /**
-   * Deactivate student account (server-side)
+   * Deactivate account
    */
-  static async deactivateStudentAccount(studentId: string, reason?: string) {
+  static async deactivateStudentAccount(
+    studentId: string,
+    reason?: string
+  ): Promise<AccountActionResponse> {
     try {
       const student = await prisma.student.findUnique({
         where: { id: studentId },
       });
 
-      if (!student) {
-        throw new Error("Student not found");
-      }
+      if (!student) throw new Error("Student not found");
 
-      // Deactivate the user account
-      await prisma.user.update({
-        where: { id: student.userId },
-        data: {
-          isActive: false,
-        },
-      });
+      await prisma.$transaction([
+        prisma.user.update({
+          where: { id: student.userId },
+          data: {
+            isActive: false,
+            updatedAt: new Date(),
+          },
+        }),
+        prisma.student.update({
+          where: { id: studentId },
+          data: {
+            isActive: false,
+            updatedAt: new Date(),
+          },
+        }),
+      ]);
 
-      // Log the account deactivation
       await prisma.auditLog.create({
         data: {
           userId: student.userId,
-          action: "ACCOUNT_DELETION_REQUESTED",
-          resourceType: "USER",
+          action: AuditAction.ACCOUNT_DEACTIVATED,
+          resourceType: ResourceType.USER,
           resourceId: student.userId,
           details: {
-            reason,
+            reason: reason || "user_request",
+            timestamp: new Date().toISOString(),
           },
         },
       });
 
       return {
         success: true,
-        message: "Student account deactivated successfully",
+        message: "Account deactivated successfully",
       };
     } catch (error) {
       console.error("Error deactivating student account:", error);
-      throw error;
+      throw new Error("Failed to deactivate student account");
     }
   }
 
   /**
-   * Activate student account (server-side)
+   * Activate account
    */
-  static async activateStudentAccount(studentId: string) {
+  static async activateStudentAccount(
+    studentId: string
+  ): Promise<AccountActionResponse> {
     try {
       const student = await prisma.student.findUnique({
         where: { id: studentId },
       });
 
-      if (!student) {
-        throw new Error("Student not found");
-      }
+      if (!student) throw new Error("Student not found");
 
-      // Activate the user account
-      await prisma.user.update({
-        where: { id: student.userId },
-        data: {
-          isActive: true,
-        },
-      });
+      await prisma.$transaction([
+        prisma.user.update({
+          where: { id: student.userId },
+          data: {
+            isActive: true,
+            updatedAt: new Date(),
+          },
+        }),
+        prisma.student.update({
+          where: { id: studentId },
+          data: {
+            isActive: true,
+            updatedAt: new Date(),
+          },
+        }),
+      ]);
 
-      // Log the account activation
       await prisma.auditLog.create({
         data: {
           userId: student.userId,
-          action: "USER_PROFILE_VIEWED",
-          resourceType: "USER",
+          action: AuditAction.ACCOUNT_ACTIVATED,
+          resourceType: ResourceType.USER,
           resourceId: student.userId,
           details: {
-            action: "account_activated",
+            by: "system",
+            timestamp: new Date().toISOString(),
           },
         },
       });
 
       return {
         success: true,
-        message: "Student account activated successfully",
+        message: "Account activated successfully",
       };
     } catch (error) {
       console.error("Error activating student account:", error);
-      throw error;
+      throw new Error("Failed to activate student account");
     }
   }
 
   /**
-   * Get all students with pagination (server-side)
+   * Get all students (admin view) — decrypted + paginated
    */
   static async getAllStudents(
-    page: number = 1,
-    limit: number = 10,
+    page = 1,
+    limit = 20,
     filters?: {
       department?: string;
       college?: string;
+      course?: string;
       isActive?: boolean;
+      search?: string;
     }
-  ) {
+  ): Promise<StudentsListResponse> {
     try {
       const skip = (page - 1) * limit;
-
-      // Build where clause
       const where: any = {};
+
       if (filters?.department) where.department = filters.department;
       if (filters?.college) where.college = filters.college;
+      if (filters?.course) where.course = filters.course;
       if (filters?.isActive !== undefined) where.isActive = filters.isActive;
 
-      const [students, total] = await Promise.all([
+      // Search filter for matric number
+      if (filters?.search) {
+        where.matricNumber = {
+          contains: filters.search.toUpperCase(),
+          mode: "insensitive",
+        };
+      }
+
+      const [students, total] = await prisma.$transaction([
         prisma.student.findMany({
           where,
           skip,
           take: limit,
-          include: {
-            user: {
-              select: {
-                id: true,
-                email: true,
-                isActive: true,
-                emailVerified: true,
-                lastLoginAt: true,
-                createdAt: true,
-              },
-            },
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            matricNumber: true,
+            firstName: true,
+            surname: true,
+            otherName: true,
+            email: true,
+            phone: true,
+            passportUrl: true,
+            department: true,
+            college: true,
+            course: true,
+            isActive: true,
+            dateEnrolled: true,
+            state: true,
+            lga: true,
+            createdAt: true,
           },
-          orderBy: { dateEnrolled: "desc" },
         }),
         prisma.student.count({ where }),
       ]);
 
-      // Decrypt sensitive data
-      const decryptedStudents = await Promise.all(
-        students.map(async (student) => ({
-          ...student,
-          email: await unprotectData(student.email, "email"),
-          phone: await unprotectData(student.phone, "phone"),
-          firstName: await unprotectData(student.firstName, "name"),
-          surname: await unprotectData(student.surname, "name"),
-          otherName: student.otherName
-            ? await unprotectData(student.otherName, "name")
-            : null,
-          state: await unprotectData(student.state, "location"),
-          lga: await unprotectData(student.lga, "location"),
-          user: {
-            ...student.user,
-            email: await unprotectData(student.user.email, "email"),
-          },
-        }))
+      const decrypted = await Promise.all(
+        students.map(async (s) => {
+          try {
+            const profile = await this.getStudentProfileById(s.id);
+            return profile;
+          } catch (error) {
+            console.error(
+              `Error decrypting profile for student ${s.id}:`,
+              error
+            );
+            return null;
+          }
+        })
       );
 
+      const validProfiles = decrypted.filter(Boolean) as StudentProfile[];
+
+      const totalPages = Math.ceil(total / limit);
+
       return {
-        students: decryptedStudents,
+        students: validProfiles,
         pagination: {
           page,
           limit,
           total,
-          totalPages: Math.ceil(total / limit),
+          totalPages,
+          hasNext: page < totalPages,
+          hasPrev: page > 1,
         },
       };
     } catch (error) {
       console.error("Error getting all students:", error);
-      throw error;
+      throw new Error("Failed to retrieve students list");
+    }
+  }
+
+  /**
+   * Get student profile by user ID
+   */
+  static async getStudentProfileByUserId(
+    userId: string
+  ): Promise<StudentProfile | null> {
+    try {
+      const student = await prisma.student.findUnique({
+        where: { userId },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!student) return null;
+
+      return this.getStudentProfileById(student.id);
+    } catch (error) {
+      console.error("Error getting student profile by user ID:", error);
+      throw new Error("Failed to retrieve student profile");
+    }
+  }
+
+  /**
+   * Check if student exists by matric number
+   */
+  static async checkStudentExists(matricNumber: string): Promise<boolean> {
+    try {
+      const student = await prisma.student.findUnique({
+        where: { matricNumber: matricNumber.toUpperCase() },
+        select: { id: true },
+      });
+
+      return !!student;
+    } catch (error) {
+      console.error("Error checking student existence:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Get student statistics
+   */
+  static async getStudentStatistics(): Promise<{
+    total: number;
+    active: number;
+    inactive: number;
+    byDepartment: Record<string, number>;
+    byCollege: Record<string, number>;
+  }> {
+    try {
+      const [total, active, departmentStats, collegeStats] = await Promise.all([
+        prisma.student.count(),
+        prisma.student.count({ where: { isActive: true } }),
+        prisma.student.groupBy({
+          by: ["department"],
+          _count: { _all: true },
+        }),
+        prisma.student.groupBy({
+          by: ["college"],
+          _count: { _all: true },
+        }),
+      ]);
+
+      const byDepartment = departmentStats.reduce((acc, stat) => {
+        acc[stat.department] = stat._count._all;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const byCollege = collegeStats.reduce((acc, stat) => {
+        acc[stat.college] = stat._count._all;
+        return acc;
+      }, {} as Record<string, number>);
+
+      return {
+        total,
+        active,
+        inactive: total - active,
+        byDepartment,
+        byCollege,
+      };
+    } catch (error) {
+      console.error("Error getting student statistics:", error);
+      throw new Error("Failed to retrieve student statistics");
     }
   }
 }

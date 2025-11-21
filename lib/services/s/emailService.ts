@@ -3,8 +3,152 @@ import { prisma } from "@/lib/server/prisma";
 import { protectData, unprotectData } from "@/lib/security/dataProtection";
 import { AuditAction, ResourceType } from "@prisma/client";
 import { generateVerificationToken } from "@/lib/utils";
+import { sendEmail } from "@/lib/config/nodemailer";
 
 export class StudentEmailService {
+  /**
+   * Get base URL depending on environment.
+   * - Development: Prefer local fallback URLs.
+   * - Production: Always use the public production base URL.
+   */
+  private static getBaseUrl(): string {
+    const isDev = process.env.NODE_ENV === "development";
+
+    if (isDev) {
+      return (
+        process.env.NEXT_PUBLIC_BASE_URL_II || // 1st priority
+        process.env.NEXT_PUBLIC_BASE_URL || // 2nd fallback
+        "https://10.16.217.13:3002" // final fallback (local dev)
+      );
+    }
+
+    // PRODUCTION
+    return (
+      process.env.NEXT_PUBLIC_BASE_URL || // production environment variable
+      "https://mouaucm.vercel.app" // final production fallback
+    );
+  }
+
+  /**
+   * Encode user data for URL parameters (base64url encoded)
+   */
+  private static encodeUserData(userId: string, role: string): string {
+    // Create a simple payload object
+    const userData = {
+      id: userId,
+      role: role,
+      timestamp: Date.now(),
+    };
+
+    // Convert to string and encode for URL safety
+    const userDataString = JSON.stringify(userData);
+    return Buffer.from(userDataString).toString("base64url");
+  }
+
+  /**
+   * Decode user data from URL parameters
+   */
+  static decodeUserData(encodedData: string): {
+    id: string;
+    role: string;
+    timestamp: number;
+  } {
+    try {
+      const decodedString = Buffer.from(encodedData, "base64url").toString(
+        "utf-8"
+      );
+      return JSON.parse(decodedString);
+    } catch (error) {
+      throw new Error("Invalid user data format");
+    }
+  }
+
+  /**
+   * Encode parameters for verification link
+   */
+  private static encodeVerificationParams(
+    token: string,
+    userId: string,
+    role: string
+  ): string {
+    const encodedUser = this.encodeUserData(userId, role);
+
+    // Use URLSearchParams for proper URL encoding
+    const params = new URLSearchParams({
+      t: token,
+      u: encodedUser,
+      r: role,
+    });
+
+    return params.toString();
+  }
+
+  /**
+   * Encode parameters for password reset link
+   */
+  private static encodePasswordResetParams(
+    token: string,
+    userId: string,
+    role: string
+  ): string {
+    const encodedUser = this.encodeUserData(userId, role);
+
+    // Use URLSearchParams for proper URL encoding
+    const params = new URLSearchParams({
+      t: token,
+      u: encodedUser,
+      r: role,
+    });
+
+    return params.toString();
+  }
+
+  /**
+   * Decrypt student data for email templates
+   */
+  private static async getDecryptedStudentData(student: any) {
+    const [
+      email,
+      firstName,
+      surname,
+      otherName,
+      phone,
+      matricNumber,
+      jambRegNumber,
+      department,
+      college,
+    ] = await Promise.all([
+      unprotectData(student.email, "email"),
+      unprotectData(student.firstName, "name"),
+      unprotectData(student.surname, "name"),
+      student.otherName
+        ? unprotectData(student.otherName, "name")
+        : Promise.resolve(""),
+      unprotectData(student.phone, "phone"),
+      student.matricNumber
+        ? unprotectData(student.matricNumber, "matric") // ✅ FIXED
+        : Promise.resolve(""),
+      student.jambRegNumber
+        ? unprotectData(student.jambRegNumber, "jamb") // ✅ FIXED
+        : Promise.resolve(""),
+      Promise.resolve(student.department),
+      Promise.resolve(student.college),
+    ]);
+
+    return {
+      email,
+      firstName,
+      surname,
+      otherName,
+      fullName: `${surname} ${firstName}${otherName ? ` ${otherName}` : ""}`,
+      phone,
+      matricNumber,
+      jambRegNumber,
+      department,
+      college,
+    };
+  }
+
   /**
    * Send welcome email
    */
@@ -21,12 +165,30 @@ export class StudentEmailService {
         throw new Error("Student not found");
       }
 
-      // Decrypt email
-      const email = await unprotectData(student.email, "email");
+      // Decrypt all student data
+      const decryptedData = await this.getDecryptedStudentData(student);
 
-      // In a real implementation, you would use an email service like SendGrid, Nodemailer, etc.
-      // For now, we'll just log the email that would be sent
-      console.log(`Welcome email sent to ${email}`);
+      // DEBUG: Check what we got
+      console.log("=== EMAIL DEBUG ===");
+      console.log("Raw student.email:", student.email);
+      console.log("Decrypted email:", decryptedData.email);
+      console.log("Email type:", typeof decryptedData.email);
+      console.log("Email length:", decryptedData.email?.length);
+
+      // Send welcome email using Nodemailer
+      await sendEmail(decryptedData.email, "welcome-student", {
+        name: decryptedData.fullName,
+        firstName: decryptedData.firstName,
+        surname: decryptedData.surname,
+        otherName: decryptedData.otherName,
+        studentId: student.id,
+        matricNumber: decryptedData.matricNumber,
+        jambRegNumber: decryptedData.jambRegNumber,
+        department: decryptedData.department,
+        college: decryptedData.college,
+        registrationDate: new Date().toLocaleDateString(),
+        baseUrl: this.getBaseUrl(),
+      });
 
       // Log the email sent
       await prisma.auditLog.create({
@@ -37,7 +199,9 @@ export class StudentEmailService {
           resourceId: student.user.id,
           details: {
             type: "welcome",
-            email,
+            email: decryptedData.email,
+            environment: process.env.NODE_ENV,
+            baseUrl: this.getBaseUrl(),
           },
         },
       });
@@ -68,12 +232,28 @@ export class StudentEmailService {
         throw new Error("User or student not found");
       }
 
-      // Decrypt email
-      const email = await unprotectData(user.student.email, "email");
+      // Decrypt all student data
+      const decryptedData = await this.getDecryptedStudentData(user.student);
 
-      // In a real implementation, you would use an email service like SendGrid, Nodemailer, etc.
-      // For now, we'll just log the email that would be sent
-      console.log(`Email verification sent to ${email} with token ${token}`);
+      // Create verification link using new format
+      const baseUrl = this.getBaseUrl();
+      const queryParams = this.encodeVerificationParams(
+        token,
+        userId,
+        "student"
+      );
+      const verificationLink = `${baseUrl}/auth/verify/ve?${queryParams}`;
+
+      // Send verification email using Nodemailer
+      await sendEmail(decryptedData.email, "email-verification", {
+        name: decryptedData.fullName,
+        firstName: decryptedData.firstName,
+        surname: decryptedData.surname,
+        verificationLink,
+        token,
+        expiryHours: 24,
+        baseUrl,
+      });
 
       // Log the email sent
       await prisma.auditLog.create({
@@ -84,8 +264,13 @@ export class StudentEmailService {
           resourceId: userId,
           details: {
             type: "email_verification",
-            email,
+            email: decryptedData.email,
             token,
+            userId,
+            role: "student",
+            verificationLink,
+            environment: process.env.NODE_ENV,
+            baseUrl,
           },
         },
       });
@@ -127,10 +312,10 @@ export class StudentEmailService {
       const decryptedEmail = await unprotectData(student.email, "email");
 
       // Verify the hash matches
-      const { generateSearchHash } = await import(
+      const { generateSearchableHash } = await import(
         "@/lib/security/dataProtection"
       );
-      const expectedHash = generateSearchHash(decryptedEmail);
+      const expectedHash = await generateSearchableHash(decryptedEmail);
 
       if (hash !== expectedHash) {
         throw new Error("Invalid verification code");
@@ -158,6 +343,9 @@ export class StudentEmailService {
         where: { token: verificationToken.token },
       });
 
+      // Send welcome email after verification
+      await this.sendWelcomeEmail(student.id);
+
       // Log the verification
       await prisma.auditLog.create({
         data: {
@@ -168,6 +356,8 @@ export class StudentEmailService {
           details: {
             email: decryptedEmail,
             verificationCode: code,
+            environment: process.env.NODE_ENV,
+            baseUrl: this.getBaseUrl(),
           },
           ipAddress: "unknown",
           userAgent: "unknown",
@@ -203,12 +393,28 @@ export class StudentEmailService {
         throw new Error("User or student not found");
       }
 
-      // Decrypt email
-      const email = await unprotectData(user.student.email, "email");
+      // Decrypt all student data
+      const decryptedData = await this.getDecryptedStudentData(user.student);
 
-      // In a real implementation, you would use an email service like SendGrid, Nodemailer, etc.
-      // For now, we'll just log the email that would be sent
-      console.log(`Password reset sent to ${email} with token ${token}`);
+      // Create reset link using new format - FIXED: pointing to correct password reset route
+      const baseUrl = this.getBaseUrl();
+      const queryParams = this.encodePasswordResetParams(
+        token,
+        userId,
+        "student"
+      );
+      const resetLink = `${baseUrl}/auth/reset/password?${queryParams}`;
+
+      // Send password reset email using Nodemailer
+      await sendEmail(decryptedData.email, "password-reset", {
+        name: decryptedData.fullName,
+        firstName: decryptedData.firstName,
+        surname: decryptedData.surname,
+        resetLink,
+        token,
+        expiryHours: 1, // Typically password reset links expire in 1 hour
+        baseUrl,
+      });
 
       // Log the email sent
       await prisma.auditLog.create({
@@ -219,8 +425,13 @@ export class StudentEmailService {
           resourceId: userId,
           details: {
             type: "password_reset",
-            email,
+            email: decryptedData.email,
             token,
+            userId,
+            role: "student",
+            resetLink,
+            environment: process.env.NODE_ENV,
+            baseUrl,
           },
         },
       });
@@ -231,6 +442,61 @@ export class StudentEmailService {
       };
     } catch (error) {
       console.error("Error sending password reset email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send password reset confirmation email
+   */
+  static async sendPasswordResetConfirmation(userId: string) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          student: true,
+        },
+      });
+
+      if (!user || !user.student) {
+        throw new Error("User or student not found");
+      }
+
+      // Decrypt all student data
+      const decryptedData = await this.getDecryptedStudentData(user.student);
+
+      // Send password reset confirmation email using Nodemailer
+      await sendEmail(decryptedData.email, "password-reset-confirmation", {
+        name: decryptedData.fullName,
+        firstName: decryptedData.firstName,
+        surname: decryptedData.surname,
+        resetTime: new Date().toLocaleString(),
+        ipAddress: "unknown", // You can capture this from the request
+        baseUrl: this.getBaseUrl(),
+      });
+
+      // Log the email sent
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: AuditAction.NOTIFICATION_SENT,
+          resourceType: ResourceType.USER,
+          resourceId: userId,
+          details: {
+            type: "password_reset_confirmation",
+            email: decryptedData.email,
+            environment: process.env.NODE_ENV,
+            baseUrl: this.getBaseUrl(),
+          },
+        },
+      });
+
+      return {
+        success: true,
+        message: "Password reset confirmation sent successfully",
+      };
+    } catch (error) {
+      console.error("Error sending password reset confirmation:", error);
       throw error;
     }
   }
@@ -265,14 +531,21 @@ export class StudentEmailService {
         throw new Error("Assignment not found");
       }
 
-      // Decrypt email
-      const email = await unprotectData(student.email, "email");
+      // Decrypt all student data
+      const decryptedData = await this.getDecryptedStudentData(student);
 
-      // In a real implementation, you would use an email service like SendGrid, Nodemailer, etc.
-      // For now, we'll just log the email that would be sent
-      console.log(
-        `Assignment reminder sent to ${email} for assignment ${assignment.title}`
-      );
+      // Send assignment reminder email
+      await sendEmail(decryptedData.email, "assignment-reminder", {
+        name: decryptedData.fullName,
+        firstName: decryptedData.firstName,
+        surname: decryptedData.surname,
+        assignmentTitle: assignment.title,
+        courseCode: assignment.course.code,
+        courseName: assignment.course.title,
+        dueDate: assignment.dueDate?.toLocaleDateString(),
+        reminderTime: new Date().toLocaleString(),
+        baseUrl: this.getBaseUrl(),
+      });
 
       // Log the email sent
       await prisma.auditLog.create({
@@ -283,10 +556,12 @@ export class StudentEmailService {
           resourceId: assignmentId,
           details: {
             type: "assignment_reminder",
-            email,
+            email: decryptedData.email,
             assignmentTitle: assignment.title,
             courseCode: assignment.course.code,
             dueDate: assignment.dueDate,
+            environment: process.env.NODE_ENV,
+            baseUrl: this.getBaseUrl(),
           },
         },
       });
@@ -332,14 +607,28 @@ export class StudentEmailService {
         throw new Error("Assignment not found");
       }
 
-      // Decrypt email
-      const email = await unprotectData(student.email, "email");
+      // Decrypt all student data
+      const decryptedData = await this.getDecryptedStudentData(student);
 
-      // In a real implementation, you would use an email service like SendGrid, Nodemailer, etc.
-      // For now, we'll just log the email that would be sent
-      console.log(
-        `Grade notification sent to ${email} for assignment ${assignment.title} with grade ${grade}`
-      );
+      // Calculate percentage if maxScore is available
+      const percentage = assignment.maxScore
+        ? ((grade / assignment.maxScore) * 100).toFixed(1)
+        : null;
+
+      // Send grade notification
+      await sendEmail(decryptedData.email, "grade-notification", {
+        name: decryptedData.fullName,
+        firstName: decryptedData.firstName,
+        surname: decryptedData.surname,
+        assignmentTitle: assignment.title,
+        courseCode: assignment.course.code,
+        courseName: assignment.course.title,
+        grade,
+        maxScore: assignment.maxScore || 100,
+        percentage,
+        submissionDate: new Date().toLocaleDateString(),
+        baseUrl: this.getBaseUrl(),
+      });
 
       // Log the email sent
       await prisma.auditLog.create({
@@ -350,10 +639,12 @@ export class StudentEmailService {
           resourceId: assignmentId,
           details: {
             type: "grade_notification",
-            email,
+            email: decryptedData.email,
             assignmentTitle: assignment.title,
             courseCode: assignment.course.code,
             grade,
+            environment: process.env.NODE_ENV,
+            baseUrl: this.getBaseUrl(),
           },
         },
       });
@@ -416,11 +707,28 @@ export class StudentEmailService {
         },
       });
 
-      // In a real implementation, you would use an email service like SendGrid, Nodemailer, etc.
-      // For now, we'll just log the email that would be sent
-      console.log(
-        `Verification email resent to ${email} with token ${verificationToken}`
+      // Decrypt all student data
+      const decryptedData = await this.getDecryptedStudentData(student);
+
+      // Create verification link using new format
+      const baseUrl = this.getBaseUrl();
+      const queryParams = this.encodeVerificationParams(
+        verificationToken,
+        student.user.id,
+        "student"
       );
+      const verificationLink = `${baseUrl}/auth/verify/ve?${queryParams}`;
+
+      // Send verification email using Nodemailer
+      await sendEmail(decryptedData.email, "email-verification", {
+        name: decryptedData.fullName,
+        firstName: decryptedData.firstName,
+        surname: decryptedData.surname,
+        verificationLink,
+        token: verificationToken,
+        expiryHours: 24,
+        baseUrl,
+      });
 
       // Log the email sent
       await prisma.auditLog.create({
@@ -430,8 +738,13 @@ export class StudentEmailService {
           resourceType: ResourceType.USER,
           resourceId: student.user.id,
           details: {
-            email,
+            email: decryptedData.email,
             token: verificationToken,
+            userId: student.user.id,
+            role: "student",
+            verificationLink,
+            environment: process.env.NODE_ENV,
+            baseUrl,
           },
         },
       });
@@ -442,6 +755,192 @@ export class StudentEmailService {
       };
     } catch (error) {
       console.error("Error resending verification email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send course enrollment notification email
+   */
+  static async sendCourseEnrollmentEmail(studentId: string, courseId: string) {
+    try {
+      const student = await prisma.student.findUnique({
+        where: { id: studentId },
+        include: {
+          user: true,
+        },
+      });
+
+      if (!student || !student.user) {
+        throw new Error("Student not found");
+      }
+
+      const course = await prisma.course.findUnique({
+        where: { id: courseId },
+      });
+
+      if (!course) {
+        throw new Error("Course not found");
+      }
+
+      // Decrypt all student data
+      const decryptedData = await this.getDecryptedStudentData(student);
+
+      // Send course enrollment email
+      await sendEmail(decryptedData.email, "course-enrollment", {
+        name: decryptedData.fullName,
+        firstName: decryptedData.firstName,
+        surname: decryptedData.surname,
+        courseCode: course.code,
+        courseName: course.title,
+        enrollmentDate: new Date().toLocaleDateString(),
+        academicYear: new Date().getFullYear(),
+        baseUrl: this.getBaseUrl(),
+      });
+
+      // Log the email sent
+      await prisma.auditLog.create({
+        data: {
+          userId: student.user.id,
+          action: AuditAction.NOTIFICATION_SENT,
+          resourceType: ResourceType.COURSE,
+          resourceId: courseId,
+          details: {
+            type: "course_enrollment",
+            email: decryptedData.email,
+            courseCode: course.code,
+            courseName: course.title,
+            environment: process.env.NODE_ENV,
+            baseUrl: this.getBaseUrl(),
+          },
+        },
+      });
+
+      return {
+        success: true,
+        message: "Course enrollment notification sent successfully",
+      };
+    } catch (error) {
+      console.error("Error sending course enrollment notification:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send account suspension notification email
+   */
+  static async sendAccountSuspensionEmail(
+    studentId: string,
+    reason: string,
+    suspensionEndDate?: Date
+  ) {
+    try {
+      const student = await prisma.student.findUnique({
+        where: { id: studentId },
+        include: {
+          user: true,
+        },
+      });
+
+      if (!student || !student.user) {
+        throw new Error("Student not found");
+      }
+
+      // Decrypt all student data
+      const decryptedData = await this.getDecryptedStudentData(student);
+
+      // Send account suspension email
+      await sendEmail(decryptedData.email, "account-suspension", {
+        name: decryptedData.fullName,
+        firstName: decryptedData.firstName,
+        surname: decryptedData.surname,
+        reason,
+        suspensionDate: new Date().toLocaleDateString(),
+        suspensionEndDate: suspensionEndDate
+          ? suspensionEndDate.toLocaleDateString()
+          : "Indefinite",
+        contactEmail: "support@mouaucm.edu.ng",
+        baseUrl: this.getBaseUrl(),
+      });
+
+      // Log the email sent
+      await prisma.auditLog.create({
+        data: {
+          userId: student.user.id,
+          action: AuditAction.NOTIFICATION_SENT,
+          resourceType: ResourceType.USER,
+          resourceId: student.user.id,
+          details: {
+            type: "account_suspension",
+            email: decryptedData.email,
+            reason,
+            suspensionEndDate,
+            environment: process.env.NODE_ENV,
+            baseUrl: this.getBaseUrl(),
+          },
+        },
+      });
+
+      return {
+        success: true,
+        message: "Account suspension notification sent successfully",
+      };
+    } catch (error) {
+      console.error("Error sending account suspension notification:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send account reactivation notification email
+   */
+  static async sendAccountReactivationEmail(studentId: string) {
+    try {
+      const student = await prisma.student.findUnique({
+        where: { id: studentId },
+        include: {
+          user: true,
+        },
+      });
+
+      if (!student || !student.user) {
+        throw new Error("Student not found");
+      }
+
+      // Decrypt all student data
+      const decryptedData = await this.getDecryptedStudentData(student);
+
+      // Send account reactivation email
+      await sendEmail(decryptedData.email, "account-reactivation", {
+        name: decryptedData.fullName,
+        firstName: decryptedData.firstName,
+        surname: decryptedData.surname,
+        reactivationDate: new Date().toLocaleDateString(),
+        baseUrl: this.getBaseUrl(),
+      });
+
+      // Log the email sent
+      await prisma.auditLog.create({
+        data: {
+          userId: student.user.id,
+          action: AuditAction.NOTIFICATION_SENT,
+          resourceType: ResourceType.USER,
+          resourceId: student.user.id,
+          details: {
+            type: "account_reactivation",
+            email: decryptedData.email,
+            environment: process.env.NODE_ENV,
+            baseUrl: this.getBaseUrl(),
+          },
+        },
+      });
+
+      return {
+        success: true,
+        message: "Account reactivation notification sent successfully",
+      };
+    } catch (error) {
+      console.error("Error sending account reactivation notification:", error);
       throw error;
     }
   }

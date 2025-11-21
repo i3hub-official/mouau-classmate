@@ -1,12 +1,21 @@
 // lib/services/profileService.ts
 import { prisma } from "@/lib/server/prisma";
-import { StudentProfile } from "@/lib/types/s/index";
 import {
   protectData,
   unprotectData,
-  verifyProtectedData,
+  verifyPassword,
+  validatePasswordStrength,
 } from "@/lib/security/dataProtection";
 import { AuditAction } from "@prisma/client";
+import {
+  StudentProfile,
+  ProfileUpdateData,
+  ProfileResponse,
+  EmailUpdateResponse,
+  AccountActionResponse,
+} from "@/lib/types/s/index";
+
+// Define the missing types and interfaces
 
 export class StudentProfileService {
   /**
@@ -30,11 +39,18 @@ export class StudentProfileService {
           department: true,
           course: true,
           college: true,
-          dateEnrolled: true,
+          admissionYear: true,
+          gender: true,
+          dateOfBirth: true,
+          state: true,
+          lga: true,
           isActive: true,
+          dateEnrolled: true,
+          createdAt: true,
           user: {
             select: {
               role: true,
+              createdAt: true,
             },
           },
         },
@@ -42,20 +58,61 @@ export class StudentProfileService {
 
       if (!student) return null;
 
-      // Decrypt sensitive data
-      const decryptedProfile = {
-        ...student,
-        email: await unprotectData(student.email, "email"),
-        phone: await unprotectData(student.phone, "phone"),
-        firstName: await unprotectData(student.firstName, "name"),
-        surname: await unprotectData(student.surname, "name"),
-        otherName: student.otherName
-          ? await unprotectData(student.otherName, "name")
-          : null,
-        role: student.user.role,
+      // Decrypt sensitive data using new protection tiers
+      const [
+        decryptedEmail,
+        decryptedPhone,
+        decryptedFirstName,
+        decryptedSurname,
+        decryptedOtherName,
+        decryptedState,
+        decryptedLga,
+      ] = await Promise.all([
+        unprotectData(student.email, "email"),
+        unprotectData(student.phone, "phone"),
+        unprotectData(student.firstName, "name"),
+        unprotectData(student.surname, "name"),
+        student.otherName
+          ? unprotectData(student.otherName, "name")
+          : Promise.resolve(null),
+        student.state
+          ? unprotectData(student.state, "location")
+          : Promise.resolve(""),
+        student.lga
+          ? unprotectData(student.lga, "location")
+          : Promise.resolve(""),
+      ]);
+
+      const fullName = this.formatFullName(
+        decryptedSurname,
+        decryptedFirstName,
+        decryptedOtherName
+      );
+
+      const profile: StudentProfile = {
+        id: student.id,
+        matricNumber: student.matricNumber,
+        fullName,
+        firstName: decryptedFirstName,
+        surname: decryptedSurname,
+        otherName: decryptedOtherName,
+        email: decryptedEmail,
+        phone: decryptedPhone,
+        passportUrl: student.passportUrl,
+        department: student.department,
+        course: student.course,
+        college: student.college,
+        admissionYear: student.admissionYear,
+        gender: student.gender,
+        dateOfBirth: student.dateOfBirth,
+        state: decryptedState,
+        lga: decryptedLga,
+        isActive: student.isActive,
+        role: "STUDENT",
+        createdAt: student.createdAt,
       };
 
-      return decryptedProfile as StudentProfile;
+      return profile;
     } catch (error) {
       console.error("Error getting student profile:", error);
       throw error;
@@ -63,18 +120,27 @@ export class StudentProfileService {
   }
 
   /**
+   * Format full name from components
+   */
+  private static formatFullName(
+    surname: string,
+    firstName: string,
+    otherName: string | null
+  ): string {
+    let fullName = `${surname} ${firstName}`;
+    if (otherName) {
+      fullName += ` ${otherName}`;
+    }
+    return fullName;
+  }
+
+  /**
    * Update student profile
    */
   static async updateStudentProfile(
     userId: string,
-    profileData: Partial<{
-      firstName: string;
-      surname: string;
-      otherName: string;
-      phone: string;
-      passportUrl: string;
-    }>
-  ) {
+    profileData: ProfileUpdateData
+  ): Promise<ProfileResponse> {
     try {
       // Get the current student data
       const currentStudent = await prisma.student.findUnique({
@@ -86,9 +152,9 @@ export class StudentProfileService {
       }
 
       // Prepare update data
-      const updateData: any = {};
+      const updateData: any = { updatedAt: new Date() };
 
-      // Update fields if provided
+      // Update fields if provided using new protection tiers
       if (profileData.firstName) {
         updateData.firstName = (
           await protectData(profileData.firstName, "name")
@@ -117,13 +183,22 @@ export class StudentProfileService {
         updateData.passportUrl = profileData.passportUrl;
       }
 
+      if (profileData.state) {
+        updateData.state = (
+          await protectData(profileData.state, "location")
+        ).encrypted;
+      }
+
+      if (profileData.lga) {
+        updateData.lga = (
+          await protectData(profileData.lga, "location")
+        ).encrypted;
+      }
+
       // Update the student profile
       const updatedStudent = await prisma.student.update({
         where: { userId },
-        data: {
-          ...updateData,
-          updatedAt: new Date(),
-        },
+        data: updateData,
         select: {
           id: true,
           matricNumber: true,
@@ -136,45 +211,94 @@ export class StudentProfileService {
           department: true,
           course: true,
           college: true,
-          dateEnrolled: true,
+          admissionYear: true,
+          gender: true,
+          dateOfBirth: true,
+          state: true,
+          lga: true,
           isActive: true,
+          dateEnrolled: true,
+          createdAt: true,
           user: {
             select: {
               role: true,
+              createdAt: true,
             },
           },
         },
       });
 
-      // Decrypt sensitive data for response
-      const decryptedProfile = {
-        ...updatedStudent,
-        email: await unprotectData(updatedStudent.email, "email"),
-        phone: await unprotectData(updatedStudent.phone, "phone"),
-        firstName: await unprotectData(updatedStudent.firstName, "name"),
-        surname: await unprotectData(updatedStudent.surname, "name"),
-        otherName: updatedStudent.otherName
-          ? await unprotectData(updatedStudent.otherName, "name")
-          : null,
-        role: updatedStudent.user.role,
+      // Decrypt sensitive data for response using new protection tiers
+      const [
+        decryptedEmail,
+        decryptedPhone,
+        decryptedFirstName,
+        decryptedSurname,
+        decryptedOtherName,
+        decryptedState,
+        decryptedLga,
+      ] = await Promise.all([
+        unprotectData(updatedStudent.email, "email"),
+        unprotectData(updatedStudent.phone, "phone"),
+        unprotectData(updatedStudent.firstName, "name"),
+        unprotectData(updatedStudent.surname, "name"),
+        updatedStudent.otherName
+          ? unprotectData(updatedStudent.otherName, "name")
+          : Promise.resolve(null),
+        updatedStudent.state
+          ? unprotectData(updatedStudent.state, "location")
+          : Promise.resolve(""),
+        updatedStudent.lga
+          ? unprotectData(updatedStudent.lga, "location")
+          : Promise.resolve(""),
+      ]);
+
+      const fullName = this.formatFullName(
+        decryptedSurname,
+        decryptedFirstName,
+        decryptedOtherName
+      );
+
+      const profile: StudentProfile = {
+        id: updatedStudent.id,
+        matricNumber: updatedStudent.matricNumber,
+        fullName,
+        firstName: decryptedFirstName,
+        surname: decryptedSurname,
+        otherName: decryptedOtherName,
+        email: decryptedEmail,
+        phone: decryptedPhone,
+        passportUrl: updatedStudent.passportUrl,
+        department: updatedStudent.department,
+        course: updatedStudent.course,
+        college: updatedStudent.college,
+        admissionYear: updatedStudent.admissionYear,
+        gender: updatedStudent.gender,
+        dateOfBirth: updatedStudent.dateOfBirth,
+        state: decryptedState,
+        lga: decryptedLga,
+        isActive: updatedStudent.isActive,
+        role: "STUDENT",
+        createdAt: updatedStudent.createdAt,
       };
 
       // Log the profile update
       await prisma.auditLog.create({
         data: {
           userId,
-          action: "PROFILE_UPDATED",
+          action: AuditAction.PROFILE_UPDATED,
           resourceType: "USER",
           resourceId: userId,
           details: {
             updatedFields: Object.keys(profileData),
+            timestamp: new Date().toISOString(),
           },
         },
       });
 
       return {
         success: true,
-        profile: decryptedProfile as StudentProfile,
+        profile,
         message: "Profile updated successfully",
       };
     } catch (error) {
@@ -190,7 +314,7 @@ export class StudentProfileService {
     userId: string,
     newEmail: string,
     password: string
-  ) {
+  ): Promise<EmailUpdateResponse> {
     try {
       // Get the user
       const user = await prisma.user.findUnique({
@@ -204,40 +328,37 @@ export class StudentProfileService {
         throw new Error("Student not found");
       }
 
-      // Verify the password
+      // Verify the password using the new verifyPassword function
       if (!user.passwordHash) {
         throw new Error("Password not set");
       }
 
-      const isPasswordValid = await verifyProtectedData(
-        password,
-        user.passwordHash,
-        "password"
-      );
+      const isPasswordValid = await verifyPassword(password, user.passwordHash);
       if (!isPasswordValid) {
         throw new Error("Invalid password");
       }
 
-      // Check if the new email is already in use
+      // Check if the new email is already in use using the new protection tier
+      const protectedNewEmail = await protectData(newEmail, "email");
+
       const existingStudent = await prisma.student.findFirst({
         where: {
-          email: (await protectData(newEmail, "email")).encrypted,
+          emailSearchHash: protectedNewEmail.searchHash,
+          id: { not: user.student.id },
         },
       });
 
-      if (existingStudent && existingStudent.id !== user.student.id) {
+      if (existingStudent) {
         throw new Error("Email is already in use");
       }
-
-      // Protect the new email
-      const protectedEmail = await protectData(newEmail, "email");
 
       // Update the student email
       await prisma.student.update({
         where: { id: user.student.id },
         data: {
-          email: protectedEmail.encrypted,
-          emailSearchHash: protectedEmail.searchHash,
+          email: protectedNewEmail.encrypted,
+          emailSearchHash: protectedNewEmail.searchHash,
+          updatedAt: new Date(),
         },
       });
 
@@ -245,15 +366,16 @@ export class StudentProfileService {
       await prisma.user.update({
         where: { id: userId },
         data: {
-          email: protectedEmail.encrypted,
+          email: protectedNewEmail.encrypted,
           emailVerified: null, // Require email verification again
           emailVerificationRequired: true,
+          updatedAt: new Date(),
         },
       });
 
       // Generate email verification token
-      const verificationToken =
-        require("@/lib/utils/utils").generateVerificationToken();
+      const { generateVerificationToken } = await import("@/lib/utils");
+      const verificationToken = generateVerificationToken();
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
       await prisma.verificationToken.create({
@@ -268,11 +390,13 @@ export class StudentProfileService {
       await prisma.auditLog.create({
         data: {
           userId,
-          action: "PROFILE_UPDATED",
+          action: AuditAction.EMAIL_UPDATED,
           resourceType: "USER",
           resourceId: userId,
           details: {
-            updatedFields: ["email"],
+            oldEmail: user.email,
+            newEmail: protectedNewEmail.encrypted,
+            timestamp: new Date().toISOString(),
           },
         },
       });
@@ -290,9 +414,13 @@ export class StudentProfileService {
   }
 
   /**
-   * Deactivate student account
+   * Change student password
    */
-  static async deactivateStudentAccount(userId: string, password: string) {
+  static async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<AccountActionResponse> {
     try {
       // Get the user
       const user = await prisma.user.findUnique({
@@ -303,16 +431,85 @@ export class StudentProfileService {
         throw new Error("User not found");
       }
 
-      // Verify the password
+      // Verify the current password using the new verifyPassword function
       if (!user.passwordHash) {
         throw new Error("Password not set");
       }
 
-      const isPasswordValid = await verifyProtectedData(
-        password,
-        user.passwordHash,
-        "password"
+      const isCurrentPasswordValid = await verifyPassword(
+        currentPassword,
+        user.passwordHash
       );
+      if (!isCurrentPasswordValid) {
+        throw new Error("Current password is incorrect");
+      }
+
+      // Validate new password strength using the new validation function
+      const passwordValidation = validatePasswordStrength(newPassword);
+      if (!passwordValidation.isValid) {
+        throw new Error(
+          `Password validation failed: ${passwordValidation.errors.join(", ")}`
+        );
+      }
+
+      // Hash the new password using the new protection tier
+      const protectedPassword = await protectData(newPassword, "password");
+
+      // Update the password
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          passwordHash: protectedPassword.encrypted,
+          updatedAt: new Date(),
+        },
+      });
+
+      // Log the password change
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: AuditAction.PASSWORD_CHANGED,
+          resourceType: "USER",
+          resourceId: userId,
+          details: {
+            timestamp: new Date().toISOString(),
+          },
+        },
+      });
+
+      return {
+        success: true,
+        message: "Password changed successfully",
+      };
+    } catch (error) {
+      console.error("Error changing password:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Deactivate student account
+   */
+  static async deactivateStudentAccount(
+    userId: string,
+    password: string
+  ): Promise<AccountActionResponse> {
+    try {
+      // Get the user
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      // Verify the password using the new verifyPassword function
+      if (!user.passwordHash) {
+        throw new Error("Password not set");
+      }
+
+      const isPasswordValid = await verifyPassword(password, user.passwordHash);
       if (!isPasswordValid) {
         throw new Error("Invalid password");
       }
@@ -322,6 +519,16 @@ export class StudentProfileService {
         where: { id: userId },
         data: {
           isActive: false,
+          updatedAt: new Date(),
+        },
+      });
+
+      // Also deactivate the student profile
+      await prisma.student.update({
+        where: { userId },
+        data: {
+          isActive: false,
+          updatedAt: new Date(),
         },
       });
 
@@ -329,9 +536,12 @@ export class StudentProfileService {
       await prisma.auditLog.create({
         data: {
           userId,
-          action: "ACCOUNT_DELETION_REQUESTED",
+          action: AuditAction.ACCOUNT_DEACTIVATED,
           resourceType: "USER",
           resourceId: userId,
+          details: {
+            timestamp: new Date().toISOString(),
+          },
         },
       });
 
@@ -346,66 +556,145 @@ export class StudentProfileService {
   }
 
   /**
-   * Delete student account
+   * Reactivate student account
    */
-  static async deleteStudentAccount(userId: string, password: string) {
+  static async reactivateStudentAccount(
+    userId: string
+  ): Promise<AccountActionResponse> {
     try {
-      // Get the user
-      const user = await prisma.user.findUnique({
+      // Reactivate the user account
+      await prisma.user.update({
         where: { id: userId },
+        data: {
+          isActive: true,
+          updatedAt: new Date(),
+        },
       });
 
-      if (!user) {
-        throw new Error("User not found");
-      }
-
-      // Verify the password
-      if (!user.passwordHash) {
-        throw new Error("Password not set");
-      }
-
-      const isPasswordValid = await verifyProtectedData(
-        password,
-        user.passwordHash,
-        "password"
-      );
-      if (!isPasswordValid) {
-        throw new Error("Invalid password");
-      }
-
-      // Delete the student (this will cascade delete related records)
-      const student = await prisma.student.findUnique({
+      // Also reactivate the student profile
+      await prisma.student.update({
         where: { userId },
+        data: {
+          isActive: true,
+          updatedAt: new Date(),
+        },
       });
 
-      if (student) {
-        await prisma.student.delete({
-          where: { id: student.id },
-        });
-      }
-
-      // Delete the user
-      await prisma.user.delete({
-        where: { id: userId },
-      });
-
-      // Log the account deletion
+      // Log the account reactivation
       await prisma.auditLog.create({
         data: {
           userId,
-          action: "ACCOUNT_DELETION",
+          action: AuditAction.ACCOUNT_REACTIVATED,
           resourceType: "USER",
           resourceId: userId,
+          details: {
+            timestamp: new Date().toISOString(),
+          },
         },
       });
 
       return {
         success: true,
-        message: "Account deleted successfully",
+        message: "Account reactivated successfully",
       };
     } catch (error) {
-      console.error("Error deleting student account:", error);
+      console.error("Error reactivating student account:", error);
       throw error;
+    }
+  }
+
+  /**
+   * Get profile completion status
+   */
+  static async getProfileCompletion(userId: string): Promise<{
+    completed: boolean;
+    completionPercentage: number;
+    missingFields: string[];
+  }> {
+    try {
+      const student = await prisma.student.findUnique({
+        where: { userId },
+        select: {
+          firstName: true,
+          surname: true,
+          phone: true,
+          passportUrl: true,
+          state: true,
+          lga: true,
+          dateOfBirth: true,
+          gender: true,
+        },
+      });
+
+      if (!student) {
+        throw new Error("Student not found");
+      }
+
+      const requiredFields = [
+        { key: "firstName", value: student.firstName },
+        { key: "surname", value: student.surname },
+        { key: "phone", value: student.phone },
+        { key: "passportUrl", value: student.passportUrl },
+        { key: "state", value: student.state },
+        { key: "lga", value: student.lga },
+        { key: "dateOfBirth", value: student.dateOfBirth },
+        { key: "gender", value: student.gender },
+      ];
+
+      const completedFields = requiredFields.filter((field) => {
+        if (field.value === null || field.value === undefined) return false;
+        if (typeof field.value === "string" && field.value.trim() === "")
+          return false;
+        return true;
+      });
+
+      const missingFields = requiredFields
+        .filter((field) => !completedFields.includes(field))
+        .map((field) => field.key);
+
+      const completionPercentage = Math.round(
+        (completedFields.length / requiredFields.length) * 100
+      );
+
+      return {
+        completed: completionPercentage === 100,
+        completionPercentage,
+        missingFields,
+      };
+    } catch (error) {
+      console.error("Error getting profile completion:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Verify current password for sensitive operations
+   */
+  static async verifyCurrentPassword(
+    userId: string,
+    password: string
+  ): Promise<{ isValid: boolean; message?: string }> {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        return { isValid: false, message: "User not found" };
+      }
+
+      if (!user.passwordHash) {
+        return { isValid: false, message: "Password not set" };
+      }
+
+      const isValid = await verifyPassword(password, user.passwordHash);
+      return {
+        isValid,
+        message: isValid ? undefined : "Invalid password",
+      };
+    } catch (error) {
+      console.error("Error verifying current password:", error);
+      return { isValid: false, message: "Error verifying password" };
     }
   }
 }

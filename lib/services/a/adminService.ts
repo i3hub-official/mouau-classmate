@@ -39,7 +39,7 @@ export class AdminService {
       // Decrypt sensitive data
       const decryptedAdmin: AdminUser = {
         id: admin.id,
-        employeeId: admin.employeeId,
+        teacherId: admin.teacherId,
         email: await this.decryptField(admin.user.email, "email"),
         phone: await this.decryptField(admin.phone, "phone"),
         firstName: await this.decryptField(admin.firstName, "name"),
@@ -55,7 +55,7 @@ export class AdminService {
         experience: admin.experience,
         dateJoined: admin.dateJoined,
         isActive: admin.user.isActive,
-        photo: admin.photo,
+        passportUrl: admin.passportUrl,
         // Add required properties from user
         role: "ADMIN", // Replace with enum if available
         name: admin.user.name ?? "",
@@ -101,7 +101,7 @@ export class AdminService {
       // Decrypt sensitive data
       const decryptedAdmin: AdminUser = {
         id: admin.id,
-        employeeId: admin.employeeId,
+        teacherId: admin.teacherId,
         email: await this.decryptField(admin.user.email, "email"),
         phone: await this.decryptField(admin.phone, "phone"),
         firstName: await this.decryptField(admin.firstName, "name"),
@@ -117,7 +117,7 @@ export class AdminService {
         experience: admin.experience,
         dateJoined: admin.dateJoined,
         isActive: admin.user.isActive,
-        photo: admin.photo,
+        passportUrl: admin.passportUrl,
         // Add required properties from user
         role: "ADMIN",
         name: admin.user.name ?? "",
@@ -167,7 +167,7 @@ export class AdminService {
       // Decrypt sensitive data
       const decryptedAdmin: AdminUser = {
         id: admin.id,
-        employeeId: admin.employeeId,
+        teacherId: admin.teacherId,
         email: await this.decryptField(admin.user.email, "email"),
         phone: await this.decryptField(admin.phone, "phone"),
         firstName: await this.decryptField(admin.firstName, "name"),
@@ -183,7 +183,7 @@ export class AdminService {
         experience: admin.experience,
         dateJoined: admin.dateJoined,
         isActive: admin.user.isActive,
-        photo: admin.photo,
+        passportUrl: admin.passportUrl,
         // Add required properties from user
         role: "ADMIN",
         name: admin.user.name ?? "",
@@ -202,12 +202,12 @@ export class AdminService {
   /**
    * Get admin by employee ID
    */
-  static async getAdminByEmployeeId(
-    employeeId: string
+  static async getAdminByTeacherId(
+    teacherId: string
   ): Promise<AdminUser | null> {
     try {
       const admin = await prisma.admin.findUnique({
-        where: { employeeId },
+        where: { teacherId },
         include: {
           user: {
             select: {
@@ -246,7 +246,7 @@ export class AdminService {
         experience: admin.experience,
         dateJoined: admin.dateJoined,
         isActive: admin.user.isActive,
-        photo: admin.photo,
+        passportUrl: admin.passportUrl,
         // Add required properties from user
         role: "ADMIN",
         name: admin.user.name ?? "",
@@ -266,7 +266,7 @@ export class AdminService {
    * Create admin
    */
   static async createAdmin(adminData: {
-    employeeId: string;
+    teacherId: string;
     firstName: string;
     surname: string;
     otherName?: string;
@@ -295,7 +295,7 @@ export class AdminService {
 
       // Check if employee ID already exists
       const existingAdmin = await prisma.admin.findFirst({
-        where: { employeeId: adminData.employeeId },
+        where: { teacherId: adminData.teacherId },
       });
 
       if (existingAdmin) {
@@ -328,7 +328,7 @@ export class AdminService {
       const admin = await prisma.admin.create({
         data: {
           userId: user.id,
-          employeeId: adminData.employeeId,
+          teacherId: adminData.teacherId,
           firstName: (await protectData(adminData.firstName, "name")).encrypted,
           surname: (await protectData(adminData.surname, "name")).encrypted,
           otherName: adminData.otherName
@@ -352,8 +352,8 @@ export class AdminService {
           phoneSearchHash: (
             await protectData(adminData.phone, "phone")
           ).searchHash,
-          employeeIdSearchHash: (
-            await protectData(adminData.employeeId, "name")
+          teacherIdSearchHash: (
+            await protectData(adminData.teacherId, "name")
           ).searchHash,
         },
       });
@@ -366,7 +366,7 @@ export class AdminService {
           resourceType: ResourceType.USER,
           resourceId: admin.id,
           details: {
-            employeeId: adminData.employeeId,
+            teacherId: adminData.teacherId,
             email: protectedEmail.encrypted,
             department: adminData.department,
             institution: adminData.institution,
@@ -421,7 +421,7 @@ export class AdminService {
       qualification?: string;
       specialization?: string;
       experience?: string;
-      photo?: string;
+      passportUrl?: string;
     }
   ) {
     try {
@@ -478,8 +478,8 @@ export class AdminService {
       if (profileData.experience !== undefined) {
         updateData.experience = profileData.experience;
       }
-      if (profileData.photo !== undefined) {
-        updateData.photo = profileData.photo;
+      if (profileData.passportUrl !== undefined) {
+        updateData.passportUrl = profileData.passportUrl;
       }
 
       // Update admin profile
@@ -650,7 +650,7 @@ export class AdminService {
         experience: admin.experience,
         dateJoined: admin.dateJoined,
         isActive: admin.user.isActive,
-        photo: admin.photo,
+        passportUrl: admin.passportUrl,
         // Add required properties from user
         role: "ADMIN",
         name: admin.user.name ?? "",
@@ -733,7 +733,7 @@ export class AdminService {
           experience: admin.experience,
           dateJoined: admin.dateJoined,
           isActive: admin.user.isActive,
-          photo: admin.photo,
+          passportUrl: admin.passportUrl,
         }))
       );
 
@@ -793,7 +793,7 @@ export class AdminService {
                 },
               },
               {
-                employeeId: {
+                teacherId: {
                   contains: query,
                   mode: "insensitive",
                 },
@@ -839,7 +839,7 @@ export class AdminService {
           experience: admin.experience,
           dateJoined: admin.dateJoined,
           isActive: admin.user.isActive,
-          photo: admin.photo,
+          passportUrl: admin.passportUrl,
         }))
       );
 

@@ -1,6 +1,6 @@
 // ===========================================================
-// MOUAU CLASSMATE - PRISMA SCHEMA
-// Identity • E-Learning • Progress • Portfolio
+// MOUAU CLASSMATE - PRISMA SCHEMA (Updated & Complete)
+// Identity • E-Learning • Progress • Portfolio • Examinations
 // ===========================================================
 
 generator client {
@@ -13,7 +13,7 @@ datasource db {
 }
 
 // ===========================================================
-// ENUMS for Type Safety
+// ENUMS (All grouped at the top for clarity)
 // ===========================================================
 
 enum Role {
@@ -50,6 +50,8 @@ enum NotificationType {
   WARNING
   ERROR
   SECURITY
+  REMINDER
+  GRADE
 }
 
 enum AuditAction {
@@ -65,40 +67,37 @@ enum AuditAction {
   COURSE_CREATED
   ASSIGNMENT_CREATED
   GRADE_ASSIGNED
+  EXAM_RESULT_PUBLISHED
   PASSWORD_RESET_REQUESTED
   PASSWORD_RESET
   SESSION_REFRESHED
-  SESSION_CLEANED_UP
-  SESSION_CREATED
   SESSION_INVALIDATED
-  ALL_SESSIONS_INVALIDATED
   NOTIFICATION_SENT
   SYSTEM_CONFIG_UPDATED
   SUSPICIOUS_ACTIVITY_DETECTED
   RATE_LIMIT_EXCEEDED
-  DEVICE_FINGERPRINT_MISMATCH
   RESEND_VERIFICATION_REQUESTED
   USER_LOGIN_FAILED
-  EMAIL_VERIFICATION_FAILED
-  USER_LOGIN_ERROR
   EXPORT_TRANSCRIPT
-  EXPORT_TRANSCRIPT_FAILED
   DATA_EXPORT_REQUESTED
   ACCOUNT_DELETION_REQUESTED
-  NOTIFICATION_SETTINGS_UPDATED
-  USER_PROFILE_VIEWED
-  PASSWORD_CHANGED
-  SECURITY_SETTINGS_UPDATED
   ACCOUNT_DELETION
-  PORTFOLIO_UPDATED
-  USER_PREFERENCES
-  NOTIFICATION_SETTINGS_RESET
-  LECTURE_CREATED
-  TEACHER_REGISTERED
-  COURSE_COMPLETED
-  ADMIN_REGISTERED
   ATTENDANCE_MARKED
-  // Add any other missing actions you need
+  EXAM_RESULT_RECORDED
+  EXAM_RESULT_UPDATED
+  COURSE_COMPLETED
+  ACCOUNT_DEACTIVATED
+  ACCOUNT_REACTIVATED
+  ACCOUNT_ACTIVATED
+  EXAM_COMPLETED
+  COURSE_ENROLLED
+  GRADE_RECEIVED
+  PASSWORD_CHANGED
+  STUDENT_PROFILE_UPDATED
+  EMAIL_UPDATED
+  AUTH_ERROR
+  NOTIFICATION_SETTINGS_UPDATED
+  ACCOUNT_DELETED
 }
 
 enum ResourceType {
@@ -114,12 +113,47 @@ enum ResourceType {
   SESSION
   NOTIFICATION
   ATTENDANCE
+  EXAM
+  EXAM_RESULT
 }
 
 enum SessionSecurityLevel {
   LOW
   MEDIUM
   HIGH
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum ExamType {
+  PHYSICAL
+  ONLINE
+  HYBRID
+}
+
+enum ExamFormat {
+  THEORY
+  PRACTICAL
+  OBJECTIVE
+  ORAL
+  TAKE_HOME
+  PROJECT_BASED
+}
+
+enum ExamRemark {
+  EXCELLENT
+  VERY_GOOD
+  GOOD
+  FAIR
+  PASS
+  FAIL
+  ABSENT
+  MALPRACTICE
 }
 
 // ===========================================================
@@ -131,7 +165,7 @@ model User {
   name                      String?
   email                     String    @unique(map: "users_email_key")
   emailVerified             DateTime?
-  image                     String?
+  passportUrl               String?
   role                      Role      @default(STUDENT)
   isActive                  Boolean   @default(false)
   lastLoginAt               DateTime?
@@ -149,23 +183,29 @@ model User {
   emailVerificationAttempts Int       @default(0)
   metadata                  Json?
 
-  // Authentication (NextAuth)
+  // Auth
   accounts Account[]
   sessions Session[]
 
-  // Role-specific profiles
+  // Profiles (1-to-1)
   student Student?
   teacher Teacher?
   admin   Admin?
 
-  // Related data
-  auditLogs       AuditLog[]
-  notifications   Notification[]
-  resetTokens     PasswordResetToken[]
-  metrics         Metric[]
-  userActivities  UserActivity[]
-  securityEvents  SecurityEvent[]
-  UserPreferences UserPreferences?
+  // Relations
+  auditLogs      AuditLog[]
+  notifications  Notification[]
+  resetTokens    PasswordResetToken[]
+  metrics        Metric[]
+  userActivities UserActivity[]
+  securityEvents SecurityEvent[]
+  preferences    UserPreferences?
+
+  // Reverse relations for convenience
+  markedAttendances Attendance[]    @relation("AttendanceMarkedBy")
+  updatedConfigs    SystemConfig[]  @relation("SystemConfigUpdatedBy")
+  resolvedEvents    SecurityEvent[] @relation("SecurityEventResolvedBy")
+  examResults       ExamResult[]
 
   @@index([email])
   @@index([role])
@@ -174,6 +214,10 @@ model User {
   @@index([accountLocked])
   @@map("users")
 }
+
+// ===========================================================
+// NextAuth Models
+// ===========================================================
 
 model Account {
   id                String   @id @default(cuid())
@@ -193,14 +237,14 @@ model Account {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([provider, providerAccountId], map: "accounts_provider_providerAccountId_key")
+  @@unique([provider, providerAccountId])
   @@index([userId])
   @@map("accounts")
 }
 
 model Session {
   id                String               @id @default(cuid())
-  sessionToken      String               @unique(map: "sessions_sessionToken_key")
+  sessionToken      String               @unique
   userId            String
   expires           DateTime
   createdAt         DateTime             @default(now())
@@ -215,32 +259,24 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([sessionToken])
   @@index([expires])
   @@index([deviceFingerprint])
-  @@index([securityLevel])
-  @@index([createdAt])
   @@map("sessions")
 }
 
 model VerificationToken {
   identifier String
-  token      String   @unique(map: "verification_tokens_token_key")
+  token      String   @unique
   expires    DateTime
   createdAt  DateTime @default(now())
-  tokenId    String?  @unique(map: "verification_tokens_token_id_key") // For secure token reference
 
-  @@unique([identifier, token], map: "verification_tokens_identifier_token_key")
-  @@index([token])
-  @@index([tokenId])
-  @@index([expires])
-  @@index([createdAt])
+  @@unique([identifier, token])
   @@map("verification_tokens")
 }
 
 model PasswordResetToken {
   id        String   @id @default(cuid())
-  token     String   @unique(map: "password_reset_tokens_token_key")
+  token     String   @unique
   userId    String
   expires   DateTime
   used      Boolean  @default(false)
@@ -253,171 +289,139 @@ model PasswordResetToken {
   @@index([token])
   @@index([userId])
   @@index([expires])
-  @@index([used])
   @@map("password_reset_tokens")
 }
 
 // ===========================================================
-// 2. STUDENT & TEACHER PROFILES
+// 2. PROFILES
 // ===========================================================
 
 model Student {
   id            String  @id @default(uuid())
-  // Unique identifiers - all treated separately
-  matricNumber  String  @unique(map: "students_matric_number_key")
-  jambRegNumber String  @unique(map: "students_jamb_reg_number_key")
-  nin           String? @unique(map: "students_nin_key")
+  matricNumber  String  @unique
+  jambRegNumber String  @unique
+  nin           String? @unique
 
-  // Personal information
-  surname     String
-  firstName   String
-  otherName   String?
+  surname     String  @db.Text
+  firstName   String  @db.Text
+  otherName   String? @db.Text
   gender      Gender?
-  phone       String  @unique(map: "students_phone_key")
-  passportUrl String?
-  email       String  @unique(map: "students_email_key")
+  phone       String  @unique @db.Text
+  passportUrl String? @db.Text
+  email       String  @unique @db.Text
 
-  // Academic information
-  department    String
-  course        String         @default("")
-  college       String
-  state         String
-  lga           String
-  maritalStatus MaritalStatus? @default(SINGLE)
-  dateEnrolled  DateTime       @default(now())
-  isActive      Boolean        @default(true)
-  admissionYear Int?
-  dateOfBirth   DateTime?
-  updatedAt     DateTime       @updatedAt
-
-  // Search hashes for encrypted field queries
-  emailSearchHash   String? @unique(map: "students_email_search_hash_key")
-  phoneSearchHash   String? @unique(map: "students_phone_search_hash_key")
-  jambRegSearchHash String? @unique(map: "students_jamb_reg_search_hash_key")
-  ninSearchHash     String? @unique(map: "students_nin_search_hash_key")
-
-  // Security fields
+  department     String         @db.Text
+  course         String         @default("") @db.Text
+  college        String         @db.Text
+  state          String         @db.Text
+  lga            String         @db.Text
+  maritalStatus  MaritalStatus? @default(SINGLE)
+  dateEnrolled   DateTime       @default(now())
+  admissionYear  Int?
+  dateOfBirth    DateTime?
+  isActive       Boolean        @default(true)
   lastActivityAt DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
-  // Relationships
-  userId                String
+  // Encrypted search
+  emailSearchHash   String? @unique
+  phoneSearchHash   String? @unique
+  matricSearchHash  String? @unique
+  jambRegSearchHash String? @unique
+  ninSearchHash     String? @unique
+
+  // Relations
+  userId                String                 @unique
   user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   enrollments           Enrollment[]
   portfolios            Portfolio[]
   submissions           Submission[]
   assignmentSubmissions AssignmentSubmission[]
   attendances           Attendance[]
+  examResults           ExamResult[]
 
-  @@unique([userId], map: "students_user_id_key")
-  @@unique([matricNumber], map: "students_matric_number_alt_key")
-  @@unique([jambRegNumber], map: "students_jamb_reg_number_alt_key")
   @@index([matricNumber])
-  @@index([jambRegNumber])
+  @@index([department, admissionYear])
+  @@index([isActive, admissionYear])
   @@index([email])
   @@index([phone])
-  @@index([department])
-  @@index([college])
-  @@index([dateEnrolled])
-  @@index([lastActivityAt])
   @@map("students")
 }
 
 model Teacher {
-  id             String   @id @default(uuid())
-  employeeId     String   @unique(map: "teachers_employee_id_key")
-  surname        String
-  firstName      String
-  otherName      String?
+  id             String    @id @default(uuid())
+  teacherId      String    @unique
+  surname        String    @db.Text
+  firstName      String    @db.Text
+  otherName      String?   @db.Text
   gender         Gender?
-  phone          String   @unique(map: "teachers_phone_key")
-  email          String   @unique(map: "teachers_email_key")
-  institution    String
-  department     String
-  qualification  String?
-  specialization String?
-  experience     String?
-  dateJoined     DateTime @default(now())
-  isActive       Boolean  @default(true)
-  photo          String?
-  updatedAt      DateTime @updatedAt
-
-  // Security fields
+  phone          String    @unique @db.Text
+  email          String    @unique @db.Text
+  institution    String    @db.Text
+  department     String    @db.Text
+  qualification  String?   @db.Text
+  specialization String?   @db.Text
+  experience     String?   @db.Text
+  title          String?   @db.Text
+  dateJoined     DateTime  @default(now())
+  isActive       Boolean   @default(true)
+  passportUrl    String?   @db.Text
   lastActivityAt DateTime?
+  updatedAt      DateTime  @updatedAt
 
-  // Search hashes for encrypted field queries
-  emailSearchHash      String? @unique(map: "teachers_email_search_hash_key")
-  phoneSearchHash      String? @unique(map: "teachers_phone_search_hash_key")
-  employeeIdSearchHash String? @unique(map: "teachers_employee_id_search_hash_key")
+  emailSearchHash     String? @unique
+  phoneSearchHash     String? @unique
+  teacherIdSearchHash String? @unique
 
-  // Relationships
-  userId            String
+  userId            String       @unique
   user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   instructedCourses Course[]     @relation("CourseInstructor")
   createdCourses    Course[]     @relation("CourseCreator")
   assignments       Assignment[]
 
-  @@unique([userId], map: "teachers_user_id_key")
-  @@unique([employeeId], map: "teachers_employee_id_alt_key")
-  @@index([employeeId])
-  @@index([email])
-  @@index([phone])
+  @@index([teacherId])
   @@index([department])
-  @@index([lastActivityAt])
   @@map("teachers")
 }
 
-// ===========================================================
-// 3. ADMIN PROFILE
-// ===========================================================
-
 model Admin {
-  id             String   @id @default(uuid())
-  employeeId     String   @unique(map: "admins_employee_id_key")
-  surname        String
-  firstName      String
-  otherName      String?
+  id             String    @id @default(uuid())
+  adminId        String    @unique
+  surname        String    @db.Text
+  firstName      String    @db.Text
+  otherName      String?   @db.Text
   gender         Gender?
-  phone          String   @unique(map: "admins_phone_key")
-  email          String   @unique(map: "admins_email_key")
-  department     String
-  institution    String
-  qualification  String?
-  specialization String?
-  experience     String?
-  dateJoined     DateTime @default(now())
-  isActive       Boolean  @default(true)
-  photo          String?
-  updatedAt      DateTime @updatedAt
-
-  // Security fields
+  phone          String    @unique @db.Text
+  email          String    @unique @db.Text
+  department     String    @db.Text
+  institution    String    @db.Text
+  qualification  String?   @db.Text
+  specialization String?   @db.Text
+  experience     String?   @db.Text
+  dateJoined     DateTime  @default(now())
+  isActive       Boolean   @default(true)
+  passportUrl    String?   @db.Text
   lastActivityAt DateTime?
+  updatedAt      DateTime  @updatedAt
 
-  // Search hashes for encrypted field queries
-  emailSearchHash      String? @unique(map: "admins_email_search_hash_key")
-  phoneSearchHash      String? @unique(map: "admins_phone_search_hash_key")
-  employeeIdSearchHash String? @unique(map: "admins_employee_id_search_hash_key")
+  emailSearchHash     String? @unique
+  phoneSearchHash     String? @unique
+  teacherIdSearchHash String? @unique
 
-  // Relationships
-  userId String
+  userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId], map: "admins_user_id_key")
-  @@unique([employeeId], map: "admins_employee_id_alt_key")
-  @@index([employeeId])
-  @@index([email])
-  @@index([phone])
-  @@index([department])
-  @@index([lastActivityAt])
   @@map("admins")
 }
 
 // ===========================================================
-// 4. ACADEMIC STRUCTURE
+// 3. ACADEMIC STRUCTURE
 // ===========================================================
 
 model Course {
   id            String   @id @default(uuid())
-  code          String   @unique(map: "courses_code_key")
+  code          String   @unique
   title         String
   description   String?
   credits       Int      @default(3)
@@ -425,29 +429,26 @@ model Course {
   semester      Int      @default(1)
   courseOutline String?
   isActive      Boolean  @default(true)
+  color         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  color         String? // Hex color code for UI representation
 
-  // Instructor relationships
   instructorId String?
   instructor   Teacher? @relation("CourseInstructor", fields: [instructorId], references: [id])
+  creatorId    String?
+  creator      Teacher? @relation("CourseCreator", fields: [creatorId], references: [id])
 
-  creatorId String?
-  creator   Teacher? @relation("CourseCreator", fields: [creatorId], references: [id])
-
-  // Course content
   lectures    Lecture[]
   enrollments Enrollment[]
-  portfolios  Portfolio[]
   assignments Assignment[]
+  portfolios  Portfolio[]
   attendances Attendance[]
+  exams       Exam[]
+  examResults ExamResult[]
 
   @@index([code])
-  @@index([level])
-  @@index([semester])
+  @@index([level, semester, isActive])
   @@index([instructorId])
-  @@index([createdAt])
   @@map("courses")
 }
 
@@ -460,10 +461,10 @@ model Lecture {
   orderIndex  Int       @default(0)
   isPublished Boolean   @default(false)
   publishedAt DateTime?
+  scheduledAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  // Relations
   courseId    String
   course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
   submissions Submission[]
@@ -471,12 +472,78 @@ model Lecture {
 
   @@index([courseId])
   @@index([orderIndex])
-  @@index([isPublished])
   @@map("lectures")
 }
 
+model Exam {
+  id          String  @id @default(cuid())
+  title       String
+  description String?
+  courseId    String
+  course      Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  date       DateTime
+  duration   Int        @default(180)
+  totalMarks Int        @default(70)
+  venue      String     @default("TBA")
+  type       ExamType   @default(PHYSICAL)
+  format     ExamFormat @default(THEORY)
+
+  isPublished Boolean   @default(false)
+  publishedAt DateTime?
+  deletedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  results ExamResult[]
+
+  @@index([courseId])
+  @@index([date])
+  @@index([isPublished])
+  @@map("exams")
+}
+
 // ===========================================================
-// 5. ENROLLMENTS & PROGRESS TRACKING
+// NEW: Exam Results
+// ===========================================================
+
+model ExamResult {
+  id        String  @id @default(uuid())
+  examId    String
+  exam      Exam    @relation(fields: [examId], references: [id], onDelete: Cascade)
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId  String
+  course    Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  score       Float?
+  percentage  Float? // Auto-calculated: (score / totalMarks) * 100
+  grade       Grade?
+  remark      ExamRemark @default(PASS)
+  isPublished Boolean    @default(false)
+  publishedAt DateTime?
+
+  recordedBy String?
+  recorder   User?    @relation(fields: [recordedBy], references: [id])
+  recordedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Optional fields
+  scriptUrl String?
+  feedback  String?
+
+  @@unique([examId, studentId])
+  @@index([studentId])
+  @@index([courseId])
+  @@index([examId])
+  @@index([isPublished])
+  @@index([grade])
+  @@map("exam_results")
+}
+
+// ===========================================================
+// ENROLLMENTS, ASSIGNMENTS, etc.
 // ===========================================================
 
 model Enrollment {
@@ -490,41 +557,34 @@ model Enrollment {
   score          Float?
   progress       Float     @default(0)
   lastAccessedAt DateTime?
+  createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
-  @@unique([studentId, courseId], map: "enrollments_student_id_course_id_key")
-  @@index([studentId])
-  @@index([courseId])
-  @@index([isCompleted])
-  @@index([dateEnrolled])
+  @@unique([studentId, courseId])
+  @@index([courseId, isCompleted])
   @@map("enrollments")
 }
 
-// ===========================================================
-// 6. ASSESSMENTS & SUBMISSIONS
-// ===========================================================
-
 model Assignment {
-  id                  String   @id @default(uuid())
+  id                  String    @id @default(uuid())
   title               String
   description         String?
   instructions        String?
   dueDate             DateTime
-  maxScore            Int      @default(100)
-  weight              Float    @default(1.0)
-  allowedAttempts     Int      @default(1)
+  maxScore            Int       @default(100)
+  weight              Float     @default(1.0)
+  allowedAttempts     Int       @default(1)
   assignmentUrl       String?
-  isPublished         Boolean  @default(false)
-  allowLateSubmission Boolean  @default(false)
-  status              String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  isPublished         Boolean   @default(false)
+  allowLateSubmission Boolean   @default(false)
+  scheduledAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
 
-  // Relations
   courseId    String
   course      Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
   teacherId   String?
@@ -533,7 +593,6 @@ model Assignment {
 
   @@index([courseId])
   @@index([dueDate])
-  @@index([isPublished])
   @@map("assignments")
 }
 
@@ -548,20 +607,14 @@ model AssignmentSubmission {
   isLate        Boolean   @default(false)
   attemptNumber Int       @default(1)
   gradedAt      DateTime?
-  updatedAt     DateTime  @updatedAt
-  createdAt     DateTime  @default(now())
 
-  // Relations
   studentId    String
   student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
   assignmentId String
   assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
 
-  @@unique([studentId, assignmentId, attemptNumber], map: "assignment_submissions_student_assignment_attempt_key")
-  @@index([studentId])
-  @@index([assignmentId])
-  @@index([submittedAt])
-  @@index([isGraded])
+  @@unique([studentId, assignmentId, attemptNumber])
+  @@index([assignmentId, isGraded])
   @@map("assignment_submissions")
 }
 
@@ -573,21 +626,14 @@ model Submission {
   score       Float?
   feedback    String?
 
-  // Relations
   studentId String
   student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   lectureId String
   lecture   Lecture @relation(fields: [lectureId], references: [id], onDelete: Cascade)
 
-  @@unique([studentId, lectureId], map: "submissions_student_id_lecture_id_key")
-  @@index([studentId])
-  @@index([lectureId])
+  @@unique([studentId, lectureId])
   @@map("submissions")
 }
-
-// ===========================================================
-// 7. PORTFOLIO & PROJECTS
-// ===========================================================
 
 model Portfolio {
   id           String   @id @default(uuid())
@@ -600,21 +646,45 @@ model Portfolio {
   submittedAt  DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  // Relations
   courseId  String
   course    Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
   studentId String
   student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([studentId])
-  @@index([courseId])
-  @@index([submittedAt])
   @@index([isPublished])
   @@map("portfolios")
 }
 
+model Attendance {
+  id           String           @id @default(uuid())
+  studentId    String
+  courseId     String
+  lectureId    String
+  status       AttendanceStatus @default(PRESENT)
+  markedAt     DateTime         @default(now())
+  markedBy     String?
+  markedByUser User?            @relation("AttendanceMarkedBy", fields: [markedBy], references: [id])
+  notes        String?
+  verified     Boolean          @default(false)
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lecture Lecture @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, lectureId])
+  @@index([courseId])
+  @@index([status])
+  @@index([verified])
+  @@map("attendance")
+}
+
 // ===========================================================
-// 8. AUDIT LOGGING & NOTIFICATIONS
+// AUDIT, SECURITY, NOTIFICATIONS
 // ===========================================================
 
 model AuditLog {
@@ -632,9 +702,7 @@ model AuditLog {
 
   @@index([userId])
   @@index([action])
-  @@index([resourceType, resourceId])
   @@index([createdAt])
-  @@index([securityLevel])
   @@map("audit_logs")
 }
 
@@ -649,96 +717,117 @@ model Notification {
   actionUrl String?
   createdAt DateTime         @default(now())
   readAt    DateTime?
-  priority  Int              @default(1) // 1=low, 2=medium, 3=high
+  priority  Int              @default(1)
 
   @@index([userId])
   @@index([isRead])
   @@index([createdAt])
-  @@index([type])
-  @@index([priority])
   @@map("notifications")
 }
 
-// ===========================================================
-// 9. SYSTEM CONFIGURATION & METRICS
-// ===========================================================
-
 model SystemConfig {
-  id          String   @id @default(uuid())
-  key         String   @unique(map: "system_configs_key_key")
-  value       String
-  description String?
-  category    String   @default("general")
-  isPublic    Boolean  @default(false)
-  updatedAt   DateTime @updatedAt
-  updatedBy   String?
+  id            String   @id @default(uuid())
+  key           String   @unique
+  value         String
+  description   String?
+  category      String   @default("general")
+  isPublic      Boolean  @default(false)
+  updatedAt     DateTime @updatedAt
+  updatedBy     String?
+  updatedByUser User?    @relation("SystemConfigUpdatedBy", fields: [updatedBy], references: [id])
 
-  @@index([key])
   @@index([category])
   @@map("system_configs")
+}
+
+model SecurityEvent {
+  id             String    @id @default(uuid())
+  userId         String?
+  user           User?     @relation(fields: [userId], references: [id])
+  eventType      String
+  severity       String    @default("medium")
+  description    String
+  ipAddress      String?
+  userAgent      String?
+  metadata       Json?
+  resolved       Boolean   @default(false)
+  resolvedAt     DateTime?
+  resolvedBy     String?
+  resolvedByUser User?     @relation("SecurityEventResolvedBy", fields: [resolvedBy], references: [id])
+  createdAt      DateTime  @default(now())
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("security_events")
+}
+
+model UserPreferences {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  emailNotifications  Boolean @default(true)
+  pushNotifications   Boolean @default(true)
+  assignmentReminders Boolean @default(true)
+  gradeAlerts         Boolean @default(true)
+  lectureReminders    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_preferences")
+}
+
+model NINCache {
+  id               String   @id @default(cuid())
+  nin              String   @unique
+  surname          String
+  firstName        String
+  otherName        String?
+  gender           String
+  dateOfBirth      String
+  phoneNumber      String
+  state            String?
+  lga              String?
+  residenceAddress String?
+  photo            String?
+  firstVerified    DateTime
+  lastVerified     DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([nin])
+  @@index([phoneNumber])
+  @@map("nin_cache")
 }
 
 model Metric {
   id        String   @id @default(uuid())
   name      String
   value     Float
-  tags      Json? // Additional metadata as JSON
+  tags      Json?
   timestamp DateTime @default(now())
   userId    String?
   user      User?    @relation(fields: [userId], references: [id])
 
   @@index([name])
   @@index([timestamp])
-  @@index([userId])
   @@map("metrics")
 }
 
-// ===========================================================
-// 10. RATE LIMITING & SECURITY
-// ===========================================================
-
 model RateLimit {
   id          String   @id @default(uuid())
-  key         String // Combination of user_id:action or ip:action
+  key         String
   count       Int      @default(1)
   windowStart DateTime
   windowEnd   DateTime
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@unique([key, windowStart], map: "rate_limits_key_window_start_key")
-  @@index([key])
-  @@index([windowStart])
-  @@index([windowEnd])
+  @@unique([key, windowStart])
   @@map("rate_limits")
 }
-
-model SecurityEvent {
-  id          String    @id @default(uuid())
-  userId      String?
-  user        User?     @relation(fields: [userId], references: [id])
-  eventType   String // e.g., "suspicious_login", "multiple_failed_attempts"
-  severity    String    @default("medium") // low, medium, high, critical
-  description String
-  ipAddress   String?
-  userAgent   String?
-  metadata    Json?
-  resolved    Boolean   @default(false)
-  resolvedAt  DateTime?
-  resolvedBy  String?
-  createdAt   DateTime  @default(now())
-
-  @@index([userId])
-  @@index([eventType])
-  @@index([severity])
-  @@index([createdAt])
-  @@index([resolved])
-  @@map("security_events")
-}
-
-// ===========================================================
-// 11. ACTIVITY TRACKING
-// ===========================================================
 
 model UserActivity {
   id           String   @id @default(uuid())
@@ -753,70 +842,6 @@ model UserActivity {
   createdAt    DateTime @default(now())
 
   @@index([userId])
-  @@index([action])
-  @@index([resourceType, resourceId])
   @@index([createdAt])
   @@map("user_activities")
-}
-
-// ===========================================================
-// 12. USER PREFERENCES & SETTINGS
-// ===========================================================
-model UserPreferences {
-  id     String @id @default(cuid())
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Notification settings
-  emailNotifications  Boolean @default(true)
-  pushNotifications   Boolean @default(true)
-  assignmentReminders Boolean @default(true)
-  gradeAlerts         Boolean @default(true)
-  lectureReminders    Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("user_preferences")
-}
-
-// ===========================================================
-// 13. ATTENDANCE TRACKING
-// ===========================================================
-
-model Attendance {
-  id        String           @id @default(uuid())
-  studentId String
-  courseId  String
-  lectureId String
-  status    AttendanceStatus @default(PRESENT)
-  markedAt  DateTime         @default(now())
-  markedBy  String? // User ID of who marked the attendance
-  notes     String?
-  verified  Boolean          @default(false) // If attendance was verified (e.g., biometric, QR code)
-  ipAddress String?
-  userAgent String?
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-
-  // Relations
-  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  lecture Lecture @relation(fields: [lectureId], references: [id], onDelete: Cascade)
-
-  @@unique([studentId, lectureId], map: "attendance_student_lecture_key")
-  @@index([studentId])
-  @@index([courseId])
-  @@index([lectureId])
-  @@index([status])
-  @@index([markedAt])
-  @@index([verified])
-  @@map("attendance")
-}
-
-enum AttendanceStatus {
-  PRESENT
-  ABSENT
-  LATE
-  EXCUSED
 }

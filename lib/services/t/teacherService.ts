@@ -39,7 +39,7 @@ export class TeacherService {
       // Decrypt sensitive data
       const decryptedTeacher: TeacherUser = {
         id: teacher.id,
-        employeeId: teacher.employeeId,
+        teacherId: teacher.teacherId,
         email: await this.decryptField(teacher.user.email, "email"),
         phone: await this.decryptField(teacher.phone, "phone"),
         firstName: await this.decryptField(teacher.firstName, "name"),
@@ -54,7 +54,7 @@ export class TeacherService {
         experience: teacher.experience,
         dateJoined: teacher.dateJoined,
         isActive: teacher.isActive,
-        photo: teacher.photo,
+        passportUrl: teacher.passportUrl,
         // Add required properties from user
         role: "TEACHER",
         name: teacher.user.name ?? "",
@@ -100,7 +100,7 @@ export class TeacherService {
       // Decrypt sensitive data
       const decryptedTeacher: TeacherUser = {
         id: teacher.id,
-        employeeId: teacher.employeeId,
+        teacherId: teacher.teacherId,
         email: await this.decryptField(teacher.user.email, "email"),
         phone: await this.decryptField(teacher.phone, "phone"),
         firstName: await this.decryptField(teacher.firstName, "name"),
@@ -115,7 +115,7 @@ export class TeacherService {
         experience: teacher.experience,
         dateJoined: teacher.dateJoined,
         isActive: teacher.isActive,
-        photo: teacher.photo,
+        passportUrl: teacher.passportUrl,
         // Add required properties from user
         role: "TEACHER",
         name: teacher.user.name ?? "",
@@ -167,7 +167,7 @@ export class TeacherService {
       // Decrypt sensitive data
       const decryptedTeacher: TeacherUser = {
         id: teacher.id,
-        employeeId: teacher.employeeId,
+        teacherId: teacher.teacherId,
         email: await this.decryptField(teacher.user.email, "email"),
         phone: await this.decryptField(teacher.phone, "phone"),
         firstName: await this.decryptField(teacher.firstName, "name"),
@@ -182,7 +182,7 @@ export class TeacherService {
         experience: teacher.experience,
         dateJoined: teacher.dateJoined,
         isActive: teacher.isActive,
-        photo: teacher.photo,
+        passportUrl: teacher.passportUrl,
         // Add required properties from user
         role: "TEACHER",
         name: teacher.user.name ?? "",
@@ -201,12 +201,12 @@ export class TeacherService {
   /**
    * Get teacher by employee ID
    */
-  static async getTeacherByEmployeeId(
-    employeeId: string
+  static async getTeacherByTeacherId(
+    teacherId: string
   ): Promise<TeacherUser | null> {
     try {
       const teacher = await prisma.teacher.findUnique({
-        where: { employeeId },
+        where: { teacherId },
         include: {
           user: {
             select: {
@@ -244,7 +244,7 @@ export class TeacherService {
         experience: teacher.experience,
         dateJoined: teacher.dateJoined,
         isActive: teacher.isActive,
-        photo: teacher.photo,
+        passportUrl: teacher.passportUrl,
         // Add required properties from user
         role: "TEACHER",
         name: teacher.user.name ?? "",
@@ -264,7 +264,7 @@ export class TeacherService {
    * Create teacher
    */
   static async createTeacher(teacherData: {
-    employeeId: string;
+    teacherId: string;
     firstName: string;
     surname: string;
     otherName?: string;
@@ -293,7 +293,7 @@ export class TeacherService {
 
       // Check if employee ID already exists
       const existingTeacher = await prisma.teacher.findFirst({
-        where: { employeeId: teacherData.employeeId },
+        where: { teacherId: teacherData.teacherId },
       });
 
       if (existingTeacher) {
@@ -329,7 +329,7 @@ export class TeacherService {
       const teacher = await prisma.teacher.create({
         data: {
           userId: user.id,
-          employeeId: teacherData.employeeId,
+          teacherId: teacherData.teacherId,
           firstName: (
             await protectData(teacherData.firstName, "name")
           ).encrypted,
@@ -359,7 +359,7 @@ export class TeacherService {
           resourceType: "USER",
           resourceId: teacher.id,
           details: {
-            employeeId: teacherData.employeeId,
+            teacherId: teacherData.teacherId,
             email: protectedEmail.encrypted,
             department: teacherData.department,
             institution: teacherData.institution,
@@ -412,7 +412,7 @@ export class TeacherService {
       qualification?: string;
       specialization?: string;
       experience?: string;
-      photo?: string;
+      passportUrl?: string;
     }
   ) {
     try {
@@ -466,8 +466,8 @@ export class TeacherService {
       if (profileData.experience !== undefined) {
         updateData.experience = profileData.experience;
       }
-      if (profileData.photo !== undefined) {
-        updateData.photo = profileData.photo;
+      if (profileData.passportUrl !== undefined) {
+        updateData.passportUrl = profileData.passportUrl;
       }
 
       // Update teacher profile
@@ -639,7 +639,7 @@ export class TeacherService {
         experience: teacher.experience,
         dateJoined: teacher.dateJoined,
         isActive: teacher.user.isActive,
-        photo: teacher.photo,
+        passportUrl: teacher.passportUrl,
         // Add required properties from user
         role: "TEACHER",
         name: teacher.user.name ?? "",
@@ -719,7 +719,7 @@ export class TeacherService {
           experience: teacher.experience,
           dateJoined: teacher.dateJoined,
           isActive: teacher.user.isActive,
-          photo: teacher.photo,
+          passportUrl: teacher.passportUrl,
         }))
       );
 
@@ -818,7 +818,7 @@ export class TeacherService {
           experience: teacher.experience,
           dateJoined: teacher.dateJoined,
           isActive: teacher.user.isActive,
-          photo: teacher.photo,
+          passportUrl: teacher.passportUrl,
         }))
       );
 

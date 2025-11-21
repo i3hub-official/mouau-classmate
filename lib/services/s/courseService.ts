@@ -1,7 +1,6 @@
 // lib/services/s/courseService.ts
 import { prisma } from "@/lib/server/prisma";
-import { Course, Enrollment, EnrollmentWithCourse } from "@/lib/types/s/index";
-import { AuditAction } from "@prisma/client";
+import { Course, EnrollmentWithCourse } from "@/lib/types/s/index";
 
 export class StudentCourseService {
   /**

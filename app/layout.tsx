@@ -17,7 +17,7 @@ const poppins = Poppins({
 export const metadata: Metadata = {
   title: "MOUAU Classmate - Learning Management System",
   description:
-    "A modern academic management platform connecting students and lecturers at MOUAU. Streamline coursework, materials, and collaboration seamlessly.",
+    "A modern academic management platform connecting students and teachers at MOUAU. Streamline coursework, materials, and collaboration seamlessly.",
   manifest: "/manifest.json",
   icons: {
     icon: [
@@ -57,7 +57,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "MOUAU Classmate - Learning Management System",
     description:
-      "A seamless platform for MOUAU students and lecturers — modern, fast, and collaborative.",
+      "A seamless platform for MOUAU students and teachers — modern, fast, and collaborative.",
     images: ["/og-image.png"],
   },
 

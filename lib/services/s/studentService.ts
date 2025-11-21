@@ -1,26 +1,43 @@
 // lib/services/s/studentService.ts
 import { prisma } from "@/lib/server/prisma";
 import { Student, StudentProfile } from "@/lib/types/s/index";
-import { protectData, unprotectData } from "@/lib/security/dataProtection";
+import { unprotectData } from "@/lib/security/dataProtection";
 import { AuditAction, ResourceType } from "@prisma/client";
 
 export class StudentService {
   /**
-   * Helper method to decrypt student data
+   * Decrypt all encrypted fields in a student record
    */
   private static async decryptStudentData(student: any): Promise<Student> {
     try {
+      const decrypted = await Promise.all([
+        unprotectData(student.firstName, "name"),
+        unprotectData(student.surname, "name"),
+        student.otherName ? unprotectData(student.otherName, "name") : null,
+        unprotectData(student.email, "email"),
+        unprotectData(student.phone, "phone"),
+        unprotectData(student.nin, "nin"),
+        unprotectData(student.jambRegNumber, "jamb"),
+        student.matricNumber
+          ? unprotectData(student.matricNumber, "matric")
+          : student.matricNumber,
+        unprotectData(student.state || "", "location"),
+        unprotectData(student.lga || "", "location"),
+      ]);
+
       return {
         ...student,
-        email: await unprotectData(student.email, "email"),
-        phone: await unprotectData(student.phone, "phone"),
-        firstName: await unprotectData(student.firstName, "name"),
-        surname: await unprotectData(student.surname, "name"),
-        otherName: student.otherName
-          ? await unprotectData(student.otherName, "name")
-          : null,
-        state: await unprotectData(student.state, "location"),
-        lga: await unprotectData(student.lga, "location"),
+        firstName: decrypted[0],
+        surname: decrypted[1],
+        otherName: decrypted[2],
+        email: decrypted[3],
+        phone: decrypted[4],
+        nin: decrypted[5],
+        jambRegNumber: decrypted[6],
+        matricNumber: decrypted[7] || student.matricNumber,
+        state: decrypted[8] || "",
+        lga: decrypted[9] || "",
+        // Decrypt user email if included
         user: student.user
           ? {
               ...student.user,
@@ -29,82 +46,186 @@ export class StudentService {
           : undefined,
       };
     } catch (error) {
-      console.error("Error decrypting student data:", error);
-      throw new Error("Failed to decrypt student data");
+      console.error("Failed to decrypt student data:", error);
+      throw new Error(
+        "Data integrity violation — possible tampering or corruption"
+      );
     }
   }
 
   /**
-   * Get student by ID
+   * Get full decrypted student by ID
    */
   static async getStudentById(id: string): Promise<Student | null> {
-    try {
-      const student = await prisma.student.findUnique({
-        where: { id },
-        include: {
-          user: {
-            select: {
-              id: true,
-              email: true,
-              isActive: true,
-              emailVerified: true,
-              lastLoginAt: true,
-              createdAt: true,
-            },
+    const student = await prisma.student.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            isActive: true,
+            emailVerified: true,
+            lastLoginAt: true,
+            createdAt: true,
           },
         },
-      });
+      },
+    });
 
-      if (!student) return null;
+    if (!student) return null;
 
-      // Decrypt sensitive data
-      return (await this.decryptStudentData(student)) as Student;
-    } catch (error) {
-      console.error("Error getting student by ID:", error);
-      throw error;
-    }
+    return this.decryptStudentData(student);
   }
 
   /**
-   * Get student by matric number
+   * Get student by matric number (case-insensitive)
    */
   static async getStudentByMatricNumber(
     matricNumber: string
   ): Promise<Student | null> {
-    try {
-      const student = await prisma.student.findUnique({
-        where: { matricNumber },
-        include: {
-          user: {
-            select: {
-              id: true,
-              email: true,
-              isActive: true,
-              emailVerified: true,
-              lastLoginAt: true,
-              createdAt: true,
-            },
+    const student = await prisma.student.findUnique({
+      where: { matricNumber: matricNumber.toUpperCase() },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            isActive: true,
+            emailVerified: true,
           },
         },
-      });
+      },
+    });
 
-      if (!student) return null;
+    if (!student) return null;
 
-      // Decrypt sensitive data
-      return (await this.decryptStudentData(student)) as Student;
-    } catch (error) {
-      console.error("Error getting student by matric number:", error);
-      throw error;
-    }
+    return this.decryptStudentData(student);
   }
 
   /**
    * Get student by user ID
    */
   static async getStudentByUserId(userId: string): Promise<Student | null> {
-    try {
-      const student = await prisma.student.findUnique({
-        where: { userId },
+    const student = await prisma.student.findUnique({
+      where: { userId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            isActive: true,
+            emailVerified: true,
+            lastLoginAt: true,
+          },
+        },
+      },
+    });
+
+    if (!student) return null;
+
+    return this.decryptStudentData(student);
+  }
+
+  /**
+   * Get safe, public-facing student profile (for dashboard, profile page)
+   */
+  static async getStudentProfile(
+    userId: string
+  ): Promise<StudentProfile | null> {
+    const student = await prisma.student.findUnique({
+      where: { userId },
+      select: {
+        id: true,
+        matricNumber: true,
+        firstName: true,
+        surname: true,
+        otherName: true,
+        email: true,
+        phone: true,
+        passportUrl: true,
+        department: true,
+        college: true,
+        admissionYear: true,
+        gender: true,
+        dateOfBirth: true,
+        state: true,
+        lga: true,
+        isActive: true,
+        dateEnrolled: true,
+        course: true, // Add course property to select
+        user: {
+          select: { role: true },
+        },
+      },
+    });
+
+    if (!student) return null;
+
+    const [firstName, surname, otherName, email, phone, state, lga] =
+      await Promise.all([
+        unprotectData(student.firstName, "name"),
+        unprotectData(student.surname, "name"),
+        student.otherName ? unprotectData(student.otherName, "name") : null,
+        unprotectData(student.email, "email"),
+        unprotectData(student.phone, "phone"),
+        unprotectData(student.state || "", "location"),
+        unprotectData(student.lga || "", "location"),
+      ]);
+
+    const fullName = [surname, firstName, otherName]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    return {
+      id: student.id,
+      matricNumber: student.matricNumber,
+      firstName,
+      surname,
+      otherName,
+      fullName,
+      email,
+      phone,
+      passportUrl: student.passportUrl,
+      department: student.department,
+      college: student.college,
+      admissionYear: student.admissionYear,
+      gender: student.gender,
+      dateOfBirth: student.dateOfBirth,
+      state: state || "",
+      lga: lga || "",
+      isActive: student.isActive,
+      createdAt: student.dateEnrolled,
+      role: "STUDENT",
+      course: student.course ?? "", // Add course property, fallback to empty string if undefined
+    };
+  }
+
+  /**
+   * Update last activity timestamp
+   */
+  static async updateLastActivity(studentId: string): Promise<void> {
+    await prisma.student.update({
+      where: { id: studentId },
+      data: { lastActivityAt: new Date() },
+    });
+  }
+
+  /**
+   * Get all students with pagination (admin view)
+   */
+  static async getAllStudents(page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+
+    const [students, total] = await Promise.all([
+      prisma.student.findMany({
+        skip,
+        take: limit,
+        orderBy: { matricNumber: "desc" },
         include: {
           user: {
             select: {
@@ -112,286 +233,99 @@ export class StudentService {
               email: true,
               isActive: true,
               emailVerified: true,
-              lastLoginAt: true,
-              createdAt: true,
             },
           },
         },
-      });
+      }),
+      prisma.student.count(),
+    ]);
 
-      if (!student) return null;
+    const decrypted = await Promise.all(
+      students.map((s) => this.decryptStudentData(s))
+    );
 
-      // Decrypt sensitive data
-      return (await this.decryptStudentData(student)) as Student;
-    } catch (error) {
-      console.error("Error getting student by user ID:", error);
-      throw error;
-    }
+    return {
+      students: decrypted as Student[],
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1,
+      },
+    };
   }
 
   /**
-   * Get student profile (safe data without sensitive information)
+   * Search students by name, matric, email, phone (using search hashes)
    */
-  static async getStudentProfile(
-    userId: string
-  ): Promise<StudentProfile | null> {
-    try {
-      const student = await prisma.student.findUnique({
-        where: { userId },
-        select: {
-          id: true,
-          matricNumber: true,
-          firstName: true,
-          surname: true,
-          otherName: true,
-          email: true,
-          phone: true,
-          passportUrl: true,
-          department: true,
-          course: true,
-          college: true,
-          dateEnrolled: true,
-          isActive: true,
-          user: {
-            select: {
-              role: true,
-            },
-          },
+  static async searchStudents(query: string, page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+    const q = query.trim();
+
+    const [students, total] = await Promise.all([
+      prisma.student.findMany({
+        where: {
+          OR: [
+            { matricNumber: { contains: q, mode: "insensitive" } },
+            { emailSearchHash: { contains: q.toLowerCase() } },
+            { phoneSearchHash: { contains: q } },
+            { ninSearchHash: { contains: q } },
+            { jambRegSearchHash: { contains: q } },
+          ],
         },
-      });
-
-      if (!student) return null;
-
-      // Decrypt sensitive data
-      const decryptedProfile = {
-        ...student,
-        email: await unprotectData(student.email, "email"),
-        phone: await unprotectData(student.phone, "phone"),
-        firstName: await unprotectData(student.firstName, "name"),
-        surname: await unprotectData(student.surname, "name"),
-        otherName: student.otherName
-          ? await unprotectData(student.otherName, "name")
-          : null,
-        role: student.user.role,
-      };
-
-      return decryptedProfile as StudentProfile;
-    } catch (error) {
-      console.error("Error getting student profile:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Update student last activity
-   */
-  static async updateLastActivity(studentId: string): Promise<void> {
-    try {
-      await prisma.student.update({
-        where: { id: studentId },
-        data: { lastActivityAt: new Date() },
-      });
-    } catch (error) {
-      console.error("Error updating student last activity:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get all students with pagination
-   */
-  static async getAllStudents(page: number = 1, limit: number = 10) {
-    try {
-      const skip = (page - 1) * limit;
-
-      const [students, total] = await Promise.all([
-        prisma.student.findMany({
-          skip,
-          take: limit,
-          include: {
-            user: {
-              select: {
-                id: true,
-                email: true,
-                isActive: true,
-                emailVerified: true,
-                lastLoginAt: true,
-                createdAt: true,
-              },
-            },
-          },
-          orderBy: { matricNumber: "desc" },
-        }),
-        prisma.student.count(),
-      ]);
-
-      // Decrypt sensitive data
-      const decryptedStudents = await Promise.all(
-        students.map(async (student) => await this.decryptStudentData(student))
-      );
-
-      return {
-        students: decryptedStudents as Student[],
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
+        skip,
+        take: limit,
+        orderBy: { matricNumber: "desc" },
+        include: {
+          user: { select: { email: true, isActive: true } },
         },
-      };
-    } catch (error) {
-      console.error("Error getting all students:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Search students by name, matric number, or email
-   */
-  static async searchStudents(
-    query: string,
-    page: number = 1,
-    limit: number = 10
-  ) {
-    try {
-      const skip = (page - 1) * limit;
-
-      // Search using matric number and email search hashes
-      const [students, total] = await Promise.all([
-        prisma.student.findMany({
-          where: {
-            OR: [
-              { matricNumber: { contains: query, mode: "insensitive" } },
-              // For encrypted fields, we use search hashes
-              { emailSearchHash: { contains: query, mode: "insensitive" } },
-            ],
-          },
-          skip,
-          take: limit,
-          include: {
-            user: {
-              select: {
-                id: true,
-                email: true,
-                isActive: true,
-                emailVerified: true,
-                lastLoginAt: true,
-                createdAt: true,
-              },
-            },
-          },
-          orderBy: { matricNumber: "desc" },
-        }),
-        prisma.student.count({
-          where: {
-            OR: [
-              { matricNumber: { contains: query, mode: "insensitive" } },
-              { emailSearchHash: { contains: query, mode: "insensitive" } },
-            ],
-          },
-        }),
-      ]);
-
-      // Decrypt sensitive data
-      const decryptedStudents = await Promise.all(
-        students.map(async (student) => await this.decryptStudentData(student))
-      );
-
-      return {
-        students: decryptedStudents as Student[],
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
+      }),
+      prisma.student.count({
+        where: {
+          OR: [
+            { matricNumber: { contains: q, mode: "insensitive" } },
+            { emailSearchHash: { contains: q.toLowerCase() } },
+            { phoneSearchHash: { contains: q } },
+          ],
         },
-      };
-    } catch (error) {
-      console.error("Error searching students:", error);
-      throw error;
-    }
+      }),
+    ]);
+
+    const decrypted = await Promise.all(
+      students.map((s) => this.decryptStudentData(s))
+    );
+
+    return {
+      students: decrypted as Student[],
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   /**
-   * Get students by department
+   * Create audit log
    */
-  static async getStudentsByDepartment(
-    department: string,
-    page: number = 1,
-    limit: number = 10
-  ) {
-    try {
-      const skip = (page - 1) * limit;
-
-      const [students, total] = await Promise.all([
-        prisma.student.findMany({
-          where: { department },
-          skip,
-          take: limit,
-          include: {
-            user: {
-              select: {
-                id: true,
-                email: true,
-                isActive: true,
-                emailVerified: true,
-                lastLoginAt: true,
-                createdAt: true,
-              },
-            },
-          },
-          orderBy: { matricNumber: "desc" },
-        }),
-        prisma.student.count({ where: { department } }),
-      ]);
-
-      // Decrypt sensitive data
-      const decryptedStudents = await Promise.all(
-        students.map(async (student) => await this.decryptStudentData(student))
-      );
-
-      return {
-        students: decryptedStudents as Student[],
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
-        },
-      };
-    } catch (error) {
-      console.error("Error getting students by department:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Create audit log for student actions
-   */
-  static async createAuditLog(
+  static async logAction(
     userId: string,
     action: AuditAction,
     resourceType: ResourceType,
     resourceId?: string,
-    details?: any,
-    ipAddress?: string,
-    userAgent?: string
+    details?: any
   ) {
-    try {
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action,
-          resourceType,
-          resourceId,
-          details,
-          ipAddress,
-          userAgent,
-        },
-      });
-    } catch (error) {
-      console.error("Error creating audit log:", error);
-      throw error;
-    }
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action,
+        resourceType,
+        resourceId,
+        details,
+      },
+    });
   }
 }

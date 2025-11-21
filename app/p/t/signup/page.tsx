@@ -127,9 +127,9 @@ const TEACHER_AGREEMENT_CONTENT = {
 };
 
 // Validation functions
-const isValidEmployeeId = (employeeId: string): boolean => {
+const isValidTeacherId = (teacherId: string): boolean => {
   const regex = /^[A-Za-z0-9\/-]{5,}$/;
-  return regex.test(employeeId);
+  return regex.test(teacherId);
 };
 
 export default function TeacherSignupPage() {
@@ -139,13 +139,13 @@ export default function TeacherSignupPage() {
   const router = useRouter();
 
   const [formData, setFormData] = useState({
-    employeeId: "",
+    teacherId: "",
     staffNumber: "",
     surname: "",
     firstName: "",
     otherName: "",
     gender: "",
-    photo: "",
+    passportUrl: "",
     college: "",
     department: "",
     rank: "",
@@ -208,8 +208,8 @@ export default function TeacherSignupPage() {
           throw new Error("Role selection expired");
         }
 
-        // Validate that it's lecturer role
-        if (data.role !== "lecturer") {
+        // Validate that it's teacher role
+        if (data.role !== "teacher") {
           throw new Error("Invalid role. Lecturer role required.");
         }
 
@@ -260,19 +260,18 @@ export default function TeacherSignupPage() {
     e.preventDefault();
     setErrors({});
 
-    const employeeId = formData.employeeId.trim().toUpperCase();
+    const teacherId = formData.teacherId.trim().toUpperCase();
 
-    if (!employeeId) {
+    if (!teacherId) {
       setErrorWithTimeout({
-        employeeId: "Please enter your Employee ID",
+        teacherId: "Please enter your Employee ID",
       });
       return;
     }
 
-    if (!isValidEmployeeId(employeeId)) {
+    if (!isValidTeacherId(teacherId)) {
       setErrorWithTimeout({
-        employeeId:
-          "Please enter a valid Employee ID (e.g., MOUAU/STAFF/12345)",
+        teacherId: "Please enter a valid Employee ID (e.g., MOUAU/STAFF/12345)",
       });
       return;
     }
@@ -286,7 +285,7 @@ export default function TeacherSignupPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ employeeId }),
+        body: JSON.stringify({ teacherId }),
       });
 
       const data = await response.json();
@@ -301,7 +300,7 @@ export default function TeacherSignupPage() {
         setFormData((prev) => ({
           ...prev,
           ...data.data,
-          employeeId: employeeId,
+          teacherId: teacherId,
           staffNumber: data.data.staffNumber || "",
         }));
         setManualEntry(false);
@@ -311,14 +310,14 @@ export default function TeacherSignupPage() {
         setStep(3);
       } else {
         setErrorWithTimeout({
-          employeeId:
+          teacherId:
             "Teacher not found. Please check your employee ID and try again.",
         });
       }
     } catch (error) {
       console.error("Verification error:", error);
       setErrorWithTimeout({
-        employeeId:
+        teacherId:
           error instanceof Error
             ? error.message
             : "Verification failed. Please try again.",
@@ -390,7 +389,7 @@ export default function TeacherSignupPage() {
         surname: formData.surname,
         otherName: formData.otherName,
         gender: formData.gender,
-        employeeId: formData.employeeId,
+        teacherId: formData.teacherId,
         department: formData.department,
         qualification: formData.rank, // Using rank as qualification
         specialization: "", // This might need to be added to the form
@@ -398,7 +397,7 @@ export default function TeacherSignupPage() {
         experience: "", // This might need to be added to the form
         email: formData.email,
         phone: formData.phone,
-        photo: formData.photo,
+        passportUrl: formData.passportUrl,
       };
 
       // Real API call to register teacher
@@ -408,7 +407,7 @@ export default function TeacherSignupPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          employeeId: formData.employeeId,
+          teacherId: formData.teacherId,
           teacherData,
           password: formData.password,
         }),
@@ -457,12 +456,12 @@ export default function TeacherSignupPage() {
 
       if (!file.type.startsWith("image/")) {
         setErrorWithTimeout({
-          photo: "Please select an image file",
+          passportUrl: "Please select an image file",
         });
         return;
       }
 
-      setFormData({ ...formData, photo: file.name });
+      setFormData({ ...formData, passportUrl: file.name });
       const reader = new FileReader();
       reader.onloadend = () => {
         setPhotoPreview(reader.result as string);
@@ -697,20 +696,20 @@ export default function TeacherSignupPage() {
                 </label>
                 <input
                   type="text"
-                  value={formData.employeeId}
+                  value={formData.teacherId}
                   onChange={(e) => {
                     const value = e.target.value.toUpperCase();
-                    handleInputChange("employeeId", value);
+                    handleInputChange("teacherId", value);
                   }}
                   placeholder="e.g., MOUAU/STAFF/12345"
                   className={`form-input w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent ${
-                    errors.employeeId ? "border-error" : "border-border"
+                    errors.teacherId ? "border-error" : "border-border"
                   }`}
                 />
-                {errors.employeeId && (
+                {errors.teacherId && (
                   <p className="text-error text-[10px] md:text-xs mt-1 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 bg-error rounded-full"></span>
-                    {errors.employeeId}
+                    {errors.teacherId}
                   </p>
                 )}
               </div>
@@ -1196,7 +1195,7 @@ export default function TeacherSignupPage() {
                     Employee ID
                   </label>
                   <p className="font-medium text-sm md:text-base text-foreground">
-                    {formData.employeeId}
+                    {formData.teacherId}
                   </p>
                 </div>
                 <div>

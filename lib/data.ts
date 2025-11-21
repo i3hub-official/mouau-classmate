@@ -122,7 +122,7 @@ export const AGREEMENT_CONTENT = {
     {
       title: "3. Data Privacy & Protection",
       content:
-        "Your personal information will be protected in accordance with the Nigerian Data Protection Regulation (NDPR) 2019 and used solely for academic and administrative purposes within MOUAU. We collect and process data including your name, matriculation number, contact information, academic records, and usage data. You have the right to access, correct, or request deletion of your personal data subject to legal and institutional requirements.",
+        "Your personal information will be protected in accordance with the Nigerian Data Protection Regulation (NDPR) 2019 and used solely for academic and administrative purposes within MOUAU. We collect and process data including your name, matriculation number, contact information, academic records, and usage data. By using this service, you consent to Michael Okpara University of Agriculture, Umudike (MOUAU) looking up and verifying your provided personal and identification data from the National Identity Management Commission (NIMC) database to ensure the authenticity and security of your account. You have the right to access, correct, or request deletion of your personal data subject to legal and institutional requirements.",
     },
     {
       title: "4. Academic Integrity",
@@ -182,7 +182,8 @@ export const AGREEMENT_CONTENT = {
     {
       title: "15. Contact & Support",
       content:
-        "For questions about these terms, data privacy concerns, or technical support, contact the MOUAU IT Help Desk at support@mouau.edu.ng or visit the ICT Centre on campus during working hours.",
+        "For questions about these terms, data privacy concerns, or technical support, contact the MOUAU IT Help Desk at support@mouaucm.vercel.app or visit the ICT Centre on campus during working hours.",
     },
   ],
 };
+

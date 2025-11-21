@@ -23,7 +23,7 @@ interface TeacherUser {
     firstName: string;
     surname: string;
     department: string;
-    employeeId: string;
+    teacherId: string;
     college: string;
     academicRank: string;
     photo?: string;
@@ -63,13 +63,13 @@ export default function TeacherLayout({
   const router = useRouter();
   const pathname = usePathname();
 
-  // Use the role protection hook for teacher/lecturer routes
+  // Use the role protection hook for teacher/teacher routes
   const {
     isValid: hasValidRole,
     isLoading: roleLoading,
     roleData,
   } = useRoleProtection({
-    requiredRole: ["teacher", "lecturer"],
+    requiredRole: ["teacher", "teacher"],
     redirectTo: "/sr",
     maxAge: 30,
   });
@@ -535,7 +535,7 @@ export default function TeacherLayout({
                 </div>
                 <div className="text-right text-sm text-muted-foreground">
                   <p>Academic Rank: {authState.user.profile?.academicRank}</p>
-                  <p>Employee ID: {authState.user.profile?.employeeId}</p>
+                  <p>Employee ID: {authState.user.profile?.teacherId}</p>
                 </div>
               </div>
             </div>

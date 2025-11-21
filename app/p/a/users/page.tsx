@@ -73,7 +73,7 @@ interface UserWithDetails {
   } | null;
   teacher?: {
     id: string;
-    employeeId: string;
+    teacherId: string;
     firstName: string;
     surname: string;
     otherName?: string | null;
@@ -90,7 +90,7 @@ interface UserWithDetails {
   } | null;
   admin?: {
     id: string;
-    employeeId: string;
+    teacherId: string;
     firstName: string;
     surname: string;
     otherName?: string | null;
@@ -755,7 +755,7 @@ async function getUsers(
         teacher: {
           select: {
             id: true,
-            employeeId: true,
+            teacherId: true,
             firstName: true,
             surname: true,
             department: true,
@@ -767,7 +767,7 @@ async function getUsers(
         admin: {
           select: {
             id: true,
-            employeeId: true,
+            teacherId: true,
             firstName: true,
             surname: true,
             department: true,

@@ -2,16 +2,25 @@
 
 import { prisma } from "@/lib/server/prisma";
 import {
-  StudentDashboard,
+  StudentProfile,
   DashboardStats,
   RecentActivity,
   UpcomingDeadline,
+  EnrollmentWithCourse,
 } from "@/lib/types/s/index";
 import { StudentCourseService } from "./courseService";
 import { StudentAssignmentService } from "./assignmentService";
 import { StudentGradeService } from "./gradeService";
-import { StudentNotificationService } from "./notificationService";
 import { StudentService } from "./studentService";
+
+interface DashboardResponse {
+  student: StudentProfile;
+  stats: DashboardStats;
+  recentActivities: RecentActivity[];
+  upcomingDeadlines: UpcomingDeadline[];
+  currentEnrollments: EnrollmentWithCourse[];
+  recentGrades: any[]; // You might want to create a proper type for this
+}
 
 export class StudentDashboardService {
   /**
@@ -19,13 +28,57 @@ export class StudentDashboardService {
    */
   static async getStudentDashboard(
     studentId: string
-  ): Promise<StudentDashboard> {
+  ): Promise<DashboardResponse> {
     try {
       // Get student profile
-      const student = await StudentService.getStudentProfile(studentId);
-      if (!student) {
+      const studentResponse = await StudentService.getStudentProfile(studentId);
+      // The response type should match the actual return type from StudentService.getStudentProfile
+      // For example, if it returns { success: boolean, student?: StudentProfile }
+      if (
+        !studentResponse ||
+        (typeof studentResponse === "object" &&
+          "success" in studentResponse &&
+          !studentResponse.success) ||
+        (typeof studentResponse === "object" &&
+          "student" in studentResponse &&
+          !studentResponse.student)
+      ) {
         throw new Error("Student not found");
       }
+
+      // If studentResponse is { success, student }, extract student, else assume it's StudentProfile
+      const student =
+        typeof studentResponse === "object" && "student" in studentResponse
+          ? (studentResponse as any).student
+          : studentResponse;
+
+      // Create student profile
+      const studentProfile: StudentProfile = {
+        id: student.id,
+        matricNumber: student.matricNumber,
+        fullName: this.formatFullName(
+          student.surname,
+          student.firstName,
+          student.otherName
+        ),
+        firstName: student.firstName,
+        surname: student.surname,
+        otherName: student.otherName,
+        email: student.email,
+        phone: student.phone,
+        passportUrl: student.passportUrl,
+        department: student.department,
+        college: student.college,
+        course: student.course,
+        admissionYear: student.admissionYear,
+        gender: student.gender,
+        dateOfBirth: student.dateOfBirth,
+        state: student.state,
+        lga: student.lga,
+        isActive: student.isActive,
+        role: "STUDENT",
+        createdAt: student.createdAt,
+      };
 
       // Get dashboard stats
       const stats = await this.getDashboardStats(studentId);
@@ -44,11 +97,11 @@ export class StudentDashboardService {
       const recentGrades = await this.getRecentGrades(studentId, 5);
 
       return {
-        student,
+        student: studentProfile,
         stats,
         recentActivities,
         upcomingDeadlines,
-        currentEnrollments: currentEnrollments.enrollments,
+        currentEnrollments: currentEnrollments.enrollments || [],
         recentGrades,
       };
     } catch (error) {
@@ -58,70 +111,84 @@ export class StudentDashboardService {
   }
 
   /**
+   * Format full name from components
+   */
+  private static formatFullName(
+    surname: string,
+    firstName: string,
+    otherName: string | null
+  ): string {
+    let fullName = `${surname} ${firstName}`;
+    if (otherName) {
+      fullName += ` ${otherName}`;
+    }
+    return fullName;
+  }
+
+  /**
    * Get dashboard statistics
    */
   private static async getDashboardStats(
     studentId: string
   ): Promise<DashboardStats> {
     try {
-      // Get total courses
-      const totalCourses = await prisma.enrollment.count({
-        where: { studentId },
-      });
-
-      // Get active courses
-      const activeCourses = await prisma.enrollment.count({
-        where: {
-          studentId,
-          isCompleted: false,
-        },
-      });
-
-      // Get completed courses
-      const completedCourses = await prisma.enrollment.count({
-        where: {
-          studentId,
-          isCompleted: true,
-        },
-      });
-
-      // Get pending assignments
+      // Get enrollments with course information
       const enrollments = await prisma.enrollment.findMany({
         where: { studentId },
-        select: { courseId: true },
+        include: {
+          course: {
+            select: {
+              id: true,
+              credits: true,
+              isActive: true,
+            },
+          },
+        },
       });
 
+      const totalCourses = enrollments.length;
+      const activeCourses = enrollments.filter((e) => !e.isCompleted).length;
+      const completedCourses = enrollments.filter((e) => e.isCompleted).length;
+
+      // Calculate total credits
+      const totalCredits = enrollments.reduce((sum, enrollment) => {
+        return sum + (enrollment.course?.credits || 0);
+      }, 0);
+
+      // Get course IDs for assignment queries
       const courseIds = enrollments.map((e) => e.courseId);
 
+      // Get pending assignments (unsubmitted published assignments)
       const pendingAssignments = await prisma.assignment.count({
         where: {
           courseId: { in: courseIds },
           isPublished: true,
-          dueDate: {
-            gte: new Date(),
-          },
+          dueDate: { gte: new Date() },
           submissions: {
             none: {
-              studentId,
+              studentId: studentId,
             },
           },
+          deletedAt: null,
         },
       });
 
-      // Get upcoming deadlines (assignments due in the next 7 days)
-      const upcomingDeadlines = await prisma.assignment.count({
+      // Get upcoming deadlines count (next 7 days)
+      const weekFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const upcomingDeadlinesCount = await prisma.assignment.count({
         where: {
           courseId: { in: courseIds },
           isPublished: true,
           dueDate: {
             gte: new Date(),
-            lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            lte: weekFromNow,
           },
           submissions: {
             none: {
-              studentId,
+              studentId: studentId,
             },
           },
+          deletedAt: null,
         },
       });
 
@@ -129,36 +196,49 @@ export class StudentDashboardService {
       const gradeStats = await StudentGradeService.getGradeStatistics(
         studentId
       );
-      const currentGPA = gradeStats.gpa;
-
-      // Get total credits
-      // If 'Enrollment' does not have a 'credit' field, sum the credits from the related 'Course' model
-      const enrollmentsWithCourses = await prisma.enrollment.findMany({
-        where: { studentId },
-        select: { course: { select: { credits: true } } },
-      });
-      const totalCredits = enrollmentsWithCourses.reduce(
-        (sum, enrollment) => sum + (enrollment.course?.credits ?? 0),
-        0
-      );
+      const currentGPA = gradeStats.gpa || 0;
 
       // Get unread notifications
-      const unreadNotifications = await prisma.notification.count({
+      const user = await prisma.user.findFirst({
         where: {
-          userId: studentId,
-          isRead: false,
+          student: {
+            id: studentId,
+          },
+        },
+        select: { id: true },
+      });
+
+      const unreadNotifications = user
+        ? await prisma.notification.count({
+            where: {
+              userId: user.id,
+              isRead: false,
+            },
+          })
+        : 0;
+
+      // Get upcoming exams (you'll need to implement this based on your Exam model)
+      const upcomingExams = await prisma.exam.count({
+        where: {
+          courseId: { in: courseIds },
+          isPublished: true,
+          date: { gte: new Date() },
         },
       });
 
       return {
         totalCourses,
+        enrolledCourses: totalCourses,
+        totalEnrolledCourses: totalCourses,
         activeCourses,
         completedCourses,
         pendingAssignments,
-        upcomingDeadlines,
+        upcomingDeadlines: upcomingDeadlinesCount,
         currentGPA,
         totalCredits,
         unreadNotifications,
+        upcomingExams,
+        totalCreditsEarned: totalCredits, // You might want different logic for earned vs enrolled credits
       };
     } catch (error) {
       console.error("Error getting dashboard stats:", error);
@@ -167,34 +247,124 @@ export class StudentDashboardService {
   }
 
   /**
-   * Get recent activities
+   * Get recent activities for a student
    */
   private static async getRecentActivities(
     studentId: string,
     limit: number = 10
   ): Promise<RecentActivity[]> {
     try {
-      // Get recent user activities
-      const activities = await prisma.userActivity.findMany({
-        where: { userId: studentId },
-        take: limit,
-        orderBy: { createdAt: "desc" },
+      // Get user ID for the student
+      const user = await prisma.user.findFirst({
+        where: {
+          student: {
+            id: studentId,
+          },
+        },
+        select: { id: true },
       });
 
-      // Transform to RecentActivity format
-      const recentActivities: RecentActivity[] = activities.map((activity) => ({
-        id: activity.id,
-        type: this.getActivityType(activity.action),
-        title: activity.action.replace(/_/g, " ").toLowerCase(), // Added title property
-        description: this.getActivityDescription(activity),
-        timestamp: activity.createdAt,
-        metadata: activity.details,
-      }));
+      if (!user) {
+        return [];
+      }
 
-      return recentActivities;
+      // Get audit logs for recent activities
+      const activities = await prisma.auditLog.findMany({
+        where: {
+          userId: user.id,
+          action: {
+            in: [
+              "ASSIGNMENT_SUBMITTED",
+              "EXAM_COMPLETED",
+              "COURSE_ENROLLED",
+              "GRADE_RECEIVED",
+            ],
+          },
+        },
+        take: limit,
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          action: true,
+          details: true,
+          createdAt: true,
+          resourceType: true,
+          resourceId: true,
+        },
+      });
+
+      return activities.map((activity) => {
+        const type = this.mapActionToActivityType(activity.action);
+        const title = this.getActivityTitle(activity.action, activity.details);
+        const description = this.getActivityDescription(
+          activity.action,
+          activity.details
+        );
+
+        return {
+          id: activity.id,
+          activityType: type,
+          title,
+          description: description || undefined,
+          date: activity.createdAt,
+        };
+      });
     } catch (error) {
-      console.error("Error getting recent activities:", error);
-      throw error;
+      console.error("Error fetching recent activities:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Map action to activity type
+   */
+  private static mapActionToActivityType(
+    action: string
+  ): RecentActivity["activityType"] {
+    const map: Record<string, RecentActivity["activityType"]> = {
+      ASSIGNMENT_SUBMITTED: "assignment_submitted",
+      EXAM_COMPLETED: "exam_taken",
+      COURSE_ENROLLED: "course_completed",
+      GRADE_RECEIVED: "assignment_submitted", // or create "grade_received" type
+    };
+
+    return map[action] || "assignment_submitted";
+  }
+
+  /**
+   * Get activity title
+   */
+  private static getActivityTitle(action: string, details?: any): string {
+    const titles: Record<string, string> = {
+      ASSIGNMENT_SUBMITTED: "Assignment Submitted",
+      EXAM_COMPLETED: "Exam Completed",
+      COURSE_ENROLLED: "Course Enrolled",
+      GRADE_RECEIVED: "Grade Received",
+    };
+
+    return titles[action] || "Activity Recorded";
+  }
+
+  /**
+   * Get activity description
+   */
+  private static getActivityDescription(
+    action: string,
+    details?: any
+  ): string | null {
+    if (!details) return null;
+
+    switch (action) {
+      case "ASSIGNMENT_SUBMITTED":
+        return details.assignmentTitle || `Assignment submission`;
+      case "EXAM_COMPLETED":
+        return details.examTitle || `Exam completed`;
+      case "COURSE_ENROLLED":
+        return details.courseCode || `New course enrollment`;
+      case "GRADE_RECEIVED":
+        return `Score: ${details.score || "N/A"}`;
+      default:
+        return null;
     }
   }
 
@@ -209,116 +379,79 @@ export class StudentDashboardService {
       const assignments = await StudentAssignmentService.getUpcomingAssignments(
         studentId,
         30
-      ); // Next 30 days
-
-      // Filter assignments that haven't been submitted
-      const unsubmittedAssignments = assignments.filter(
-        (assignment) => assignment.submissions.length === 0
       );
 
-      // Transform to UpcomingDeadline format
-      const upcomingDeadlines: UpcomingDeadline[] = unsubmittedAssignments
-        .slice(0, limit)
-        .map((assignment) => {
-          const dueDate = new Date(assignment.dueDate);
-          const now = new Date();
-          const daysRemaining = Math.ceil(
-            (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-          );
+      return assignments.slice(0, limit).map((assignment) => {
+        const dueDate = new Date(assignment.dueDate);
+        const now = new Date();
+        const daysRemaining = Math.ceil(
+          (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+        );
 
-          return {
-            id: assignment.id,
-            assignmentId: assignment.id,
-            title: assignment.title,
-            courseCode: assignment.course?.code ?? "",
-            courseTitle: assignment.course?.title ?? "",
-            dueDate,
-            daysRemaining,
-            isSubmitted: false,
-            isLate: false,
-          };
-        });
-
-      return upcomingDeadlines;
+        return {
+          id: assignment.id,
+          title: assignment.title,
+          courseCode: assignment.course?.code || "",
+          courseTitle: assignment.course?.title || "",
+          dueDate,
+          daysRemaining,
+          type: "assignment",
+          isOverdue: dueDate < now,
+        };
+      });
     } catch (error) {
       console.error("Error getting upcoming deadlines:", error);
-      throw error;
+      return [];
     }
   }
 
   /**
    * Get recent grades
    */
-  private static async getRecentGrades(studentId: string, limit: number = 10) {
+  private static async getRecentGrades(
+    studentId: string,
+    limit: number = 10
+  ): Promise<any[]> {
     try {
-      const submissions = await StudentAssignmentService.getGradedAssignments(
-        studentId,
-        1,
-        limit
-      );
+      const submissionsResponse =
+        await StudentAssignmentService.getGradedAssignments(
+          studentId,
+          1,
+          limit
+        );
+      const submissions = submissionsResponse?.assignments || [];
 
-      // Transform to GradeInfo format
-      const recentGrades = submissions.assignments.map((assignment) => {
-        const submission = assignment.submissions[0];
-        return {
-          courseId: assignment.courseId,
-          courseCode: assignment.course?.code ?? "",
-          courseTitle: assignment.course?.title ?? "",
-          credits: assignment.course?.credits ?? 0,
-          grade: this.scoreToGrade(submission.score),
-          score: submission.score,
-          gradePoint: this.calculateGradePoint(
-            this.scoreToGrade(submission.score)
-          ),
-          semester: assignment.course?.semester ?? 0,
-          level: assignment.course?.level ?? 0,
-        };
-      });
+      return submissions
+        .map((assignment: any) => {
+          const submission = assignment.submissions?.[0];
+          if (!submission) return null;
 
-      return recentGrades;
+          return {
+            courseId: assignment.courseId,
+            courseCode: assignment.course?.code || "",
+            courseTitle: assignment.course?.title || "",
+            credits: assignment.course?.credits || 0,
+            grade: this.scoreToGrade(submission.score),
+            score: submission.score,
+            gradePoint: this.calculateGradePoint(
+              this.scoreToGrade(submission.score)
+            ),
+            assignmentTitle: assignment.title,
+            submittedAt: submission.submittedAt,
+          };
+        })
+        .filter(Boolean);
     } catch (error) {
       console.error("Error getting recent grades:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get activity type from action
-   */
-  private static getActivityType(
-    action: string
-  ): "enrollment" | "submission" | "grade" | "assignment" | "lecture" {
-    if (action.includes("ENROLLMENT")) return "enrollment";
-    if (action.includes("SUBMISSION")) return "submission";
-    if (action.includes("GRADE")) return "grade";
-    if (action.includes("ASSIGNMENT")) return "assignment";
-    if (action.includes("LECTURE")) return "lecture";
-    return "enrollment"; // Default
-  }
-
-  /**
-   * Get activity description from activity
-   */
-  private static getActivityDescription(activity: any): string {
-    switch (activity.action) {
-      case "ENROLLMENT_CREATED":
-        return `Enrolled in course`;
-      case "ASSIGNMENT_SUBMITTED":
-        return `Submitted assignment`;
-      case "GRADE_ASSIGNED":
-        return `Received a grade`;
-      default:
-        return activity.action.replace(/_/g, " ").toLowerCase();
+      return [];
     }
   }
 
   /**
    * Convert score to grade
    */
-  private static scoreToGrade(
-    score: number | null | undefined
-  ): "A" | "B" | "C" | "D" | "E" | "F" | null {
-    if (score === null || score === undefined) return null;
+  private static scoreToGrade(score: number | null | undefined): string {
+    if (score === null || score === undefined) return "N/A";
     if (score >= 70) return "A";
     if (score >= 60) return "B";
     if (score >= 50) return "C";
@@ -328,11 +461,9 @@ export class StudentDashboardService {
   }
 
   /**
-   * Calculate grade point from grade
+   * Calculate grade point
    */
-  private static calculateGradePoint(
-    grade: "A" | "B" | "C" | "D" | "E" | "F" | null
-  ): number {
+  private static calculateGradePoint(grade: string): number {
     switch (grade) {
       case "A":
         return 5.0;

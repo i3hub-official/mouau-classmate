@@ -1,13 +1,51 @@
 // src/lib/security/cspConfig.ts
 
-export const cspConfig = {
-  // Default source for everything
-  defaultSrc: [
-    "'self'",
-    "blob:",
+// Common sources that are allowed in both dev and prod
+const commonSources = {
+  // External domains
+  external: [
     "https://cecportal.vercel.app",
     "https://cecms.vercel.app",
     "https://apinigeria.vercel.app",
+    "https://checkmyninbvn.com.ng/api",
+    "https://res.cloudinary.com",
+    "https://*.cloudinary.com/",
+  ],
+
+  // Analytics and third-party services
+  analytics: [
+    "https://www.google-analytics.com",
+    "https://stats.g.doubleclick.net",
+    "https://apis.google.com",
+    "https://www.googletagmanager.com",
+  ],
+
+  // CDN and media services
+  media: [
+    "https://ui-avatars.com",
+    "https://placehold.co",
+    "https://res.cloudinary.com",
+    "https://*.cloudinary.com/",
+    "https://*.pravatar.cc",
+    "https://i.pravatar.cc",
+  ],
+
+  // Fonts
+  fonts: ["https://fonts.googleapis.com", "https://fonts.gstatic.com"],
+
+  // IP detection services
+  ipDetection: [
+    "https://api.ipify.org",
+    "https://api.my-ip.io",
+    "https://ipecho.net",
+    "https://ident.me",
+    "https://icanhazip.com",
+  ],
+};
+
+// Development-only sources (LAN IPs and localhost)
+const devOnlySources = {
+  local: [
     "https://localhost",
     "http://localhost",
     "https://127.0.0.1",
@@ -16,23 +54,27 @@ export const cspConfig = {
     "http://192.168.0.159",
   ],
 
+  webSockets: [
+    "ws://localhost:*",
+    "ws://127.0.0.1:*",
+    "ws://192.168.0.159:*",
+    "wss://localhost:*",
+    "wss://127.0.0.1:*",
+    "wss://192.168.0.159:*",
+  ],
+};
+
+const baseConfig = {
+  // Default source for everything
+  defaultSrc: ["'self'", "blob:", ...commonSources.external],
+
   // JavaScript sources
   scriptSrc: [
     "'self'",
     "'report-sample'",
     "blob:",
-    "https://mouaucm.vercel.app",
-    "https://apinigeria.vercel.app",
-    "https://localhost",
-    "http://localhost",
-    "https://127.0.0.1",
-    "http://127.0.0.1",
-    "https://192.168.0.159",
-    "http://192.168.0.159",
-    "'unsafe-inline'", // Needed for Tailwind in dev
-    "'unsafe-eval'", // Needed for Next.js in dev
-    "https://apis.google.com",
-    "https://www.googletagmanager.com",
+    ...commonSources.external,
+    ...commonSources.analytics,
   ],
 
   // Stylesheets
@@ -40,15 +82,8 @@ export const cspConfig = {
     "'self'",
     "'unsafe-inline'", // Tailwind requires this
     "blob:",
-    "https://fonts.googleapis.com",
-    "https://mouaucm.vercel.app",
-    "https://apinigeria.vercel.app",
-    "https://localhost",
-    "http://localhost",
-    "https://127.0.0.1",
-    "http://127.0.0.1",
-    "https://192.168.0.159",
-    "http://192.168.0.159",
+    ...commonSources.fonts,
+    ...commonSources.external,
   ],
 
   // Images
@@ -56,22 +91,9 @@ export const cspConfig = {
     "'self'",
     "data:",
     "blob:",
-    "https://mouaucm.vercel.app",
-    "https://apinigeria.vercel.app",
-    "https://ui-avatars.com",
-    "https://placehold.co",
-    "https://res.cloudinary.com",
-    "https://*.cloudinary.com/",
-    "https://*.pravatar.cc",
-    "https://i.pravatar.cc",
-    "https://localhost",
-    "http://localhost",
-    "https://127.0.0.1",
-    "http://127.0.0.1",
-    "https://192.168.0.159",
-    "http://192.168.0.159",
-    "https://www.google-analytics.com",
-    "https://stats.g.doubleclick.net",
+    ...commonSources.external,
+    ...commonSources.media,
+    ...commonSources.analytics,
   ],
 
   // Fonts
@@ -79,74 +101,24 @@ export const cspConfig = {
     "'self'",
     "data:",
     "blob:",
-    "https://fonts.gstatic.com",
-    "https://mouaucm.vercel.app",
-    "https://apinigeria.vercel.app",
-    "https://localhost",
-    "http://localhost",
-    "https://127.0.0.1",
-    "http://127.0.0.1",
-    "https://192.168.0.159",
-    "http://192.168.0.159",
+    ...commonSources.fonts,
+    ...commonSources.external,
   ],
 
   // Connections
   connectSrc: [
     "'self'",
     "blob:",
-    "https://mouaucm.vercel.app",
-    "https://apinigeria.vercel.app",
-    "https://localhost",
-    "http://localhost",
-    "https://127.0.0.1",
-    "http://127.0.0.1",
-    "https://192.168.0.159",
-    "http://192.168.0.159",
-    "ws://localhost:*",
-    "ws://127.0.0.1:*",
-    "ws://192.168.0.159:*",
-    "wss://localhost:*",
-    "wss://127.0.0.1:*",
-    "wss://192.168.0.159:*",
-    "https://www.google-analytics.com",
-    "https://stats.g.doubleclick.net",
-
-    // External IP APIs
-    "https://api.ipify.org",
-    "https://api.my-ip.io",
-    "https://ipecho.net",
-    "https://ident.me",
-    "https://icanhazip.com",
+    ...commonSources.external,
+    ...commonSources.analytics,
+    ...commonSources.ipDetection,
   ],
 
   // Media
-  mediaSrc: [
-    "'self'",
-    "blob:",
-    "data:",
-    "https://mouaucm.vercel.app",
-    "https://apinigeria.vercel.app",
-    "https://localhost",
-    "http://localhost",
-    "https://127.0.0.1",
-    "http://127.0.0.1",
-    "https://192.168.0.159",
-    "http://192.168.0.159",
-  ],
+  mediaSrc: ["'self'", "blob:", "data:", ...commonSources.external],
 
   // Frames
-  frameSrc: [
-    "'self'",
-    "blob:",
-    "https://mouaucm.vercel.app",
-    "https://apinigeria.vercel.app",
-    "https://localhost",
-    "http://localhost",
-    "https://127.0.0.1",
-    "http://127.0.0.1",
-    "https://192.168.0.159",
-    "http://192.168.0.159",
-  ],
+  frameSrc: ["'self'", "blob:", ...commonSources.external],
 
   // Objects
   objectSrc: ["'none'"],
@@ -155,13 +127,9 @@ export const cspConfig = {
   baseUri: ["'self'"],
 
   // Form actions
-  formAction: [
-    "'self'",
-    "https://mouaucm.vercel.app",
-    "https://apinigeria.vercel.app",
-  ],
+  formAction: ["'self'", ...commonSources.external],
 
-  // Security directives (✅ empty arrays instead of booleans)
+  // Security directives
   frameAncestors: ["'none'"],
   upgradeInsecureRequests: [],
   blockAllMixedContent: [],
@@ -170,30 +138,40 @@ export const cspConfig = {
   reportUri: ["/api/csp-violation-report"],
 };
 
-// Looser config for development
+// Development config with LAN IPs and unsafe directives
 export const devCspConfig = {
-  ...cspConfig,
-  scriptSrc: [...cspConfig.scriptSrc, "'unsafe-inline'", "'unsafe-eval'"],
+  ...baseConfig,
+  defaultSrc: [...baseConfig.defaultSrc, ...devOnlySources.local],
+  scriptSrc: [
+    ...baseConfig.scriptSrc,
+    ...devOnlySources.local,
+    "'unsafe-inline'", // Needed for Tailwind in dev
+    "'unsafe-eval'", // Needed for Next.js in dev
+  ],
+  styleSrc: [...baseConfig.styleSrc, ...devOnlySources.local],
+  imgSrc: [...baseConfig.imgSrc, ...devOnlySources.local],
+  fontSrc: [...baseConfig.fontSrc, ...devOnlySources.local],
+  connectSrc: [
+    ...baseConfig.connectSrc,
+    ...devOnlySources.local,
+    ...devOnlySources.webSockets,
+  ],
+  mediaSrc: [...baseConfig.mediaSrc, ...devOnlySources.local],
+  frameSrc: [...baseConfig.frameSrc, ...devOnlySources.local],
 };
 
-// Stricter config for production
+// Production config - no LAN IPs, only public domains
 export const prodCspConfig = {
-  ...cspConfig,
+  ...baseConfig,
   scriptSrc: [
-    ...cspConfig.scriptSrc,
-    "'unsafe-inline'", // required for hydration unless you add nonces
-    "'unsafe-eval'", // required by Next.js dev/runtime
+    ...baseConfig.scriptSrc.filter((src) => !src.includes("unsafe")),
     "https://vercel.live",
     "https://*.vercel.app",
-    "https://mouaucm.vercel.app",
-    "https://apinigeria.vercel.app",
   ],
   connectSrc: [
-    ...cspConfig.connectSrc,
+    ...baseConfig.connectSrc,
     "https://vercel.live",
     "wss://vercel.live",
-    "https://mouaucm.vercel.app",
-    "https://apinigeria.vercel.app",
   ],
 };
 
@@ -201,3 +179,6 @@ export const prodCspConfig = {
 export const getCspConfig = () => {
   return process.env.NODE_ENV === "production" ? prodCspConfig : devCspConfig;
 };
+
+// Helper to check if we're in development
+export const isDevelopment = () => process.env.NODE_ENV === "development";

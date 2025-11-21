@@ -2,128 +2,216 @@
 
 import { prisma } from "@/lib/server/prisma";
 import {
-  Assignment,
-  AssignmentWithSubmission,
+  AssignmentWithStudentSubmission,
+  AssignmentSubmission,
   AssignmentSubmissionData,
 } from "@/lib/types/s/index";
 import { AuditAction } from "@prisma/client";
 
+interface AssignmentResponse {
+  assignments: AssignmentWithStudentSubmission[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
+}
+
+interface SubmissionResponse {
+  success: boolean;
+  submission: any;
+  message: string;
+  attemptNumber: number;
+  attemptsRemaining: number;
+}
+
 export class StudentAssignmentService {
   /**
-   * Get assignments for a student
+   * Get all published assignments for a student (with submission status)
    */
   static async getStudentAssignments(
     studentId: string,
     page: number = 1,
     limit: number = 10
-  ) {
-    try {
-      const skip = (page - 1) * limit;
+  ): Promise<AssignmentResponse> {
+    const skip = (page - 1) * limit;
 
-      // Get student enrollments to find their courses
-      const enrollments = await prisma.enrollment.findMany({
-        where: { studentId },
-        select: { courseId: true },
-      });
+    const enrollments = await prisma.enrollment.findMany({
+      where: { studentId, isCompleted: false },
+      select: { courseId: true },
+    });
 
-      const courseIds = enrollments.map((e) => e.courseId);
-
-      if (courseIds.length === 0) {
-        return {
-          assignments: [],
-          pagination: {
-            page,
-            limit,
-            total: 0,
-            totalPages: 0,
-          },
-        };
-      }
-
-      const [assignments, total] = await Promise.all([
-        prisma.assignment.findMany({
-          where: {
-            courseId: { in: courseIds },
-            isPublished: true,
-          },
-          skip,
-          take: limit,
-          include: {
-            course: true,
-            submissions: {
-              where: { studentId },
-              orderBy: { attemptNumber: "desc" },
-              take: 1, // Get only the latest submission
-            },
-          },
-          orderBy: { dueDate: "asc" },
-        }),
-        prisma.assignment.count({
-          where: {
-            courseId: { in: courseIds },
-            isPublished: true,
-          },
-        }),
-      ]);
-
+    const courseIds = enrollments.map((e) => e.courseId);
+    if (courseIds.length === 0) {
       return {
-        assignments: assignments as AssignmentWithSubmission[],
+        assignments: [],
         pagination: {
           page,
           limit,
-          total,
-          totalPages: Math.ceil(total / limit),
+          total: 0,
+          totalPages: 0,
+          hasNext: false,
+          hasPrev: false,
         },
       };
-    } catch (error) {
-      console.error("Error getting student assignments:", error);
-      throw error;
     }
-  }
 
-  /**
-   * Get assignment by ID
-   */
-  static async getAssignmentById(id: string): Promise<Assignment | null> {
-    try {
-      const assignment = await prisma.assignment.findUnique({
-        where: { id },
-        include: {
-          course: true,
+    const [assignments, total] = await Promise.all([
+      prisma.assignment.findMany({
+        where: {
+          courseId: { in: courseIds },
+          isPublished: true,
+          deletedAt: null,
         },
-      });
-
-      return assignment as Assignment;
-    } catch (error) {
-      console.error("Error getting assignment by ID:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get assignment with student's submissions
-   */
-  static async getAssignmentWithSubmissions(
-    assignmentId: string,
-    studentId: string
-  ): Promise<AssignmentWithSubmission | null> {
-    try {
-      const assignment = await prisma.assignment.findUnique({
-        where: { id: assignmentId },
         include: {
-          course: true,
+          course: {
+            select: {
+              id: true,
+              code: true,
+              title: true,
+              level: true,
+              semester: true,
+              credits: true,
+              description: true,
+              isActive: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
           submissions: {
             where: { studentId },
             orderBy: { attemptNumber: "desc" },
           },
         },
+        orderBy: { dueDate: "asc" },
+        skip,
+        take: limit,
+      }),
+      prisma.assignment.count({
+        where: {
+          courseId: { in: courseIds },
+          isPublished: true,
+          deletedAt: null,
+        },
+      }),
+    ]);
+
+    const enrichedAssignments: AssignmentWithStudentSubmission[] =
+      assignments.map((a) => {
+        const submissions = a.submissions as AssignmentSubmission[];
+        const latest = submissions[0] || null;
+        const attemptsUsed = submissions.length;
+
+        // Calculate best score (only from graded submissions)
+        const gradedSubmissions = submissions.filter(
+          (s) => s.isGraded && s.score !== null
+        );
+        const bestScore =
+          gradedSubmissions.length > 0
+            ? Math.max(...gradedSubmissions.map((s) => s.score!))
+            : null;
+
+        const isOverdue = new Date() > a.dueDate;
+        const canSubmit =
+          attemptsUsed < a.allowedAttempts &&
+          (!isOverdue || a.allowLateSubmission);
+
+        return {
+          ...a,
+          course: a.course,
+          submissions,
+          latestSubmission: latest,
+          bestScore,
+          attemptsUsed,
+          canSubmit,
+          isOverdue,
+        };
       });
 
-      return assignment as AssignmentWithSubmission;
-    } catch (error) {
-      console.error("Error getting assignment with submissions:", error);
-      throw error;
-    }
+    return {
+      assignments: enrichedAssignments,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1,
+      },
+    };
+  }
+
+  /**
+   * Get single assignment with full submission history
+   */
+  static async getAssignmentById(
+    assignmentId: string,
+    studentId: string
+  ): Promise<AssignmentWithStudentSubmission | null> {
+    const assignment = await prisma.assignment.findFirst({
+      where: {
+        id: assignmentId,
+        isPublished: true,
+        deletedAt: null,
+        course: {
+          enrollments: {
+            some: { studentId, isCompleted: false },
+          },
+        },
+      },
+      include: {
+        course: {
+          select: {
+            id: true,
+            code: true,
+            title: true,
+            level: true,
+            semester: true,
+            credits: true,
+            description: true,
+            isActive: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        submissions: {
+          where: { studentId },
+          orderBy: { attemptNumber: "desc" },
+        },
+      },
+    });
+
+    if (!assignment) return null;
+
+    const submissions = assignment.submissions as AssignmentSubmission[];
+    const attemptsUsed = submissions.length;
+
+    const gradedSubmissions = submissions.filter(
+      (s) => s.isGraded && s.score !== null
+    );
+    const bestScore =
+      gradedSubmissions.length > 0
+        ? Math.max(...gradedSubmissions.map((s) => s.score!))
+        : null;
+
+    const isOverdue = new Date() > assignment.dueDate;
+    const canSubmit =
+      attemptsUsed < assignment.allowedAttempts &&
+      (!isOverdue || assignment.allowLateSubmission);
+
+    return {
+      ...assignment,
+      course: assignment.course,
+      submissions,
+      latestSubmission: submissions[0] || null,
+      bestScore,
+      attemptsUsed,
+      canSubmit,
+      isOverdue,
+    };
   }
 
   /**
@@ -131,299 +219,347 @@ export class StudentAssignmentService {
    */
   static async submitAssignment(
     studentId: string,
-    submissionData: AssignmentSubmissionData
-  ) {
-    try {
-      const { assignmentId, content, submissionUrl, attemptNumber } =
-        submissionData;
+    data: AssignmentSubmissionData
+  ): Promise<SubmissionResponse> {
+    const { assignmentId, content, submissionUrl } = data;
 
-      // Check if assignment exists and is published
-      const assignment = await prisma.assignment.findUnique({
-        where: { id: assignmentId },
-      });
-
-      if (!assignment) {
-        throw new Error("Assignment not found");
-      }
-
-      if (!assignment.isPublished) {
-        throw new Error("Assignment is not available for submission");
-      }
-
-      // Check if student is enrolled in the course
-      const enrollment = await prisma.enrollment.findUnique({
-        where: {
-          studentId_courseId: {
-            studentId,
-            courseId: assignment.courseId,
+    const assignment = await prisma.assignment.findUnique({
+      where: { id: assignmentId },
+      include: {
+        course: {
+          select: {
+            id: true,
+            code: true,
+            title: true,
           },
         },
-      });
+      },
+    });
 
-      if (!enrollment) {
-        throw new Error("You are not enrolled in this course");
-      }
+    if (!assignment || !assignment.isPublished || assignment.deletedAt) {
+      throw new Error("Assignment not found or not available");
+    }
 
-      // Check if submission is late
-      const isLate = new Date() > new Date(assignment.dueDate);
-
-      // Check if late submissions are allowed
-      if (isLate && !assignment.allowLateSubmission) {
-        throw new Error("Late submissions are not allowed for this assignment");
-      }
-
-      // Check if the student has exceeded the allowed attempts
-      const existingSubmissions = await prisma.assignmentSubmission.findMany({
-        where: {
+    // Check enrollment
+    const enrollment = await prisma.enrollment.findUnique({
+      where: {
+        studentId_courseId: {
           studentId,
-          assignmentId,
+          courseId: assignment.courseId,
         },
-      });
+      },
+    });
 
-      if (existingSubmissions.length >= assignment.allowedAttempts) {
-        throw new Error(
-          `You have exceeded the maximum number of attempts (${assignment.allowedAttempts})`
-        );
-      }
+    if (!enrollment || enrollment.isCompleted) {
+      throw new Error(
+        "You are not enrolled in this course or course is completed"
+      );
+    }
 
-      // Create submission
-      const submission = await prisma.assignmentSubmission.create({
+    const now = new Date();
+    const isLate = now > assignment.dueDate;
+
+    if (isLate && !assignment.allowLateSubmission) {
+      throw new Error("Late submissions are not allowed for this assignment");
+    }
+
+    // Check submission attempts
+    const submissionCount = await prisma.assignmentSubmission.count({
+      where: { assignmentId, studentId },
+    });
+
+    if (submissionCount >= assignment.allowedAttempts) {
+      throw new Error(
+        `Maximum ${assignment.allowedAttempts} attempt(s) exceeded`
+      );
+    }
+
+    const attemptNumber = submissionCount + 1;
+
+    const submission = await prisma.$transaction(async (tx) => {
+      const newSubmission = await tx.assignmentSubmission.create({
         data: {
           studentId,
           assignmentId,
           content,
           submissionUrl,
-          attemptNumber: attemptNumber || existingSubmissions.length + 1,
+          attemptNumber,
           isLate,
+          submittedAt: now,
+          isGraded: false,
         },
         include: {
           assignment: {
             include: {
-              course: true,
+              course: {
+                select: {
+                  code: true,
+                  title: true,
+                },
+              },
             },
           },
         },
       });
 
-      // Log the submission
-      await prisma.auditLog.create({
+      // Create audit log
+      await tx.auditLog.create({
         data: {
-          action: "ASSIGNMENT_SUBMITTED",
+          userId: studentId,
+          action: AuditAction.ASSIGNMENT_SUBMITTED,
           resourceType: "ASSIGNMENT",
           resourceId: assignmentId,
           details: {
             studentId,
             assignmentId,
-            attemptNumber: submission.attemptNumber,
+            attemptNumber,
             isLate,
+            courseCode: assignment.course.code,
+            courseTitle: assignment.course.title,
+            submittedAt: now.toISOString(),
           },
         },
       });
 
-      return {
-        success: true,
-        submission,
-        message: "Assignment submitted successfully",
-      };
-    } catch (error) {
-      console.error("Error submitting assignment:", error);
-      throw error;
-    }
+      return newSubmission;
+    });
+
+    return {
+      success: true,
+      submission,
+      message: isLate
+        ? "Assignment submitted late"
+        : "Assignment submitted successfully",
+      attemptNumber,
+      attemptsRemaining: assignment.allowedAttempts - attemptNumber,
+    };
   }
 
   /**
-   * Get upcoming assignments (due in the future)
+   * Upcoming assignments (next N days)
    */
-  static async getUpcomingAssignments(studentId: string, days: number = 7) {
-    try {
-      // Get student enrollments to find their courses
-      const enrollments = await prisma.enrollment.findMany({
-        where: { studentId },
-        select: { courseId: true },
-      });
-
-      const courseIds = enrollments.map((e) => e.courseId);
-
-      if (courseIds.length === 0) {
-        return [];
-      }
-
-      const assignments = await prisma.assignment.findMany({
-        where: {
-          courseId: { in: courseIds },
-          isPublished: true,
-          dueDate: {
-            gte: new Date(),
-            lte: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
-          },
-        },
-        include: {
-          course: true,
-          submissions: {
-            where: { studentId },
-            orderBy: { attemptNumber: "desc" },
-            take: 1, // Get only the latest submission
-          },
-        },
-        orderBy: { dueDate: "asc" },
-      });
-
-      return assignments as AssignmentWithSubmission[];
-    } catch (error) {
-      console.error("Error getting upcoming assignments:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get overdue assignments (past due date and not submitted)
-   */
-  static async getOverdueAssignments(studentId: string) {
-    try {
-      // Get student enrollments to find their courses
-      const enrollments = await prisma.enrollment.findMany({
-        where: { studentId },
-        select: { courseId: true },
-      });
-
-      const courseIds = enrollments.map((e) => e.courseId);
-
-      if (courseIds.length === 0) {
-        return [];
-      }
-
-      // Get assignments that are past due date
-      const allPastDueAssignments = await prisma.assignment.findMany({
-        where: {
-          courseId: { in: courseIds },
-          isPublished: true,
-          dueDate: {
-            lt: new Date(),
-          },
-        },
-        include: {
-          course: true,
-          submissions: {
-            where: { studentId },
-          },
-        },
-      });
-
-      // Filter out assignments that have been submitted
-      const overdueAssignments = allPastDueAssignments.filter(
-        (assignment) => assignment.submissions.length === 0
-      );
-
-      return overdueAssignments as AssignmentWithSubmission[];
-    } catch (error) {
-      console.error("Error getting overdue assignments:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get submitted assignments
-   */
-  static async getSubmittedAssignments(
+  static async getUpcomingAssignments(
     studentId: string,
-    page: number = 1,
-    limit: number = 10
-  ) {
-    try {
-      const skip = (page - 1) * limit;
+    daysAhead: number = 14
+  ): Promise<AssignmentWithStudentSubmission[]> {
+    const futureDate = new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000);
 
-      const [submissions, total] = await Promise.all([
-        prisma.assignmentSubmission.findMany({
-          where: { studentId },
-          skip,
-          take: limit,
-          include: {
-            assignment: {
-              include: {
-                course: true,
-              },
-            },
+    const enrollments = await prisma.enrollment.findMany({
+      where: { studentId, isCompleted: false },
+      select: { courseId: true },
+    });
+
+    const courseIds = enrollments.map((e) => e.courseId);
+    if (courseIds.length === 0) return [];
+
+    const assignments = await prisma.assignment.findMany({
+      where: {
+        courseId: { in: courseIds },
+        isPublished: true,
+        deletedAt: null,
+        dueDate: {
+          gte: new Date(),
+          lte: futureDate,
+        },
+      },
+      include: {
+        course: {
+          select: {
+            id: true,
+            code: true,
+            title: true,
+            level: true,
+            semester: true,
+            credits: true,
+            description: true,
+            isActive: true,
+            createdAt: true,
+            updatedAt: true,
           },
-          orderBy: { submittedAt: "desc" },
-        }),
-        prisma.assignmentSubmission.count({ where: { studentId } }),
-      ]);
+        },
+        submissions: {
+          where: { studentId },
+          orderBy: { attemptNumber: "desc" },
+        },
+      },
+      orderBy: { dueDate: "asc" },
+    });
 
-      // Transform the data to match AssignmentWithSubmission format
-      const assignments = submissions.map((submission) => ({
-        ...submission.assignment,
-        submissions: [submission],
-      }));
+    return assignments.map((a) => {
+      const submissions = a.submissions as AssignmentSubmission[];
+      const latest = submissions[0] || null;
+      const attemptsUsed = submissions.length;
+      const isOverdue = new Date() > a.dueDate;
+      const canSubmit =
+        attemptsUsed < a.allowedAttempts &&
+        (!isOverdue || a.allowLateSubmission);
 
       return {
-        assignments: assignments as AssignmentWithSubmission[],
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
-        },
+        ...a,
+        course: a.course,
+        submissions,
+        latestSubmission: latest,
+        bestScore: null, // Not needed for upcoming assignments
+        attemptsUsed,
+        canSubmit,
+        isOverdue,
       };
-    } catch (error) {
-      console.error("Error getting submitted assignments:", error);
-      throw error;
-    }
+    });
   }
 
   /**
-   * Get graded assignments
+   * Overdue unsubmitted assignments
+   */
+  static async getOverdueAssignments(
+    studentId: string
+  ): Promise<AssignmentWithStudentSubmission[]> {
+    const enrollments = await prisma.enrollment.findMany({
+      where: { studentId, isCompleted: false },
+      select: { courseId: true },
+    });
+
+    const courseIds = enrollments.map((e) => e.courseId);
+    if (courseIds.length === 0) return [];
+
+    const assignments = await prisma.assignment.findMany({
+      where: {
+        courseId: { in: courseIds },
+        isPublished: true,
+        deletedAt: null,
+        dueDate: { lt: new Date() },
+      },
+      include: {
+        course: {
+          select: {
+            id: true,
+            code: true,
+            title: true,
+            level: true,
+            semester: true,
+            credits: true,
+            description: true,
+            isActive: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        submissions: {
+          where: { studentId },
+        },
+      },
+    });
+
+    return assignments
+      .filter((a) => a.submissions.length === 0) // Only unsubmitted
+      .map((a) => {
+        const isOverdue = new Date() > a.dueDate;
+        const canSubmit = isOverdue ? a.allowLateSubmission : true;
+
+        return {
+          ...a,
+          course: a.course,
+          submissions: [],
+          latestSubmission: null,
+          bestScore: null,
+          attemptsUsed: 0,
+          canSubmit,
+          isOverdue,
+        };
+      });
+  }
+
+  /**
+   * Graded assignments
    */
   static async getGradedAssignments(
     studentId: string,
     page: number = 1,
     limit: number = 10
-  ) {
-    try {
-      const skip = (page - 1) * limit;
+  ): Promise<AssignmentResponse> {
+    const skip = (page - 1) * limit;
 
-      const [submissions, total] = await Promise.all([
-        prisma.assignmentSubmission.findMany({
-          where: {
-            studentId,
-            isGraded: true,
-          },
-          skip,
-          take: limit,
-          include: {
-            assignment: {
-              include: {
-                course: true,
+    const [submissions, total] = await Promise.all([
+      prisma.assignmentSubmission.findMany({
+        where: {
+          studentId,
+          isGraded: true,
+          score: { not: null },
+        },
+        include: {
+          assignment: {
+            include: {
+              course: {
+                select: {
+                  id: true,
+                  code: true,
+                  title: true,
+                  level: true,
+                  semester: true,
+                  credits: true,
+                },
               },
             },
           },
-          orderBy: { submittedAt: "desc" },
-        }),
-        prisma.assignmentSubmission.count({
-          where: {
-            studentId,
-            isGraded: true,
-          },
-        }),
-      ]);
-
-      // Transform the data to match AssignmentWithSubmission format
-      const assignments = submissions.map((submission) => ({
-        ...submission.assignment,
-        submissions: [submission],
-      }));
-
-      return {
-        assignments: assignments as AssignmentWithSubmission[],
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
         },
-      };
-    } catch (error) {
-      console.error("Error getting graded assignments:", error);
-      throw error;
-    }
+        orderBy: { gradedAt: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.assignmentSubmission.count({
+        where: {
+          studentId,
+          isGraded: true,
+          score: { not: null },
+        },
+      }),
+    ]);
+
+    // Transform submissions to assignment format for consistency
+    const assignmentsMap = new Map();
+
+    submissions.forEach((submission) => {
+      if (!assignmentsMap.has(submission.assignmentId)) {
+        assignmentsMap.set(submission.assignmentId, {
+          ...submission.assignment,
+          submissions: [submission],
+        });
+      } else {
+        assignmentsMap
+          .get(submission.assignmentId)
+          .submissions.push(submission);
+      }
+    });
+
+    const assignments = Array.from(assignmentsMap.values()).map(
+      (assignment) => {
+        const submissions = assignment.submissions as AssignmentSubmission[];
+        const latest = submissions[0] || null;
+        const attemptsUsed = submissions.length;
+        const isOverdue = new Date() > assignment.dueDate;
+
+        return {
+          ...assignment,
+          course: assignment.course,
+          submissions,
+          latestSubmission: latest,
+          bestScore: latest?.score || null,
+          attemptsUsed,
+          canSubmit: false, // Already graded
+          isOverdue,
+        };
+      }
+    );
+
+    return {
+      assignments,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1,
+      },
+    };
   }
 }

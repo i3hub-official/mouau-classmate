@@ -28,7 +28,7 @@ export class UserServiceServer {
           teacher: {
             select: {
               id: true,
-              employeeId: true,
+              teacherId: true,
               firstName: true,
               surname: true,
               department: true,
@@ -110,10 +110,10 @@ export class UserServiceServer {
   /**
    * Find teacher by employee ID (server-side)
    */
-  static async findTeacherByEmployeeId(employeeId: string) {
+  static async findTeacherByTeacherId(teacherId: string) {
     try {
       const teacher = await prisma.teacher.findUnique({
-        where: { employeeId },
+        where: { teacherId },
         include: {
           user: {
             select: {
@@ -385,7 +385,7 @@ export class UserServiceServer {
             teacher: {
               select: {
                 id: true,
-                employeeId: true,
+                teacherId: true,
                 firstName: true,
                 surname: true,
                 department: true,

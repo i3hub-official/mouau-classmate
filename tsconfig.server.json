@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "outDir": "dist",
+    "noEmit": false
+  },
+  "include": ["server.ts"],
+  "ts-node": {
+    "esm": true
+  }
+}

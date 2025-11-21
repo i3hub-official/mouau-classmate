@@ -1,206 +1,180 @@
-// File: lib/services/s/studentRegistrationService.ts
-
+// lib/services/s/studentRegistrationService.ts
 import { prisma } from "@/lib/server/prisma";
 import { StudentRegistrationData } from "@/lib/types/s/index";
 import {
   protectData,
   verifyPassword,
   validatePasswordStrength,
-  generateSearchHash,
 } from "@/lib/security/dataProtection";
 import { generateVerificationToken } from "@/lib/utils";
 
+// Default profile picture (secure, immutable Cloudinary URL)
+const DEFAULT_PROFILE_PICTURE =
+  "https://res.cloudinary.com/djimok28g/image/upload/v1763579659/ock8lrmvr3elhho1dhuw.jpg";
+
 export class StudentRegistrationService {
   /**
-   * Register a new student
+   * Register a new student — Fully Secure & NDPC-Compliant
    */
   static async registerStudent(data: StudentRegistrationData) {
     const {
       firstName,
       surname,
-      otherName,
+      otherName = "",
       gender,
       dateOfBirth,
-      maritalStatus,
       email,
       phone,
-      matricNumber,
+      matricNumber = "",
       jambRegNumber,
       nin,
       department,
       college,
       admissionYear,
-      state,
-      lga,
       password,
+      passportUrl,
+      state = "",
+      lga = "",
     } = data;
 
-    // Validate required fields
-    if (!email || email.trim() === "") {
-      throw new Error("Email is required");
-    }
-    if (!phone || phone.trim() === "") {
-      throw new Error("Phone number is required");
-    }
-    if (!password) {
-      throw new Error("Password is required");
-    }
+    // === VALIDATION ===
+    if (!email?.trim()) throw new Error("Email is required");
+    if (!phone?.trim()) throw new Error("Phone number is required");
+    if (!password) throw new Error("Password is required");
+    if (!nin?.trim()) throw new Error("NIN is required");
+    if (!jambRegNumber?.trim())
+      throw new Error("JAMB Registration Number is required");
 
-    // Validate password strength
     const passwordValidation = validatePasswordStrength(password);
     if (!passwordValidation.isValid) {
-      throw new Error(
-        `Password validation failed: ${passwordValidation.errors.join(", ")}`
-      );
+      throw new Error(`Weak password: ${passwordValidation.errors.join(", ")}`);
     }
 
-    try {
-      // Protect all data first (do this once)
-      const hashedPassword = await protectData(password, "password");
-      const protectedEmail = await protectData(email.trim(), "email");
-      const protectedPhone = await protectData(phone.trim(), "phone");
-      const protectedJambRegNumber = jambRegNumber
-        ? await protectData(jambRegNumber.trim(), "nin")
-        : null;
-      const protectedNin = nin ? await protectData(nin.trim(), "nin") : null;
-      const protectedFirstName = await protectData(firstName.trim(), "name");
-      const protectedSurname = await protectData(surname.trim(), "name");
-      const protectedOtherName = otherName
-        ? await protectData(otherName.trim(), "name")
-        : null;
-      const protectedState = state
-        ? await protectData(state.trim(), "location")
-        : null;
-      const protectedLga = lga
-        ? await protectData(lga.trim(), "location")
-        : null;
+    const finalPassportUrl = passportUrl?.trim() || DEFAULT_PROFILE_PICTURE;
 
-      // Extract search hashes
+    try {
+      // === PROTECT SENSITIVE DATA USING CORRECT TIERS ===
+      const [
+        protectedPassword,
+        protectedEmail,
+        protectedPhone,
+        protectedNin,
+        protectedJamb,
+        protectedMatric,
+        protectedFirstName,
+        protectedSurname,
+        protectedOtherName,
+        protectedState,
+        protectedLga,
+      ] = await Promise.all([
+        protectData(password, "password"),
+        protectData(email.trim(), "email"),
+        protectData(phone.trim(), "phone"),
+        protectData(nin.trim(), "nin"),
+        protectData(jambRegNumber.trim(), "jamb"),
+        matricNumber
+          ? protectData(matricNumber.trim(), "matric")
+          : { encrypted: "", searchHash: "" },
+        protectData(firstName.trim(), "name"),
+        protectData(surname.trim(), "name"),
+        otherName ? protectData(otherName.trim(), "name") : { encrypted: "" },
+        state ? protectData(state.trim(), "location") : { encrypted: "" },
+        lga ? protectData(lga.trim(), "location") : { encrypted: "" },
+      ]);
+
+      // Extract search hashes (now guaranteed lowercase context)
       const emailSearchHash = protectedEmail.searchHash!;
       const phoneSearchHash = protectedPhone.searchHash!;
-      const ninSearchHash = protectedNin?.searchHash || "";
-      const jambSearchHash = protectedJambRegNumber?.searchHash || "";
+      const ninSearchHash = protectedNin.searchHash!;
+      const jambSearchHash = protectedJamb.searchHash!;
+      const matricSearchHash = protectedMatric.searchHash || "";
 
-      // Check if matric number already exists
-      const existingMatric = await prisma.student.findUnique({
-        where: { matricNumber },
-      });
-
-      if (existingMatric) {
-        throw new Error("Matric number already exists");
-      }
-
-      // Check if email already exists in User table (deterministic encryption)
-      const existingUser = await prisma.user.findFirst({
-        where: { email: protectedEmail.encrypted },
-      });
-
-      if (existingUser) {
-        throw new Error("Email already exists");
-      }
-
-      // Check if email already exists using search hash in Student table
-      const existingStudent = await prisma.student.findFirst({
-        where: { emailSearchHash },
-      });
-
-      if (existingStudent) {
-        throw new Error("Email already exists");
-      }
-
-      // Check if phone already exists using search hash
-      const existingPhone = await prisma.student.findFirst({
-        where: { phoneSearchHash },
-      });
-
-      if (existingPhone) {
-        throw new Error("Phone number already exists");
-      }
-
-      // Check if JAMB registration number already exists (only if provided)
-      if (jambRegNumber && jambSearchHash) {
-        const existingJamb = await prisma.student.findFirst({
+      // === UNIQUENESS CHECKS (Parallel + Accurate) ===
+      const [
+        existingNin,
+        existingEmailUser,
+        existingEmailStudent,
+        existingPhone,
+        existingJamb,
+        existingMatric,
+      ] = await Promise.all([
+        prisma.student.findFirst({ where: { ninSearchHash } }),
+        prisma.user.findFirst({ where: { email: protectedEmail.encrypted } }),
+        prisma.student.findFirst({ where: { emailSearchHash } }),
+        prisma.student.findFirst({ where: { phoneSearchHash } }),
+        prisma.student.findFirst({
           where: { jambRegSearchHash: jambSearchHash },
-        });
+        }),
+        matricNumber
+          ? prisma.student.findUnique({
+              where: { matricNumber: matricNumber.trim().toUpperCase() },
+            })
+          : null,
+      ]);
 
-        if (existingJamb) {
-          throw new Error("JAMB registration number already exists");
-        }
-      }
+      if (existingNin) throw new Error("NIN already registered");
+      if (existingEmailUser || existingEmailStudent)
+        throw new Error("Email already in use");
+      if (existingPhone) throw new Error("Phone number already registered");
+      if (existingJamb)
+        throw new Error("JAMB Registration Number already registered");
+      if (existingMatric)
+        throw new Error("Matriculation Number already registered");
 
-      // Check if NIN already exists (if provided)
-      if (nin && ninSearchHash) {
-        const existingNin = await prisma.student.findFirst({
-          where: { ninSearchHash },
-        });
-
-        if (existingNin) {
-          throw new Error("NIN already exists");
-        }
-      }
-
-      // Debug logs (optional, remove in production)
-      if (process.env.NODE_ENV === "development") {
-        console.log("=== PROTECTED DATA DEBUG ===");
-        console.log("Email encrypted:", protectedEmail.encrypted);
-        console.log("Email search hash:", emailSearchHash);
-        console.log("Phone search hash:", phoneSearchHash);
-        console.log("JAMB search hash:", jambSearchHash);
-        console.log("NIN search hash:", ninSearchHash);
-        console.log("=== END DEBUG ===");
-      }
-
-      // Create user account
+      // === CREATE USER ACCOUNT ===
       const user = await prisma.user.create({
         data: {
+          name:
+            `${surname.trim()} ${firstName.trim()}` +
+            (otherName ? ` ${otherName.trim()}` : ""),
           email: protectedEmail.encrypted,
-          emailVerificationRequired: true,
+          passwordHash: protectedPassword.encrypted,
           role: "STUDENT",
-          passwordHash: hashedPassword.encrypted,
-          isActive: false, // Will be activated after email verification
+          isActive: false,
+          emailVerificationRequired: true,
+          passportUrl: finalPassportUrl,
         },
       });
 
-      // Create student profile
+      // === CREATE STUDENT PROFILE ===
       const student = await prisma.student.create({
         data: {
           userId: user.id,
-          matricNumber,
-          jambRegNumber: protectedJambRegNumber?.encrypted || "",
-          nin: protectedNin?.encrypted || "",
+          matricNumber: matricNumber.trim().toUpperCase(),
+          jambRegNumber: protectedJamb.encrypted,
+          nin: protectedNin.encrypted,
           firstName: protectedFirstName.encrypted,
           surname: protectedSurname.encrypted,
-          otherName: protectedOtherName?.encrypted || "",
+          otherName: protectedOtherName.encrypted || "",
           gender,
-          dateOfBirth,
-          maritalStatus,
+          dateOfBirth: dateOfBirth,
           email: protectedEmail.encrypted,
           emailSearchHash,
           phone: protectedPhone.encrypted,
           phoneSearchHash,
           jambRegSearchHash: jambSearchHash,
           ninSearchHash,
+          matricSearchHash,
           department,
           college,
-          admissionYear,
-          state: protectedState?.encrypted || "",
-          lga: protectedLga?.encrypted || "",
+          admissionYear: Number(admissionYear),
+          passportUrl: finalPassportUrl,
+          state: protectedState.encrypted,
+          lga: protectedLga.encrypted,
         },
       });
 
-      // Generate email verification token
-      const verificationToken = generateVerificationToken();
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-
+      // === EMAIL VERIFICATION TOKEN ===
+      const token = generateVerificationToken();
       await prisma.verificationToken.create({
         data: {
           identifier: user.id,
-          token: verificationToken,
-          expires: expiresAt,
+          token,
+          expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
         },
       });
 
-      // Log registration
+      // === AUDIT LOG ===
       await prisma.auditLog.create({
         data: {
           userId: user.id,
@@ -208,9 +182,17 @@ export class StudentRegistrationService {
           resourceType: "STUDENT",
           resourceId: student.id,
           details: {
-            matricNumber,
+            usedDefaultPassport: !passportUrl,
+            hasMatricNumber: !!matricNumber,
             department,
             college,
+            identifiers: {
+              nin: nin.slice(0, 4) + "****" + nin.slice(-3),
+              jamb:
+                jambRegNumber.slice(0, 4) + "****" + jambRegNumber.slice(-2),
+              email:
+                email.split("@")[0].slice(0, 3) + "***@" + email.split("@")[1],
+            },
           },
         },
       });
@@ -219,155 +201,229 @@ export class StudentRegistrationService {
         success: true,
         userId: user.id,
         studentId: student.id,
-        verificationToken,
-        message:
-          "Student registered successfully. Please check your email for verification.",
+        verificationToken: token,
+        usedDefaultProfile: !passportUrl,
+        message: "Registration successful. Please verify your email.",
       };
-    } catch (error) {
-      console.error("Student registration error:", error);
-      throw error;
+    } catch (error: any) {
+      console.error("Registration failed:", error);
+      throw new Error(error.message || "Registration failed");
     }
   }
 
-  /**
-   * Verify student email
-   */
+  // === OTHER METHODS (Updated to match new tiers) ===
+
   static async verifyEmail(token: string) {
-    try {
-      const verificationToken = await prisma.verificationToken.findUnique({
-        where: { token },
-      });
+    const vt = await prisma.verificationToken.findUnique({ where: { token } });
+    if (!vt || vt.expires < new Date())
+      throw new Error("Invalid or expired token");
 
-      if (!verificationToken) {
-        throw new Error("Invalid verification token");
-      }
-
-      if (verificationToken.expires < new Date()) {
-        throw new Error("Verification token has expired");
-      }
-
-      // Activate user account
-      await prisma.user.update({
-        where: { id: verificationToken.identifier },
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: vt.identifier },
+        data: { isActive: true, emailVerified: new Date() },
+      }),
+      prisma.verificationToken.delete({ where: { token } }),
+      prisma.auditLog.create({
         data: {
-          emailVerified: new Date(),
-          isActive: true,
-        },
-      });
-
-      // Delete verification token
-      await prisma.verificationToken.delete({
-        where: { token },
-      });
-
-      // Log verification
-      await prisma.auditLog.create({
-        data: {
-          userId: verificationToken.identifier,
+          userId: vt.identifier,
           action: "EMAIL_VERIFIED",
           resourceType: "USER",
-          resourceId: verificationToken.identifier,
+          resourceId: vt.identifier,
         },
-      });
+      }),
+    ]);
 
-      return {
-        success: true,
-        message: "Email verified successfully. You can now log in.",
-      };
-    } catch (error) {
-      console.error("Email verification error:", error);
-      throw error;
-    }
+    return { success: true, message: "Email verified" };
+  }
+
+  static async checkNINAvailability(nin: string) {
+    const { searchHash } = await protectData(nin.trim(), "nin");
+    return !(await prisma.student.findFirst({
+      where: { ninSearchHash: searchHash },
+    }));
+  }
+
+  static async checkJambAvailability(jamb: string) {
+    const { searchHash } = await protectData(jamb.trim(), "jamb");
+    return !(await prisma.student.findFirst({
+      where: { jambRegSearchHash: searchHash },
+    }));
+  }
+
+  static async checkMatricAvailability(matric: string) {
+    return !(await prisma.student.findUnique({
+      where: { matricNumber: matric.trim().toUpperCase() },
+    }));
+  }
+
+  static async checkEmailAvailability(email: string) {
+    const { encrypted, searchHash } = await protectData(email.trim(), "email");
+    const [user, student] = await Promise.all([
+      prisma.user.findFirst({ where: { email: encrypted } }),
+      prisma.student.findFirst({ where: { emailSearchHash: searchHash } }),
+    ]);
+    return !user && !student;
+  }
+
+  static async checkPhoneAvailability(phone: string) {
+    const { searchHash } = await protectData(phone.trim(), "phone");
+    return !(await prisma.student.findFirst({
+      where: { phoneSearchHash: searchHash },
+    }));
   }
 
   /**
-   * Resend verification email
+   * Update student profile
    */
-  static async resendVerification(email: string) {
+  static async updateStudentProfile(
+    studentId: string,
+    data: Partial<StudentRegistrationData>
+  ) {
     try {
-      // Protect email to get search hash
-      const protectedEmail = await protectData(email.trim(), "email");
-      const emailSearchHash = protectedEmail.searchHash!;
+      // Extract fields that can be updated
+      const {
+        firstName,
+        surname,
+        otherName,
+        gender,
+        dateOfBirth,
+        email,
+        phone,
+        department,
+        college,
+        admissionYear,
+        passportUrl,
+        state,
+        lga,
+      } = data;
 
-      // Find user by email using search hash
-      const student = await prisma.student.findFirst({
-        where: {
-          emailSearchHash,
-        },
-        include: {
-          user: true,
-        },
+      // Build update data object
+      const updateData: any = {};
+
+      // Protect and add fields if provided
+      if (firstName) {
+        const protectedFirstName = await protectData(firstName.trim(), "name");
+        updateData.firstName = protectedFirstName.encrypted;
+      }
+
+      if (surname) {
+        const protectedSurname = await protectData(surname.trim(), "name");
+        updateData.surname = protectedSurname.encrypted;
+      }
+
+      if (otherName) {
+        const protectedOtherName = await protectData(otherName.trim(), "name");
+        updateData.otherName = protectedOtherName.encrypted;
+      }
+
+      if (gender) {
+        updateData.gender = gender;
+      }
+
+      if (dateOfBirth) {
+        updateData.dateOfBirth = dateOfBirth;
+      }
+
+      if (email) {
+        const protectedEmail = await protectData(email.trim(), "email");
+        updateData.email = protectedEmail.encrypted;
+        updateData.emailSearchHash = protectedEmail.searchHash;
+      }
+
+      if (phone) {
+        const protectedPhone = await protectData(phone.trim(), "phone");
+        updateData.phone = protectedPhone.encrypted;
+        updateData.phoneSearchHash = protectedPhone.searchHash;
+      }
+
+      if (department) {
+        updateData.department = department;
+      }
+
+      if (college) {
+        updateData.college = college;
+      }
+
+      if (admissionYear) {
+        updateData.admissionYear = admissionYear;
+      }
+
+      if (passportUrl) {
+        updateData.passportUrl = passportUrl;
+      }
+
+      if (state) {
+        const protectedState = await protectData(state.trim(), "location");
+        updateData.state = protectedState.encrypted;
+      }
+
+      if (lga) {
+        const protectedLga = await protectData(lga.trim(), "location");
+        updateData.lga = protectedLga.encrypted;
+      }
+
+      // Update student profile
+      const student = await prisma.student.update({
+        where: { id: studentId },
+        data: updateData,
       });
 
-      if (!student || !student.user) {
-        throw new Error("No account found with this email");
-      }
-
-      if (student.user.emailVerified) {
-        throw new Error("Email is already verified");
-      }
-
-      // Check if there's already a recent verification request
-      const recentToken = await prisma.verificationToken.findFirst({
-        where: {
-          identifier: student.user.id,
-          createdAt: {
-            gte: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
+      // Log update
+      await prisma.auditLog.create({
+        data: {
+          userId: student.userId,
+          action: "STUDENT_PROFILE_UPDATED",
+          resourceType: "STUDENT",
+          resourceId: student.id,
+          details: {
+            updatedFields: Object.keys(updateData),
           },
         },
       });
 
-      if (recentToken) {
-        throw new Error(
-          "Verification email was recently sent. Please check your inbox or try again later."
-        );
-      }
-
-      // Generate new verification token
-      const verificationToken = generateVerificationToken();
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-
-      await prisma.verificationToken.create({
-        data: {
-          identifier: student.user.id,
-          token: verificationToken,
-          expires: expiresAt,
-        },
-      });
-
-      // Log resend request
-      await prisma.auditLog.create({
-        data: {
-          userId: student.user.id,
-          action: "RESEND_VERIFICATION_REQUESTED",
-          resourceType: "USER",
-          resourceId: student.user.id,
-        },
-      });
-
       return {
         success: true,
-        verificationToken,
-        message: "Verification email sent successfully.",
+        message: "Profile updated successfully.",
+        student,
       };
     } catch (error) {
-      console.error("Resend verification error:", error);
+      console.error("Student profile update error:", error);
       throw error;
     }
   }
 
   /**
-   * Verify password for authentication
+   * Get student profile by ID
    */
-  static async verifyPasswordForAuth(
-    password: string,
-    hashedPassword: string
-  ): Promise<boolean> {
+  static async getStudentProfile(studentId: string) {
     try {
-      return await verifyPassword(password, hashedPassword);
+      const student = await prisma.student.findUnique({
+        where: { id: studentId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              emailVerified: true,
+              isActive: true,
+              createdAt: true,
+            },
+          },
+        },
+      });
+
+      if (!student) {
+        throw new Error("Student not found");
+      }
+
+      return {
+        success: true,
+        student,
+      };
     } catch (error) {
-      console.error("Password verification error:", error);
-      return false;
+      console.error("Get student profile error:", error);
+      throw error;
     }
   }
 }

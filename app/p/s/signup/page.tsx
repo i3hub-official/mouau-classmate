@@ -26,6 +26,39 @@ import {
   AGREEMENT_CONTENT,
   type AgreementSection,
 } from "@/lib/data";
+import { uploadImageForRegistration } from "@/lib/utils/cloudinaryUpload";
+
+const CLOUDINARY_URL =
+  "cloudinary://922179739365564:ofrmL1eiymD7RlwJ7-aTA31lnow@djimok28g/image/upload";
+const CLOUDINARY_UPLOAD_PRESET = "app_media_preset";
+
+const uploadImageToCloudinary = async (file: File): Promise<string | null> => {
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+    // Optional: Add folder and transformation parameters
+    formData.append("folder", "student_registrations");
+    // formData.append("transformation", "w_400,h_400,c_fill"); // Resize to 400x400
+
+    const response = await fetch(CLOUDINARY_URL, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error?.message || "Failed to upload image");
+    }
+
+    const data = await response.json();
+    return data.secure_url;
+  } catch (error) {
+    // console.error("Cloudinary upload error:", error);
+    throw error;
+  }
+};
 
 // Helper to safely check if sessionStorage is available
 const isSessionStorageAvailable = (): boolean => {
@@ -72,12 +105,19 @@ const isValidjambRegNumber = (jamb: string): boolean => {
   return /^\d{10,13}[A-Z]{2}$/.test(jamb);
 };
 
+const isValidNIN = (nin: string): boolean => {
+  // NIN is typically 11 digits
+  return /^\d{11}$/.test(nin);
+};
+
 export default function SignupPage() {
   const router = useRouter();
   const [roleValidated, setRoleValidated] = useState(false);
   const [roleLoading, setRoleLoading] = useState(true);
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
+    nin: "",
+    hasMatricNumber: "",
     matricNumber: "",
     jambRegNumber: "",
     surname: "",
@@ -85,11 +125,9 @@ export default function SignupPage() {
     otherName: "",
     gender: "",
     photo: "",
+    photoUrl: "",
     college: "",
     department: "",
-    state: "",
-    lga: "",
-    maritalStatus: "",
     email: "",
     phone: "",
     password: "",
@@ -108,14 +146,7 @@ export default function SignupPage() {
     requiresManualEntry?: boolean;
   } | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-
-  // States and LGAs
-  const [states, setStates] = useState<string[]>([]);
-  const [lgas, setLgas] = useState<string[]>([]);
-  const [isLoadingStates, setIsLoadingStates] = useState(false);
-  const [isLoadingLgas, setIsLoadingLgas] = useState(false);
-  const [apiError, setApiError] = useState<string | null>(null);
-  const [lgaCache] = useState(new Map<string, string[]>());
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   // Role validation on mount
   useEffect(() => {
@@ -163,7 +194,7 @@ export default function SignupPage() {
 
         setRoleValidated(true);
       } catch (error) {
-        console.error("Role validation failed:", error);
+        // console.error("Role validation failed:", error);
         inMemoryRoleData = null;
         if (isSessionStorageAvailable()) {
           sessionStorage.removeItem("selectedRole");
@@ -177,80 +208,6 @@ export default function SignupPage() {
 
     validateRole();
   }, [router]);
-
-  // Fetch states data on component mount
-  useEffect(() => {
-    const fetchStatesData = async () => {
-      setIsLoadingStates(true);
-      setApiError(null);
-      try {
-        const cached = localStorage.getItem("cachedStates");
-        if (cached) {
-          setStates(JSON.parse(cached));
-          return;
-        }
-
-        const res = await fetch("https://apinigeria.vercel.app/api/v1/states");
-        if (!res.ok) {
-          throw new Error("Failed to fetch states");
-        }
-
-        const data = await res.json();
-        const statesList = data.states || [];
-        setStates(statesList);
-        localStorage.setItem("cachedStates", JSON.stringify(statesList));
-        localStorage.setItem("cachedTimestamp", Date.now().toString());
-      } catch (error) {
-        console.error("Failed to load states");
-        setApiError("Failed to load states data. Please try again later.");
-      } finally {
-        setIsLoadingStates(false);
-      }
-    };
-
-    fetchStatesData();
-  }, []);
-
-  // Fetch LGAs when state changes
-  useEffect(() => {
-    const fetchLgasData = async () => {
-      if (!formData.state) {
-        setLgas([]);
-        return;
-      }
-
-      if (lgaCache.has(formData.state)) {
-        setLgas(lgaCache.get(formData.state) || []);
-        return;
-      }
-
-      setIsLoadingLgas(true);
-      setApiError(null);
-      try {
-        const res = await fetch(
-          `https://apinigeria.vercel.app/api/v1/lga?state=${encodeURIComponent(
-            formData.state
-          )}`
-        );
-
-        if (!res.ok) {
-          throw new Error("Failed to fetch LGAs");
-        }
-
-        const data = await res.json();
-        const lgasList = data.lgas || [];
-        setLgas(lgasList);
-        lgaCache.set(formData.state, lgasList);
-      } catch (error) {
-        console.error("Failed to load LGAs");
-        setApiError("Failed to load LGAs data. Please try again later.");
-      } finally {
-        setIsLoadingLgas(false);
-      }
-    };
-
-    fetchLgasData();
-  }, [formData.state, lgaCache]);
 
   const setErrorWithTimeout = (errorObj: Record<string, string>) => {
     setErrors(errorObj);
@@ -268,6 +225,39 @@ export default function SignupPage() {
     }
   };
 
+  // Function to clear form data
+  const clearFormData = () => {
+    setFormData({
+      nin: "",
+      hasMatricNumber: "",
+      matricNumber: "",
+      jambRegNumber: "",
+      surname: "",
+      firstName: "",
+      otherName: "",
+      gender: "",
+      photo: "",
+      photoUrl: "",
+      college: "",
+      department: "",
+      email: "",
+      phone: "",
+      password: "",
+      confirmPassword: "",
+    });
+    setPhotoPreview(null);
+    setVerificationResult(null);
+    setManualEntry(false);
+  };
+
+  // Handle agreement checkbox change
+  const handleAgreementChange = (checked: boolean) => {
+    setAgreementAccepted(checked);
+    if (!checked) {
+      clearFormData();
+    }
+  };
+
   const handleAgreementAccept = () => {
     if (!agreementAccepted) {
       setErrorWithTimeout({
@@ -278,23 +268,22 @@ export default function SignupPage() {
     setStep(2);
   };
 
-  const handleVerifyStudent = async (e: React.FormEvent) => {
+  const handleVerifyUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
 
-    const matricNumber = formData.matricNumber.trim().toUpperCase();
+    const nin = formData.nin.trim();
 
-    if (!matricNumber) {
+    if (!nin) {
       setErrorWithTimeout({
-        matricNumber: "Please enter your Matriculation Number",
+        nin: "Please enter your National Identification Number",
       });
       return;
     }
 
-    if (!isValidMatricNumber(matricNumber)) {
+    if (!isValidNIN(nin)) {
       setErrorWithTimeout({
-        matricNumber:
-          "Please enter a valid Matric Number (e.g., MOUAU/20/12345)",
+        nin: "Please enter a valid NIN (11 digits)",
       });
       return;
     }
@@ -302,13 +291,13 @@ export default function SignupPage() {
     setIsLoading(true);
 
     try {
-      // Updated API endpoint
-      const response = await fetch("/api/auth/verify/s", {
+      // Updated API endpoint for NIN verification
+      const response = await fetch("/api/auth/verify/nin", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ identifier: matricNumber }),
+        body: JSON.stringify({ nin }),
       });
 
       const result = await response.json();
@@ -323,8 +312,7 @@ export default function SignupPage() {
         setFormData((prev) => ({
           ...prev,
           ...result.data,
-          matricNumber: matricNumber,
-          jambRegNumber: result.data.jambRegNumber || "",
+          nin: nin,
         }));
         setManualEntry(false);
         setStep(3);
@@ -333,14 +321,13 @@ export default function SignupPage() {
         setStep(3);
       } else {
         setErrorWithTimeout({
-          matricNumber:
-            "Student not found. Please check your matric number and try again.",
+          nin: "Verification failed. Please check your NIN and try again.",
         });
       }
     } catch (error) {
-      console.error("Verification error:", error);
+      // console.error("Verification error:", error);
       setErrorWithTimeout({
-        matricNumber:
+        nin:
           error instanceof Error
             ? error.message
             : "Verification failed. Please try again.",
@@ -354,8 +341,25 @@ export default function SignupPage() {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
 
-    // Debug log to check current form data
-    console.log("Current form data:", formData);
+    // JAMB Registration Number is now compulsory
+    if (!formData.jambRegNumber || formData.jambRegNumber.trim() === "") {
+      newErrors.jambRegNumber = "JAMB Registration Number is required";
+    } else if (!isValidjambRegNumber(formData.jambRegNumber)) {
+      newErrors.jambRegNumber =
+        "Please enter a valid JAMB registration number (10-13 digits + 2 letters)";
+    }
+
+    // Matric Number is optional but if user says they have one, it's required
+    if (formData.hasMatricNumber === "yes" && !formData.matricNumber) {
+      newErrors.matricNumber = "Please enter your Matriculation Number";
+    } else if (
+      formData.hasMatricNumber === "yes" &&
+      formData.matricNumber &&
+      !isValidMatricNumber(formData.matricNumber)
+    ) {
+      newErrors.matricNumber =
+        "Please enter a valid Matric Number (e.g., MOUAU/20/12345)";
+    }
 
     if (!formData.surname || formData.surname.trim() === "") {
       newErrors.surname = "Surname is required";
@@ -371,15 +375,6 @@ export default function SignupPage() {
     }
     if (!formData.department) {
       newErrors.department = "Department is required";
-    }
-    if (!formData.state) {
-      newErrors.state = "State is required";
-    }
-    if (!formData.lga) {
-      newErrors.lga = "LGA is required";
-    }
-    if (!formData.maritalStatus) {
-      newErrors.maritalStatus = "Marital status is required";
     }
     if (!formData.email || formData.email.trim() === "") {
       newErrors.email = "Email is required";
@@ -399,16 +394,8 @@ export default function SignupPage() {
       newErrors.phone = "Please enter a valid phone number";
     }
 
-    if (
-      formData.jambRegNumber &&
-      !isValidjambRegNumber(formData.jambRegNumber)
-    ) {
-      newErrors.jambReg =
-        "Please enter a valid JAMB registration number (10-13 digits + 2 letters)";
-    }
-
     if (Object.keys(newErrors).length > 0) {
-      console.log("Validation errors:", newErrors);
+      // console.log("Validation errors:", newErrors);
       setErrorWithTimeout(newErrors);
       return;
     }
@@ -435,27 +422,51 @@ export default function SignupPage() {
     setStep(5);
   };
 
-  // Update the handleFinalSubmit function
+  // New handler for photo upload step (step 5)
+  const handlePhotoUploadSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.photoUrl) {
+      newErrors.photo =
+        "Please upload your passport photograph before continuing";
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrorWithTimeout(newErrors);
+      return;
+    }
+
+    setStep(6);
+  };
+
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      // Flatten the data structure to match backend expectations
+      // Check if photo is uploaded
+      if (!formData.photoUrl) {
+        setErrorWithTimeout({
+          submit: "Please upload your passport photograph before submitting",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Prepare registration data with Cloudinary URL
       const registrationData = {
+        nin: formData.nin,
+        hasMatricNumber: formData.hasMatricNumber,
         matricNumber: formData.matricNumber,
         jambRegNumber: formData.jambRegNumber,
-        // Move all student data to root level
         surname: formData.surname,
         firstName: formData.firstName,
         otherName: formData.otherName,
         gender: formData.gender,
-        photo: formData.photo,
+        passportUrl: formData.photoUrl, // Use Cloudinary URL as passportUrl
         college: formData.college,
         department: formData.department,
-        state: formData.state,
-        lga: formData.lga,
-        maritalStatus: formData.maritalStatus,
         email: formData.email,
         phone: formData.phone,
         password: formData.password,
@@ -476,9 +487,9 @@ export default function SignupPage() {
         throw new Error(result.error || "Registration failed");
       }
 
-      setStep(6);
+      setStep(7);
     } catch (error) {
-      console.error("Registration error:", error);
+      // console.error("Registration error:", error);
       setErrorWithTimeout({
         submit:
           error instanceof Error
@@ -491,7 +502,14 @@ export default function SignupPage() {
   };
 
   const handleInputChange = (field: string, value: string) => {
-    console.log(`Updating ${field}:`, value);
+    // console.log(`Updating ${field}:`, value);
+
+    // Clear form if NIN is edited
+    if (field === "nin" && formData.nin && value !== formData.nin) {
+      clearFormData();
+      setFormData((prev) => ({ ...prev, [field]: value }));
+      return;
+    }
 
     // Reset department when college changes
     if (field === "college") {
@@ -499,14 +517,6 @@ export default function SignupPage() {
         ...prev,
         [field]: value,
         department: "", // Reset department when college changes
-      }));
-    }
-    // Reset LGA when state changes
-    else if (field === "state") {
-      setFormData((prev) => ({
-        ...prev,
-        [field]: value,
-        lga: "", // Reset LGA when state changes
       }));
     } else {
       setFormData((prev) => ({ ...prev, [field]: value }));
@@ -521,30 +531,65 @@ export default function SignupPage() {
     }
   };
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setErrorWithTimeout({
-          photo: "Photo must be less than 5MB",
-        });
-        return;
-      }
+      setIsUploadingPhoto(true);
+      setErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors.photo;
+        return newErrors;
+      });
 
-      if (!file.type.startsWith("image/")) {
-        setErrorWithTimeout({
-          photo: "Please select an image file",
-        });
-        return;
-      }
+      try {
+        // Use JAMB reg number for the upload (since user doesn't exist yet)
+        const jambReg = formData.jambRegNumber || "temp";
 
-      setFormData({ ...formData, photo: file.name });
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-      setErrorWithTimeout({ photo: "" });
+        // Upload to Cloudinary using the registration-specific function
+        const photoUrl = await uploadImageForRegistration(file, jambReg);
+
+        if (!photoUrl) {
+          throw new Error("Failed to upload photo to Cloudinary");
+        }
+
+        // Update form data with Cloudinary URL
+        setFormData((prev) => ({
+          ...prev,
+          photo: file.name,
+          photoUrl: photoUrl, // This is the Cloudinary URL
+        }));
+
+        // Create preview
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setPhotoPreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+
+        // Clear any previous photo errors
+        setErrors((prev) => {
+          const newErrors = { ...prev };
+          delete newErrors.photo;
+          return newErrors;
+        });
+      } catch (error) {
+        // console.error("Photo upload error:", error);
+        setErrorWithTimeout({
+          photo:
+            error instanceof Error
+              ? error.message
+              : "Failed to upload photo. Please try again.",
+        });
+        // Reset photo data on error
+        setFormData((prev) => ({
+          ...prev,
+          photo: "",
+          photoUrl: "",
+        }));
+        setPhotoPreview(null);
+      } finally {
+        setIsUploadingPhoto(false);
+      }
     }
   };
 
@@ -571,7 +616,7 @@ export default function SignupPage() {
   const Stepper = () => (
     <div className="mb-6 md:mb-8">
       <div className="flex items-center justify-between max-w-2xl mx-auto">
-        {[1, 2, 3, 4, 5, 6].map((stepNumber) => (
+        {[1, 2, 3, 4, 5, 6, 7].map((stepNumber) => (
           <div key={stepNumber} className="flex flex-col items-center">
             <div
               className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
@@ -594,11 +639,12 @@ export default function SignupPage() {
               }`}
             >
               {stepNumber === 1 && "Terms"}
-              {stepNumber === 2 && "Verify"}
+              {stepNumber === 2 && "Verify NIN"}
               {stepNumber === 3 && "Details"}
               {stepNumber === 4 && "Password"}
-              {stepNumber === 5 && "Review"}
-              {stepNumber === 6 && "Done"}
+              {stepNumber === 5 && "Photo"}
+              {stepNumber === 6 && "Review"}
+              {stepNumber === 7 && "Done"}
             </div>
           </div>
         ))}
@@ -714,7 +760,7 @@ export default function SignupPage() {
                   type="checkbox"
                   id="agreement"
                   checked={agreementAccepted}
-                  onChange={(e) => setAgreementAccepted(e.target.checked)}
+                  onChange={(e) => handleAgreementChange(e.target.checked)}
                   className="mt-0.5 md:mt-1 w-4 h-4 text-primary bg-background border-border rounded focus:ring-primary focus:ring-2"
                 />
                 <label
@@ -753,40 +799,40 @@ export default function SignupPage() {
         )}
 
         {step === 2 && (
-          <form
-            onSubmit={handleVerifyStudent}
-            className="space-y-4 md:space-y-6"
-          >
+          <form onSubmit={handleVerifyUser} className="space-y-4 md:space-y-6">
             <div>
               <h2 className="text-xl md:text-2xl font-bold text-foreground mb-2">
-                Student Verification
+                Identity Verification
               </h2>
               <p className="text-sm md:text-base text-muted-foreground mb-4 md:mb-6">
-                Enter your Matriculation Number to begin registration
+                Enter your National Identification Number (NIN) to begin
+                registration
               </p>
             </div>
 
             <div className="space-y-4">
               <div>
                 <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
-                  Matriculation Number *
+                  National Identification Number (NIN) *
                 </label>
                 <input
                   type="text"
-                  value={formData.matricNumber}
+                  value={formData.nin}
                   onChange={(e) => {
-                    const value = e.target.value.toUpperCase();
-                    handleInputChange("matricNumber", value);
+                    const value = e.target.value
+                      .replace(/\D/g, "")
+                      .slice(0, 11);
+                    handleInputChange("nin", value);
                   }}
-                  placeholder="e.g., MOUAU/20/12345"
+                  placeholder="Enter 11-digit NIN"
                   className={`form-input w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent ${
-                    errors.matricNumber ? "border-error" : "border-border"
+                    errors.nin ? "border-error" : "border-border"
                   }`}
                 />
-                {errors.matricNumber && (
+                {errors.nin && (
                   <p className="text-error text-[10px] md:text-xs mt-1 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 bg-error rounded-full"></span>
-                    {errors.matricNumber}
+                    {errors.nin}
                   </p>
                 )}
               </div>
@@ -794,29 +840,16 @@ export default function SignupPage() {
               <div className="bg-muted/50 rounded-lg p-3 md:p-4">
                 <div className="flex items-start gap-2 md:gap-3">
                   <div className="p-1 bg-primary/20 rounded">
-                    <BookOpen className="h-3 w-3 md:h-4 md:w-4 text-primary" />
+                    <Shield className="h-3 w-3 md:h-4 md:w-4 text-primary" />
                   </div>
                   <div>
                     <p className="text-xs md:text-sm font-medium text-foreground mb-1">
-                      Matric Number Format
+                      Privacy Notice
                     </p>
                     <div className="text-[10px] md:text-xs text-foreground space-y-1">
-                      <p>
-                        • Must contain <span className="font-mono">/</span> or{" "}
-                        <span className="font-mono">-</span>
-                      </p>
-                      <p>
-                        • Example:{" "}
-                        <span className="font-mono text-[9px] md:text-xs">
-                          MOUAU/25/COLPAS/PHY/12345
-                        </span>
-                      </p>
-                      <p>
-                        • Example:{" "}
-                        <span className="font-mono text-[9px] md:text-xs">
-                          MOUAU-25-COLPAS-PHY-12345
-                        </span>
-                      </p>
+                      <p>• Your NIN is used solely for identity verification</p>
+                      <p>• It will be encrypted and stored securely</p>
+                      <p>• We will not share your NIN with third parties</p>
                     </div>
                   </div>
                 </div>
@@ -859,13 +892,6 @@ export default function SignupPage() {
 
         {step === 3 && (
           <form onSubmit={handleStep3Submit} className="space-y-4 md:space-y-6">
-            {/* Debug info - remove in production */}
-            {process.env.NODE_ENV === "development" && (
-              <div className="p-2 bg-gray-800 border border-yellow-300 rounded text-xs">
-                <p className="font-semibold">Debug Info:</p>
-                <pre>{JSON.stringify(formData, null, 2)}</pre>
-              </div>
-            )}
             <div>
               <h2 className="text-xl md:text-2xl font-bold text-foreground mb-2">
                 {manualEntry ? "Enter Your Details" : "Confirm Your Details"}
@@ -877,60 +903,69 @@ export default function SignupPage() {
               </p>
             </div>
 
-            {/* Profile Photo Section */}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
-                  Profile Photo
-                </label>
-                <div className="flex items-center gap-4">
-                  <div className="relative">
-                    {photoPreview ? (
-                      <img
-                        src={photoPreview}
-                        alt="Profile"
-                        className="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover border-2 border-border"
-                      />
-                    ) : (
-                      <div className="w-20 h-20 md:w-24 md:h-24 bg-muted rounded-full flex items-center justify-center border-2 border-border">
-                        <User className="h-8 w-8 md:h-10 md:w-10 text-muted-foreground" />
-                      </div>
-                    )}
-                    <label
-                      htmlFor="photo-upload"
-                      className="absolute bottom-0 right-0 w-6 h-6 md:w-8 md:h-8 bg-primary rounded-full flex items-center justify-center cursor-pointer hover:bg-primary/90 transition-colors"
-                    >
-                      <Camera className="h-3 w-3 md:h-4 md:w-4 text-white" />
-                    </label>
-                    <input
-                      id="photo-upload"
-                      type="file"
-                      accept="image/*"
-                      onChange={handlePhotoChange}
-                      className="hidden"
-                    />
-                  </div>
-                  <div>
-                    <p className="text-xs md:text-sm text-foreground">
-                      Upload a professional photo
-                    </p>
-                    <p className="text-[10px] md:text-xs text-muted-foreground">
-                      JPG, PNG up to 5MB
-                    </p>
-                    {errors.photo && (
-                      <p className="text-error text-[10px] md:text-xs mt-1">
-                        {errors.photo}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <div className="grid md:grid-cols-2 gap-3 md:gap-4">
               <div className="md:col-span-2">
                 <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
-                  JAMB Registration Number (Optional)
+                  Do you have a Matriculation Number?
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="hasMatricNumber"
+                      value="yes"
+                      checked={formData.hasMatricNumber === "yes"}
+                      onChange={(e) =>
+                        handleInputChange("hasMatricNumber", e.target.value)
+                      }
+                      className="mr-2"
+                    />
+                    <span className="text-sm">Yes</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="hasMatricNumber"
+                      value="no"
+                      checked={formData.hasMatricNumber === "no"}
+                      onChange={(e) =>
+                        handleInputChange("hasMatricNumber", e.target.value)
+                      }
+                      className="mr-2"
+                    />
+                    <span className="text-sm">No</span>
+                  </label>
+                </div>
+              </div>
+
+              {formData.hasMatricNumber === "yes" && (
+                <div className="md:col-span-2">
+                  <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
+                    Matriculation Number *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.matricNumber}
+                    onChange={(e) => {
+                      const value = e.target.value.toUpperCase();
+                      handleInputChange("matricNumber", value);
+                    }}
+                    placeholder="e.g., MOUAU/20/12345"
+                    className={`form-input w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent ${
+                      errors.matricNumber ? "border-error" : "border-border"
+                    }`}
+                  />
+                  {errors.matricNumber && (
+                    <p className="text-error text-[10px] md:text-xs mt-1">
+                      {errors.matricNumber}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="md:col-span-2">
+                <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
+                  JAMB Registration Number *
                 </label>
                 <input
                   type="text"
@@ -1090,96 +1125,6 @@ export default function SignupPage() {
 
               <div>
                 <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
-                  State *
-                </label>
-                <select
-                  value={formData.state}
-                  onChange={(e) => handleInputChange("state", e.target.value)}
-                  className={`form-input w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent ${
-                    errors.state ? "border-error" : "border-border"
-                  }`}
-                  disabled={isLoadingStates}
-                >
-                  <option value="">Select State</option>
-                  {states.map((state) => (
-                    <option key={state} value={state}>
-                      {state}
-                    </option>
-                  ))}
-                </select>
-                {errors.state && (
-                  <p className="text-error text-[10px] md:text-xs mt-1">
-                    {errors.state}
-                  </p>
-                )}
-                {isLoadingStates && (
-                  <p className="text-muted-foreground text-[10px] md:text-xs mt-1">
-                    Loading states...
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
-                  LGA *
-                </label>
-                <select
-                  value={formData.lga}
-                  onChange={(e) => handleInputChange("lga", e.target.value)}
-                  className={`form-input w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent ${
-                    errors.lga ? "border-error" : "border-border"
-                  }`}
-                  disabled={!formData.state || isLoadingLgas}
-                >
-                  <option value="">
-                    {formData.state ? "Select LGA" : "Select State First"}
-                  </option>
-                  {lgas.map((lga) => (
-                    <option key={lga} value={lga}>
-                      {lga}
-                    </option>
-                  ))}
-                </select>
-                {errors.lga && (
-                  <p className="text-error text-[10px] md:text-xs mt-1">
-                    {errors.lga}
-                  </p>
-                )}
-                {isLoadingLgas && (
-                  <p className="text-muted-foreground text-[10px] md:text-xs mt-1">
-                    Loading LGAs...
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
-                  Marital Status *
-                </label>
-                <select
-                  value={formData.maritalStatus}
-                  onChange={(e) =>
-                    handleInputChange("maritalStatus", e.target.value)
-                  }
-                  className={`form-input w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent ${
-                    errors.maritalStatus ? "border-error" : "border-border"
-                  }`}
-                >
-                  <option value="">Select Status</option>
-                  <option value="SINGLE">Single</option>
-                  <option value="MARRIED">Married</option>
-                  <option value="DIVORCED">Divorced</option>
-                  <option value="WIDOWED">Widowed</option>
-                </select>
-                {errors.maritalStatus && (
-                  <p className="text-error text-[10px] md:text-xs mt-1">
-                    {errors.maritalStatus}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs md:text-sm font-medium text-foreground mb-2">
                   Email *
                 </label>
                 <input
@@ -1216,12 +1161,6 @@ export default function SignupPage() {
                 )}
               </div>
             </div>
-
-            {apiError && (
-              <div className="p-3 md:p-4 bg-error/10 border border-error/20 rounded-lg">
-                <p className="text-error text-xs md:text-sm">{apiError}</p>
-              </div>
-            )}
 
             <div className="flex gap-2 md:gap-4">
               <button
@@ -1344,7 +1283,91 @@ export default function SignupPage() {
           </form>
         )}
 
+        {/* New Photo Upload Step (Step 5) */}
         {step === 5 && (
+          <form
+            onSubmit={handlePhotoUploadSubmit}
+            className="space-y-4 md:space-y-6"
+          >
+            <div>
+              <h2 className="text-xl md:text-2xl font-bold text-foreground mb-2">
+                Upload Your Photo
+              </h2>
+              <p className="text-sm md:text-base text-muted-foreground mb-4 md:mb-6">
+                Please upload a passport photograph for your profile
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex flex-col items-center">
+                <div className="relative mb-4">
+                  {photoPreview ? (
+                    <img
+                      src={photoPreview}
+                      alt="Profile"
+                      className="w-32 h-32 md:w-40 md:h-40 rounded-full object-cover border-4 border-border"
+                    />
+                  ) : (
+                    <div className="w-32 h-32 md:w-40 md:h-40 bg-muted rounded-full flex items-center justify-center border-4 border-dashed border-border">
+                      <User className="h-16 w-16 md:h-20 md:w-20 text-muted-foreground" />
+                    </div>
+                  )}
+                  <label
+                    htmlFor="photo-upload"
+                    className="absolute bottom-0 right-0 w-10 h-10 md:w-12 md:h-12 bg-primary rounded-full flex items-center justify-center cursor-pointer hover:bg-primary/90 transition-colors"
+                  >
+                    {isUploadingPhoto ? (
+                      <div className="animate-spin rounded-full h-5 w-5 md:h-6 md:w-6 border-2 border-white border-t-transparent" />
+                    ) : (
+                      <Camera className="h-5 w-5 md:h-6 md:w-6 text-white" />
+                    )}
+                  </label>
+                  <input
+                    id="photo-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoChange}
+                    className="hidden"
+                  />
+                </div>
+                <div className="text-center max-w-md">
+                  <p className="text-sm md:text-base text-foreground mb-2">
+                    Upload a professional passport photograph
+                  </p>
+                  <p className="text-xs md:text-sm text-muted-foreground">
+                    JPG, PNG (7KB - 25KB). This photo will be displayed on your
+                    profile.
+                  </p>
+                  {errors.photo && (
+                    <p className="text-error text-xs md:text-sm mt-2">
+                      {errors.photo}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 md:gap-4">
+              <button
+                type="button"
+                onClick={() => setStep(4)}
+                className="flex-1 py-2.5 md:py-3 text-sm md:text-base border border-border text-foreground font-semibold rounded-lg hover:bg-muted transition-colors flex items-center justify-center gap-1.5 md:gap-2"
+              >
+                <ArrowLeft size={16} className="md:w-[18px] md:h-[18px]" />
+                Back
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-2.5 md:py-3 text-sm md:text-base bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-1.5 md:gap-2"
+              >
+                Continue
+                <ArrowRight size={16} className="md:w-[18px] md:h-[18px]" />
+              </button>
+            </div>
+          </form>
+        )}
+
+        {step === 6 && (
           <form onSubmit={handleFinalSubmit} className="space-y-4 md:space-y-6">
             <div>
               <h2 className="text-xl md:text-2xl font-bold text-foreground mb-2">
@@ -1355,17 +1378,100 @@ export default function SignupPage() {
               </p>
             </div>
 
-            <div className="bg-background/30 rounded-lg p-4 md:p-6 space-y-3 md:space-y-4">
-              <div className="grid md:grid-cols-2 gap-3 md:gap-4">
-                <div>
-                  <label className="text-xs md:text-sm font-medium text-muted-foreground">
-                    Matric Number
-                  </label>
-                  <p className="font-medium text-sm md:text-base text-foreground">
-                    {formData.matricNumber}
-                  </p>
+            <div className="bg-background/30 rounded-lg p-4 md:p-6 space-y-4 md:space-y-6">
+              {/* Profile Photo at the top center */}
+              <div className="flex flex-col items-center">
+                {photoPreview ? (
+                  <div className="text-center">
+                    <img
+                      src={photoPreview}
+                      alt="Profile Preview"
+                      className="w-32 h-32 md:w-40 md:h-40 rounded-full object-cover border-4 border-primary/20 mx-auto mb-3"
+                    />
+                    <p className="text-green-600 text-sm font-medium">
+                      Profile Photo ✓
+                    </p>
+                  </div>
+                ) : (
+                  <div className="text-center">
+                    <div className="w-32 h-32 md:w-40 md:h-40 bg-muted rounded-full flex items-center justify-center border-4 border-dashed border-border mx-auto mb-3">
+                      <User className="h-16 w-16 md:h-20 md:w-20 text-muted-foreground" />
+                    </div>
+                    <p className="text-yellow-600 text-sm font-medium">
+                      No photo uploaded
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Personal Information Section */}
+              <div className="space-y-3 md:space-y-4">
+                <h3 className="text-base md:text-lg font-semibold text-foreground pb-2 border-b border-border">
+                  Personal Information
+                </h3>
+                <div className="grid md:grid-cols-2 gap-3 md:gap-4">
+                  <div>
+                    <label className="text-xs md:text-sm font-medium text-muted-foreground">
+                      Full Name
+                    </label>
+                    <p className="font-medium text-sm md:text-base text-foreground">
+                      {formData.surname} {formData.firstName}{" "}
+                      {formData.otherName}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs md:text-sm font-medium text-muted-foreground">
+                      Gender
+                    </label>
+                    <p className="font-medium text-sm md:text-base text-foreground">
+                      {formData.gender}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs md:text-sm font-medium text-muted-foreground">
+                      Email
+                    </label>
+                    <p className="font-medium text-sm md:text-base text-foreground">
+                      {maskEmail(formData.email)}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs md:text-sm font-medium text-muted-foreground">
+                      Phone
+                    </label>
+                    <p className="font-medium text-sm md:text-base text-foreground">
+                      {maskPhone(formData.phone)}
+                    </p>
+                  </div>
                 </div>
-                {formData.jambRegNumber && (
+              </div>
+
+              {/* Academic Information Section */}
+              <div className="space-y-3 md:space-y-4">
+                <h3 className="text-base md:text-lg font-semibold text-foreground pb-2 border-b border-border">
+                  Academic Information
+                </h3>
+                <div className="grid md:grid-cols-2 gap-3 md:gap-4">
+                  <div>
+                    <label className="text-xs md:text-sm font-medium text-muted-foreground">
+                      NIN
+                    </label>
+                    <p className="font-medium text-sm md:text-base text-foreground">
+                      {formData.nin.substring(0, 4)}******
+                      {formData.nin.substring(8)}
+                    </p>
+                  </div>
+                  {formData.hasMatricNumber === "yes" &&
+                    formData.matricNumber && (
+                      <div>
+                        <label className="text-xs md:text-sm font-medium text-muted-foreground">
+                          Matric Number
+                        </label>
+                        <p className="font-medium text-sm md:text-base text-foreground">
+                          {formData.matricNumber}
+                        </p>
+                      </div>
+                    )}
                   <div>
                     <label className="text-xs md:text-sm font-medium text-muted-foreground">
                       JAMB Reg Number
@@ -1374,80 +1480,35 @@ export default function SignupPage() {
                       {formData.jambRegNumber}
                     </p>
                   </div>
-                )}
-                <div>
-                  <label className="text-xs md:text-sm font-medium text-muted-foreground">
-                    Full Name
-                  </label>
-                  <p className="font-medium text-sm md:text-base text-foreground">
-                    {formData.surname} {formData.firstName} {formData.otherName}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-xs md:text-sm font-medium text-muted-foreground">
-                    Gender
-                  </label>
-                  <p className="font-medium text-sm md:text-base text-foreground">
-                    {formData.gender}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-xs md:text-sm font-medium text-muted-foreground">
-                    College
-                  </label>
-                  <p className="font-medium text-sm md:text-base text-foreground">
-                    {formData.college}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-xs md:text-sm font-medium text-muted-foreground">
-                    Department
-                  </label>
-                  <p className="font-medium text-sm md:text-base text-foreground">
-                    {formData.department}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-xs md:text-sm font-medium text-muted-foreground">
-                    State
-                  </label>
-                  <p className="font-medium text-sm md:text-base text-foreground">
-                    {formData.state}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-xs md:text-sm font-medium text-muted-foreground">
-                    LGA
-                  </label>
-                  <p className="font-medium text-sm md:text-base text-foreground">
-                    {formData.lga}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-xs md:text-sm font-medium text-muted-foreground">
-                    Marital Status
-                  </label>
-                  <p className="font-medium text-sm md:text-base text-foreground">
-                    {formData.maritalStatus}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-xs md:text-sm font-medium text-muted-foreground">
-                    Email
-                  </label>
-                  <p className="font-medium text-sm md:text-base text-foreground">
-                    {maskEmail(formData.email)}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-xs md:text-sm font-medium text-muted-foreground">
-                    Phone
-                  </label>
-                  <p className="font-medium text-sm md:text-base text-foreground">
-                    {maskPhone(formData.phone)}
-                  </p>
+                  <div>
+                    <label className="text-xs md:text-sm font-medium text-muted-foreground">
+                      College
+                    </label>
+                    <p className="font-medium text-sm md:text-base text-foreground">
+                      {formData.college}
+                    </p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="text-xs md:text-sm font-medium text-muted-foreground">
+                      Department
+                    </label>
+                    <p className="font-medium text-sm md:text-base text-foreground">
+                      {formData.department}
+                    </p>
+                  </div>
                 </div>
               </div>
+
+              {/* Warning message if no photo */}
+              {!photoPreview && (
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-yellow-800 text-xs flex items-center gap-2">
+                    <AlertCircle size={14} />
+                    Please go back and upload your passport photograph before
+                    submitting
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="flex items-start gap-2 md:gap-3 p-3 md:p-4 bg-primary/10 rounded-lg border border-primary/20">
@@ -1466,7 +1527,7 @@ export default function SignupPage() {
             <div className="flex gap-2 md:gap-4">
               <button
                 type="button"
-                onClick={() => setStep(4)}
+                onClick={() => setStep(5)}
                 className="flex-1 py-2.5 md:py-3 text-sm md:text-base border border-border text-foreground font-semibold rounded-lg hover:bg-muted transition-colors flex items-center justify-center gap-1.5 md:gap-2"
               >
                 <ArrowLeft size={16} className="md:w-[18px] md:h-[18px]" />
@@ -1497,7 +1558,7 @@ export default function SignupPage() {
           </form>
         )}
 
-        {step === 6 && (
+        {step === 7 && (
           <div className="text-center space-y-4 md:space-y-6">
             <div className="p-3 md:p-4 bg-primary/10 rounded-full w-16 h-16 md:w-20 md:h-20 mx-auto flex items-center justify-center">
               <CheckCircle className="h-8 w-8 md:h-10 md:w-10 text-primary" />

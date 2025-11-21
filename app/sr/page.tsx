@@ -75,7 +75,7 @@ export default function SelectRolePage() {
     setRoleSelection(selectedRole);
 
     // Navigate to appropriate signup form
-    if (selectedRole === "lecturer") {
+    if (selectedRole === "teacher") {
       router.push("/p/t/signup");
     } else if (selectedRole === "student") {
       router.push("/p/s/signup");
@@ -90,7 +90,7 @@ export default function SelectRolePage() {
   // Get appropriate navigation URL based on selections
   const getNavigationUrl = () => {
     if (!selectedRole) return "#";
-    return selectedRole === "lecturer" ? "/p/t/signup" : "/p/s/signup";
+    return selectedRole === "teacher" ? "/p/t/signup" : "/p/s/signup";
   };
 
   if (loading) {
@@ -282,13 +282,13 @@ export default function SelectRolePage() {
             {/* Lecturer Card */}
             <div
               className={`relative p-8 bg-card rounded-2xl border-2 transition-all cursor-pointer group ${
-                selectedRole === "lecturer"
+                selectedRole === "teacher"
                   ? "border-primary shadow-lg shadow-primary/20 bg-primary/5 scale-[1.02]"
                   : "border-border hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10"
               }`}
-              onClick={() => handleRoleSelection("lecturer")}
+              onClick={() => handleRoleSelection("teacher")}
             >
-              {selectedRole === "lecturer" && (
+              {selectedRole === "teacher" && (
                 <div className="absolute top-4 right-4 p-2 bg-primary rounded-full animate-in zoom-in duration-200">
                   <UserCheck className="h-5 w-5 text-primary-foreground" />
                 </div>
@@ -297,7 +297,7 @@ export default function SelectRolePage() {
               <div className="flex items-center gap-4 mb-6">
                 <div
                   className={`p-3 rounded-xl transition-all duration-300 ${
-                    selectedRole === "lecturer"
+                    selectedRole === "teacher"
                       ? "bg-primary text-primary-foreground scale-110"
                       : "bg-primary/10 text-primary group-hover:bg-primary/20 group-hover:scale-110"
                   }`}
@@ -328,7 +328,7 @@ export default function SelectRolePage() {
               </div>
 
               <p className="text-muted-foreground mb-6 leading-relaxed">
-                Access the lecturer registration form with university email
+                Access the teacher registration form with university email
                 validation. Only official MOUAU staff emails are accepted.
               </p>
 
@@ -350,7 +350,7 @@ export default function SelectRolePage() {
 
               <div
                 className={`flex items-center font-medium transition-all group-hover:gap-3 gap-2 ${
-                  selectedRole === "lecturer" ? "text-primary" : "text-primary"
+                  selectedRole === "teacher" ? "text-primary" : "text-primary"
                 }`}
               >
                 Register as Lecturer

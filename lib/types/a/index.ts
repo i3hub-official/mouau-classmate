@@ -22,12 +22,12 @@ export interface AdminUser extends BaseUser {
   surname: string;
   otherName?: string | null;
   gender: Gender;
-  employeeId: string;
+  teacherId: string;
   department: string;
   institution: string;
   dateJoined: Date;
   isActive: boolean;
-  photo?: string | null;
+  passportUrl?: string | null;
   address?: string | null;
   phone?: string | null;
 
@@ -120,7 +120,7 @@ export interface StudentProfile {
 
 export interface TeacherProfile {
   id: string;
-  employeeId: string;
+  teacherId: string;
   firstName: string;
   surname: string;
   otherName?: string | null;

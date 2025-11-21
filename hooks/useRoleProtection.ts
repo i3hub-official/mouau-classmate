@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export type UserRole = "student" | "teacher" | "lecturer";
+export type UserRole = "student" | "teacher" | "teacher";
 
 interface RoleProtectionConfig {
   requiredRole: UserRole | UserRole[];

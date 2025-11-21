@@ -350,7 +350,7 @@ export class TeacherPasswordService {
             institution: teacher.institution,
             qualification: teacher.qualification,
             specialization: teacher.specialization,
-            employeeId: teacher.employeeId,
+            teacherId: teacher.teacherId,
           },
         },
       };

@@ -11,9 +11,9 @@ export interface TeacherUser {
     surname: string;
     department: string;
     college: string;
-    employeeId: string;
+    teacherId: string;
     academicRank: string;
-    photo?: string;
+    passportUrl?: string;
     phone?: string;
     dateEmployed?: string;
   };

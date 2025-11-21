@@ -219,7 +219,7 @@ export class SessionTokenValidator {
               // Teacher specific fields
               teacher: {
                 select: {
-                  employeeId: true,
+                  teacherId: true,
                   department: true,
                 },
               },
@@ -315,7 +315,7 @@ export class SessionTokenValidator {
         matricNumber = session.user.student.matricNumber;
         department = session.user.student.department;
       } else if (session.user.role === Role.TEACHER && session.user.teacher) {
-        matricNumber = session.user.teacher.employeeId;
+        matricNumber = session.user.teacher.teacherId;
         department = session.user.teacher.department;
       }
 
@@ -388,7 +388,7 @@ export class SessionTokenValidator {
           // Teacher specific fields
           teacher: {
             select: {
-              employeeId: true,
+              teacherId: true,
               department: true,
             },
           },
@@ -414,7 +414,7 @@ export class SessionTokenValidator {
         matricNumber = user.student.matricNumber;
         department = user.student.department;
       } else if (user.role === Role.TEACHER && user.teacher) {
-        matricNumber = user.teacher.employeeId;
+        matricNumber = user.teacher.teacherId;
         department = user.teacher.department;
       }
 
@@ -487,7 +487,7 @@ export class SessionTokenValidator {
           // Teacher specific fields
           teacher: {
             select: {
-              employeeId: true,
+              teacherId: true,
               department: true,
             },
           },
@@ -513,7 +513,7 @@ export class SessionTokenValidator {
         matricNumber = user.student.matricNumber;
         department = user.student.department;
       } else if (user.role === Role.TEACHER && user.teacher) {
-        matricNumber = user.teacher.employeeId;
+        matricNumber = user.teacher.teacherId;
         department = user.teacher.department;
       }
 

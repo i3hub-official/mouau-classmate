@@ -11,7 +11,7 @@ import { BaseUser } from "@/lib/types/shared/index";
 
 export interface TeacherUser extends BaseUser {
   role: "TEACHER";
-  employeeId: string;
+  teacherId: string;
   department: string;
   institution: string;
   firstName: string;
@@ -23,12 +23,12 @@ export interface TeacherUser extends BaseUser {
   experience?: string | null;
   dateJoined: Date;
   isActive: boolean;
-  photo?: string | null;
+  passportUrl?: string | null;
 }
 
 export interface Teacher {
   id: string;
-  employeeId: string;
+  teacherId: string;
   firstName: string;
   surname: string;
   otherName?: string | null;
@@ -42,7 +42,7 @@ export interface Teacher {
   experience?: string | null;
   dateJoined: Date;
   isActive: boolean;
-  photo?: string | null;
+  passportUrl?: string | null;
   updatedAt: Date;
   lastActivityAt?: Date | null;
   userId: string;
@@ -51,13 +51,13 @@ export interface Teacher {
 // Safe teacher profile (without sensitive data)
 export interface TeacherProfile {
   id: string;
-  employeeId: string;
+  teacherId: string;
   firstName: string;
   surname: string;
   otherName?: string | null;
   email: string;
   phone: string;
-  photo?: string | null;
+  passportUrl?: string | null;
   department: string;
   qualification?: string | null;
   specialization?: string | null;
@@ -73,7 +73,7 @@ export interface TeacherRegistrationData {
   gender?: Gender;
   email: string;
   phone: string;
-  employeeId: string;
+  teacherId: string;
   institution: string;
   department: string;
   qualification?: string;

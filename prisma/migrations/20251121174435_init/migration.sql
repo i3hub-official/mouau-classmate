@@ -11,13 +11,13 @@ CREATE TYPE "MaritalStatus" AS ENUM ('SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED')
 CREATE TYPE "Grade" AS ENUM ('A', 'B', 'C', 'D', 'E', 'F');
 
 -- CreateEnum
-CREATE TYPE "NotificationType" AS ENUM ('INFO', 'SUCCESS', 'WARNING', 'ERROR', 'SECURITY');
+CREATE TYPE "NotificationType" AS ENUM ('INFO', 'SUCCESS', 'WARNING', 'ERROR', 'SECURITY', 'REMINDER', 'GRADE');
 
 -- CreateEnum
-CREATE TYPE "AuditAction" AS ENUM ('USER_REGISTERED', 'USER_LOGGED_IN', 'USER_LOGGED_OUT', 'EMAIL_VERIFIED', 'PROFILE_UPDATED', 'STUDENT_REGISTERED', 'ENROLLMENT_CREATED', 'ASSIGNMENT_SUBMITTED', 'PORTFOLIO_CREATED', 'COURSE_CREATED', 'ASSIGNMENT_CREATED', 'GRADE_ASSIGNED', 'PASSWORD_RESET_REQUESTED', 'PASSWORD_RESET', 'SESSION_REFRESHED', 'SESSION_CLEANED_UP', 'SESSION_CREATED', 'SESSION_INVALIDATED', 'ALL_SESSIONS_INVALIDATED', 'NOTIFICATION_SENT', 'SYSTEM_CONFIG_UPDATED', 'SUSPICIOUS_ACTIVITY_DETECTED', 'RATE_LIMIT_EXCEEDED', 'DEVICE_FINGERPRINT_MISMATCH', 'RESEND_VERIFICATION_REQUESTED', 'USER_LOGIN_FAILED', 'EMAIL_VERIFICATION_FAILED', 'USER_LOGIN_ERROR', 'EXPORT_TRANSCRIPT', 'EXPORT_TRANSCRIPT_FAILED', 'DATA_EXPORT_REQUESTED', 'ACCOUNT_DELETION_REQUESTED', 'NOTIFICATION_SETTINGS_UPDATED', 'USER_PROFILE_VIEWED', 'PASSWORD_CHANGED', 'SECURITY_SETTINGS_UPDATED', 'ACCOUNT_DELETION', 'PORTFOLIO_UPDATED', 'USER_PREFERENCES', 'NOTIFICATION_SETTINGS_RESET', 'LECTURE_CREATED', 'TEACHER_REGISTERED', 'COURSE_COMPLETED', 'ADMIN_REGISTERED', 'ATTENDANCE_MARKED');
+CREATE TYPE "AuditAction" AS ENUM ('USER_REGISTERED', 'USER_LOGGED_IN', 'USER_LOGGED_OUT', 'EMAIL_VERIFIED', 'PROFILE_UPDATED', 'STUDENT_REGISTERED', 'ENROLLMENT_CREATED', 'ASSIGNMENT_SUBMITTED', 'PORTFOLIO_CREATED', 'COURSE_CREATED', 'ASSIGNMENT_CREATED', 'GRADE_ASSIGNED', 'EXAM_RESULT_PUBLISHED', 'PASSWORD_RESET_REQUESTED', 'PASSWORD_RESET', 'SESSION_REFRESHED', 'SESSION_INVALIDATED', 'NOTIFICATION_SENT', 'SYSTEM_CONFIG_UPDATED', 'SUSPICIOUS_ACTIVITY_DETECTED', 'RATE_LIMIT_EXCEEDED', 'RESEND_VERIFICATION_REQUESTED', 'USER_LOGIN_FAILED', 'EXPORT_TRANSCRIPT', 'DATA_EXPORT_REQUESTED', 'ACCOUNT_DELETION_REQUESTED', 'ACCOUNT_DELETION', 'ATTENDANCE_MARKED', 'EXAM_RESULT_RECORDED', 'EXAM_RESULT_UPDATED', 'COURSE_COMPLETED', 'ACCOUNT_DEACTIVATED', 'ACCOUNT_REACTIVATED', 'ACCOUNT_ACTIVATED', 'EXAM_COMPLETED', 'COURSE_ENROLLED', 'GRADE_RECEIVED', 'PASSWORD_CHANGED', 'STUDENT_PROFILE_UPDATED', 'EMAIL_UPDATED', 'AUTH_ERROR', 'NOTIFICATION_SETTINGS_UPDATED', 'ACCOUNT_DELETED');
 
 -- CreateEnum
-CREATE TYPE "ResourceType" AS ENUM ('USER', 'STUDENT', 'TEACHER', 'ADMIN', 'COURSE', 'LECTURE', 'ASSIGNMENT', 'ENROLLMENT', 'PORTFOLIO', 'SESSION', 'NOTIFICATION', 'ATTENDANCE');
+CREATE TYPE "ResourceType" AS ENUM ('USER', 'STUDENT', 'TEACHER', 'ADMIN', 'COURSE', 'LECTURE', 'ASSIGNMENT', 'ENROLLMENT', 'PORTFOLIO', 'SESSION', 'NOTIFICATION', 'ATTENDANCE', 'EXAM', 'EXAM_RESULT');
 
 -- CreateEnum
 CREATE TYPE "SessionSecurityLevel" AS ENUM ('LOW', 'MEDIUM', 'HIGH');
@@ -25,13 +25,22 @@ CREATE TYPE "SessionSecurityLevel" AS ENUM ('LOW', 'MEDIUM', 'HIGH');
 -- CreateEnum
 CREATE TYPE "AttendanceStatus" AS ENUM ('PRESENT', 'ABSENT', 'LATE', 'EXCUSED');
 
+-- CreateEnum
+CREATE TYPE "ExamType" AS ENUM ('PHYSICAL', 'ONLINE', 'HYBRID');
+
+-- CreateEnum
+CREATE TYPE "ExamFormat" AS ENUM ('THEORY', 'PRACTICAL', 'OBJECTIVE', 'ORAL', 'TAKE_HOME', 'PROJECT_BASED');
+
+-- CreateEnum
+CREATE TYPE "ExamRemark" AS ENUM ('EXCELLENT', 'VERY_GOOD', 'GOOD', 'FAIR', 'PASS', 'FAIL', 'ABSENT', 'MALPRACTICE');
+
 -- CreateTable
 CREATE TABLE "users" (
     "id" TEXT NOT NULL,
     "name" TEXT,
     "email" TEXT NOT NULL,
     "emailVerified" TIMESTAMP(3),
-    "image" TEXT,
+    "passportUrl" TEXT,
     "role" "Role" NOT NULL DEFAULT 'STUDENT',
     "isActive" BOOLEAN NOT NULL DEFAULT false,
     "lastLoginAt" TIMESTAMP(3),
@@ -95,8 +104,7 @@ CREATE TABLE "verification_tokens" (
     "identifier" TEXT NOT NULL,
     "token" TEXT NOT NULL,
     "expires" TIMESTAMP(3) NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "tokenId" TEXT
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateTable
@@ -133,15 +141,17 @@ CREATE TABLE "students" (
     "lga" TEXT NOT NULL,
     "maritalStatus" "MaritalStatus" DEFAULT 'SINGLE',
     "dateEnrolled" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "isActive" BOOLEAN NOT NULL DEFAULT true,
     "admissionYear" INTEGER,
     "dateOfBirth" TIMESTAMP(3),
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "lastActivityAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "emailSearchHash" TEXT,
     "phoneSearchHash" TEXT,
+    "matricSearchHash" TEXT,
     "jambRegSearchHash" TEXT,
     "ninSearchHash" TEXT,
-    "lastActivityAt" TIMESTAMP(3),
     "userId" TEXT NOT NULL,
 
     CONSTRAINT "students_pkey" PRIMARY KEY ("id")
@@ -150,7 +160,7 @@ CREATE TABLE "students" (
 -- CreateTable
 CREATE TABLE "teachers" (
     "id" TEXT NOT NULL,
-    "employeeId" TEXT NOT NULL,
+    "teacherId" TEXT NOT NULL,
     "surname" TEXT NOT NULL,
     "firstName" TEXT NOT NULL,
     "otherName" TEXT,
@@ -162,14 +172,15 @@ CREATE TABLE "teachers" (
     "qualification" TEXT,
     "specialization" TEXT,
     "experience" TEXT,
+    "title" TEXT,
     "dateJoined" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "photo" TEXT,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "passportUrl" TEXT,
     "lastActivityAt" TIMESTAMP(3),
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     "emailSearchHash" TEXT,
     "phoneSearchHash" TEXT,
-    "employeeIdSearchHash" TEXT,
+    "teacherIdSearchHash" TEXT,
     "userId" TEXT NOT NULL,
 
     CONSTRAINT "teachers_pkey" PRIMARY KEY ("id")
@@ -178,7 +189,7 @@ CREATE TABLE "teachers" (
 -- CreateTable
 CREATE TABLE "admins" (
     "id" TEXT NOT NULL,
-    "employeeId" TEXT NOT NULL,
+    "adminId" TEXT NOT NULL,
     "surname" TEXT NOT NULL,
     "firstName" TEXT NOT NULL,
     "otherName" TEXT,
@@ -192,12 +203,12 @@ CREATE TABLE "admins" (
     "experience" TEXT,
     "dateJoined" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "photo" TEXT,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "passportUrl" TEXT,
     "lastActivityAt" TIMESTAMP(3),
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     "emailSearchHash" TEXT,
     "phoneSearchHash" TEXT,
-    "employeeIdSearchHash" TEXT,
+    "teacherIdSearchHash" TEXT,
     "userId" TEXT NOT NULL,
 
     CONSTRAINT "admins_pkey" PRIMARY KEY ("id")
@@ -214,9 +225,9 @@ CREATE TABLE "courses" (
     "semester" INTEGER NOT NULL DEFAULT 1,
     "courseOutline" TEXT,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "color" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
-    "color" TEXT,
     "instructorId" TEXT,
     "creatorId" TEXT,
 
@@ -233,11 +244,54 @@ CREATE TABLE "lectures" (
     "orderIndex" INTEGER NOT NULL DEFAULT 0,
     "isPublished" BOOLEAN NOT NULL DEFAULT false,
     "publishedAt" TIMESTAMP(3),
+    "scheduledAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "courseId" TEXT NOT NULL,
 
     CONSTRAINT "lectures_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "exams" (
+    "id" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "courseId" TEXT NOT NULL,
+    "date" TIMESTAMP(3) NOT NULL,
+    "duration" INTEGER NOT NULL DEFAULT 180,
+    "totalMarks" INTEGER NOT NULL DEFAULT 70,
+    "venue" TEXT NOT NULL DEFAULT 'TBA',
+    "type" "ExamType" NOT NULL DEFAULT 'PHYSICAL',
+    "format" "ExamFormat" NOT NULL DEFAULT 'THEORY',
+    "isPublished" BOOLEAN NOT NULL DEFAULT false,
+    "publishedAt" TIMESTAMP(3),
+    "deletedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "exams_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "exam_results" (
+    "id" TEXT NOT NULL,
+    "examId" TEXT NOT NULL,
+    "studentId" TEXT NOT NULL,
+    "courseId" TEXT NOT NULL,
+    "score" DOUBLE PRECISION,
+    "percentage" DOUBLE PRECISION,
+    "grade" "Grade",
+    "remark" "ExamRemark" NOT NULL DEFAULT 'PASS',
+    "isPublished" BOOLEAN NOT NULL DEFAULT false,
+    "publishedAt" TIMESTAMP(3),
+    "recordedBy" TEXT,
+    "recordedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "scriptUrl" TEXT,
+    "feedback" TEXT,
+
+    CONSTRAINT "exam_results_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -252,6 +306,7 @@ CREATE TABLE "enrollments" (
     "score" DOUBLE PRECISION,
     "progress" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "lastAccessedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "enrollments_pkey" PRIMARY KEY ("id")
@@ -270,9 +325,10 @@ CREATE TABLE "assignments" (
     "assignmentUrl" TEXT,
     "isPublished" BOOLEAN NOT NULL DEFAULT false,
     "allowLateSubmission" BOOLEAN NOT NULL DEFAULT false,
-    "status" TEXT,
+    "scheduledAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "deletedAt" TIMESTAMP(3),
     "courseId" TEXT NOT NULL,
     "teacherId" TEXT,
 
@@ -291,8 +347,6 @@ CREATE TABLE "assignment_submissions" (
     "isLate" BOOLEAN NOT NULL DEFAULT false,
     "attemptNumber" INTEGER NOT NULL DEFAULT 1,
     "gradedAt" TIMESTAMP(3),
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "studentId" TEXT NOT NULL,
     "assignmentId" TEXT NOT NULL,
 
@@ -328,6 +382,25 @@ CREATE TABLE "portfolios" (
     "studentId" TEXT NOT NULL,
 
     CONSTRAINT "portfolios_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "attendance" (
+    "id" TEXT NOT NULL,
+    "studentId" TEXT NOT NULL,
+    "courseId" TEXT NOT NULL,
+    "lectureId" TEXT NOT NULL,
+    "status" "AttendanceStatus" NOT NULL DEFAULT 'PRESENT',
+    "markedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "markedBy" TEXT,
+    "notes" TEXT,
+    "verified" BOOLEAN NOT NULL DEFAULT false,
+    "ipAddress" TEXT,
+    "userAgent" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "attendance_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -377,6 +450,61 @@ CREATE TABLE "system_configs" (
 );
 
 -- CreateTable
+CREATE TABLE "security_events" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT,
+    "eventType" TEXT NOT NULL,
+    "severity" TEXT NOT NULL DEFAULT 'medium',
+    "description" TEXT NOT NULL,
+    "ipAddress" TEXT,
+    "userAgent" TEXT,
+    "metadata" JSONB,
+    "resolved" BOOLEAN NOT NULL DEFAULT false,
+    "resolvedAt" TIMESTAMP(3),
+    "resolvedBy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "security_events_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "user_preferences" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "emailNotifications" BOOLEAN NOT NULL DEFAULT true,
+    "pushNotifications" BOOLEAN NOT NULL DEFAULT true,
+    "assignmentReminders" BOOLEAN NOT NULL DEFAULT true,
+    "gradeAlerts" BOOLEAN NOT NULL DEFAULT true,
+    "lectureReminders" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "user_preferences_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "nin_cache" (
+    "id" TEXT NOT NULL,
+    "nin" TEXT NOT NULL,
+    "surname" TEXT NOT NULL,
+    "firstName" TEXT NOT NULL,
+    "otherName" TEXT,
+    "gender" TEXT NOT NULL,
+    "dateOfBirth" TEXT NOT NULL,
+    "phoneNumber" TEXT NOT NULL,
+    "state" TEXT,
+    "lga" TEXT,
+    "residenceAddress" TEXT,
+    "photo" TEXT,
+    "firstVerified" TIMESTAMP(3) NOT NULL,
+    "lastVerified" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "nin_cache_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "metrics" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -402,24 +530,6 @@ CREATE TABLE "rate_limits" (
 );
 
 -- CreateTable
-CREATE TABLE "security_events" (
-    "id" TEXT NOT NULL,
-    "userId" TEXT,
-    "eventType" TEXT NOT NULL,
-    "severity" TEXT NOT NULL DEFAULT 'medium',
-    "description" TEXT NOT NULL,
-    "ipAddress" TEXT,
-    "userAgent" TEXT,
-    "metadata" JSONB,
-    "resolved" BOOLEAN NOT NULL DEFAULT false,
-    "resolvedAt" TIMESTAMP(3),
-    "resolvedBy" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "security_events_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "user_activities" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
@@ -432,40 +542,6 @@ CREATE TABLE "user_activities" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "user_activities_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "user_preferences" (
-    "id" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "emailNotifications" BOOLEAN NOT NULL DEFAULT true,
-    "pushNotifications" BOOLEAN NOT NULL DEFAULT true,
-    "assignmentReminders" BOOLEAN NOT NULL DEFAULT true,
-    "gradeAlerts" BOOLEAN NOT NULL DEFAULT true,
-    "lectureReminders" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "user_preferences_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "attendance" (
-    "id" TEXT NOT NULL,
-    "studentId" TEXT NOT NULL,
-    "courseId" TEXT NOT NULL,
-    "lectureId" TEXT NOT NULL,
-    "status" "AttendanceStatus" NOT NULL DEFAULT 'PRESENT',
-    "markedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "markedBy" TEXT,
-    "notes" TEXT,
-    "verified" BOOLEAN NOT NULL DEFAULT false,
-    "ipAddress" TEXT,
-    "userAgent" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "attendance_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -499,37 +575,13 @@ CREATE UNIQUE INDEX "sessions_sessionToken_key" ON "sessions"("sessionToken");
 CREATE INDEX "sessions_userId_idx" ON "sessions"("userId");
 
 -- CreateIndex
-CREATE INDEX "sessions_sessionToken_idx" ON "sessions"("sessionToken");
-
--- CreateIndex
 CREATE INDEX "sessions_expires_idx" ON "sessions"("expires");
 
 -- CreateIndex
 CREATE INDEX "sessions_deviceFingerprint_idx" ON "sessions"("deviceFingerprint");
 
 -- CreateIndex
-CREATE INDEX "sessions_securityLevel_idx" ON "sessions"("securityLevel");
-
--- CreateIndex
-CREATE INDEX "sessions_createdAt_idx" ON "sessions"("createdAt");
-
--- CreateIndex
 CREATE UNIQUE INDEX "verification_tokens_token_key" ON "verification_tokens"("token");
-
--- CreateIndex
-CREATE UNIQUE INDEX "verification_tokens_token_id_key" ON "verification_tokens"("tokenId");
-
--- CreateIndex
-CREATE INDEX "verification_tokens_token_idx" ON "verification_tokens"("token");
-
--- CreateIndex
-CREATE INDEX "verification_tokens_tokenId_idx" ON "verification_tokens"("tokenId");
-
--- CreateIndex
-CREATE INDEX "verification_tokens_expires_idx" ON "verification_tokens"("expires");
-
--- CreateIndex
-CREATE INDEX "verification_tokens_createdAt_idx" ON "verification_tokens"("createdAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "verification_tokens_identifier_token_key" ON "verification_tokens"("identifier", "token");
@@ -547,13 +599,10 @@ CREATE INDEX "password_reset_tokens_userId_idx" ON "password_reset_tokens"("user
 CREATE INDEX "password_reset_tokens_expires_idx" ON "password_reset_tokens"("expires");
 
 -- CreateIndex
-CREATE INDEX "password_reset_tokens_used_idx" ON "password_reset_tokens"("used");
+CREATE UNIQUE INDEX "students_matricNumber_key" ON "students"("matricNumber");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "students_matric_number_key" ON "students"("matricNumber");
-
--- CreateIndex
-CREATE UNIQUE INDEX "students_jamb_reg_number_key" ON "students"("jambRegNumber");
+CREATE UNIQUE INDEX "students_jambRegNumber_key" ON "students"("jambRegNumber");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "students_nin_key" ON "students"("nin");
@@ -565,22 +614,31 @@ CREATE UNIQUE INDEX "students_phone_key" ON "students"("phone");
 CREATE UNIQUE INDEX "students_email_key" ON "students"("email");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "students_email_search_hash_key" ON "students"("emailSearchHash");
+CREATE UNIQUE INDEX "students_emailSearchHash_key" ON "students"("emailSearchHash");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "students_phone_search_hash_key" ON "students"("phoneSearchHash");
+CREATE UNIQUE INDEX "students_phoneSearchHash_key" ON "students"("phoneSearchHash");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "students_jamb_reg_search_hash_key" ON "students"("jambRegSearchHash");
+CREATE UNIQUE INDEX "students_matricSearchHash_key" ON "students"("matricSearchHash");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "students_nin_search_hash_key" ON "students"("ninSearchHash");
+CREATE UNIQUE INDEX "students_jambRegSearchHash_key" ON "students"("jambRegSearchHash");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "students_ninSearchHash_key" ON "students"("ninSearchHash");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "students_userId_key" ON "students"("userId");
 
 -- CreateIndex
 CREATE INDEX "students_matricNumber_idx" ON "students"("matricNumber");
 
 -- CreateIndex
-CREATE INDEX "students_jambRegNumber_idx" ON "students"("jambRegNumber");
+CREATE INDEX "students_department_admissionYear_idx" ON "students"("department", "admissionYear");
+
+-- CreateIndex
+CREATE INDEX "students_isActive_admissionYear_idx" ON "students"("isActive", "admissionYear");
 
 -- CreateIndex
 CREATE INDEX "students_email_idx" ON "students"("email");
@@ -589,28 +647,7 @@ CREATE INDEX "students_email_idx" ON "students"("email");
 CREATE INDEX "students_phone_idx" ON "students"("phone");
 
 -- CreateIndex
-CREATE INDEX "students_department_idx" ON "students"("department");
-
--- CreateIndex
-CREATE INDEX "students_college_idx" ON "students"("college");
-
--- CreateIndex
-CREATE INDEX "students_dateEnrolled_idx" ON "students"("dateEnrolled");
-
--- CreateIndex
-CREATE INDEX "students_lastActivityAt_idx" ON "students"("lastActivityAt");
-
--- CreateIndex
-CREATE UNIQUE INDEX "students_user_id_key" ON "students"("userId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "students_matric_number_alt_key" ON "students"("matricNumber");
-
--- CreateIndex
-CREATE UNIQUE INDEX "students_jamb_reg_number_alt_key" ON "students"("jambRegNumber");
-
--- CreateIndex
-CREATE UNIQUE INDEX "teachers_employee_id_key" ON "teachers"("employeeId");
+CREATE UNIQUE INDEX "teachers_teacherId_key" ON "teachers"("teacherId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "teachers_phone_key" ON "teachers"("phone");
@@ -619,37 +656,25 @@ CREATE UNIQUE INDEX "teachers_phone_key" ON "teachers"("phone");
 CREATE UNIQUE INDEX "teachers_email_key" ON "teachers"("email");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "teachers_email_search_hash_key" ON "teachers"("emailSearchHash");
+CREATE UNIQUE INDEX "teachers_emailSearchHash_key" ON "teachers"("emailSearchHash");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "teachers_phone_search_hash_key" ON "teachers"("phoneSearchHash");
+CREATE UNIQUE INDEX "teachers_phoneSearchHash_key" ON "teachers"("phoneSearchHash");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "teachers_employee_id_search_hash_key" ON "teachers"("employeeIdSearchHash");
+CREATE UNIQUE INDEX "teachers_teacherIdSearchHash_key" ON "teachers"("teacherIdSearchHash");
 
 -- CreateIndex
-CREATE INDEX "teachers_employeeId_idx" ON "teachers"("employeeId");
+CREATE UNIQUE INDEX "teachers_userId_key" ON "teachers"("userId");
 
 -- CreateIndex
-CREATE INDEX "teachers_email_idx" ON "teachers"("email");
-
--- CreateIndex
-CREATE INDEX "teachers_phone_idx" ON "teachers"("phone");
+CREATE INDEX "teachers_teacherId_idx" ON "teachers"("teacherId");
 
 -- CreateIndex
 CREATE INDEX "teachers_department_idx" ON "teachers"("department");
 
 -- CreateIndex
-CREATE INDEX "teachers_lastActivityAt_idx" ON "teachers"("lastActivityAt");
-
--- CreateIndex
-CREATE UNIQUE INDEX "teachers_user_id_key" ON "teachers"("userId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "teachers_employee_id_alt_key" ON "teachers"("employeeId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "admins_employee_id_key" ON "admins"("employeeId");
+CREATE UNIQUE INDEX "admins_adminId_key" ON "admins"("adminId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "admins_phone_key" ON "admins"("phone");
@@ -658,34 +683,16 @@ CREATE UNIQUE INDEX "admins_phone_key" ON "admins"("phone");
 CREATE UNIQUE INDEX "admins_email_key" ON "admins"("email");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "admins_email_search_hash_key" ON "admins"("emailSearchHash");
+CREATE UNIQUE INDEX "admins_emailSearchHash_key" ON "admins"("emailSearchHash");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "admins_phone_search_hash_key" ON "admins"("phoneSearchHash");
+CREATE UNIQUE INDEX "admins_phoneSearchHash_key" ON "admins"("phoneSearchHash");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "admins_employee_id_search_hash_key" ON "admins"("employeeIdSearchHash");
+CREATE UNIQUE INDEX "admins_teacherIdSearchHash_key" ON "admins"("teacherIdSearchHash");
 
 -- CreateIndex
-CREATE INDEX "admins_employeeId_idx" ON "admins"("employeeId");
-
--- CreateIndex
-CREATE INDEX "admins_email_idx" ON "admins"("email");
-
--- CreateIndex
-CREATE INDEX "admins_phone_idx" ON "admins"("phone");
-
--- CreateIndex
-CREATE INDEX "admins_department_idx" ON "admins"("department");
-
--- CreateIndex
-CREATE INDEX "admins_lastActivityAt_idx" ON "admins"("lastActivityAt");
-
--- CreateIndex
-CREATE UNIQUE INDEX "admins_user_id_key" ON "admins"("userId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "admins_employee_id_alt_key" ON "admins"("employeeId");
+CREATE UNIQUE INDEX "admins_userId_key" ON "admins"("userId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "courses_code_key" ON "courses"("code");
@@ -694,16 +701,10 @@ CREATE UNIQUE INDEX "courses_code_key" ON "courses"("code");
 CREATE INDEX "courses_code_idx" ON "courses"("code");
 
 -- CreateIndex
-CREATE INDEX "courses_level_idx" ON "courses"("level");
-
--- CreateIndex
-CREATE INDEX "courses_semester_idx" ON "courses"("semester");
+CREATE INDEX "courses_level_semester_isActive_idx" ON "courses"("level", "semester", "isActive");
 
 -- CreateIndex
 CREATE INDEX "courses_instructorId_idx" ON "courses"("instructorId");
-
--- CreateIndex
-CREATE INDEX "courses_createdAt_idx" ON "courses"("createdAt");
 
 -- CreateIndex
 CREATE INDEX "lectures_courseId_idx" ON "lectures"("courseId");
@@ -712,22 +713,37 @@ CREATE INDEX "lectures_courseId_idx" ON "lectures"("courseId");
 CREATE INDEX "lectures_orderIndex_idx" ON "lectures"("orderIndex");
 
 -- CreateIndex
-CREATE INDEX "lectures_isPublished_idx" ON "lectures"("isPublished");
+CREATE INDEX "exams_courseId_idx" ON "exams"("courseId");
 
 -- CreateIndex
-CREATE INDEX "enrollments_studentId_idx" ON "enrollments"("studentId");
+CREATE INDEX "exams_date_idx" ON "exams"("date");
 
 -- CreateIndex
-CREATE INDEX "enrollments_courseId_idx" ON "enrollments"("courseId");
+CREATE INDEX "exams_isPublished_idx" ON "exams"("isPublished");
 
 -- CreateIndex
-CREATE INDEX "enrollments_isCompleted_idx" ON "enrollments"("isCompleted");
+CREATE INDEX "exam_results_studentId_idx" ON "exam_results"("studentId");
 
 -- CreateIndex
-CREATE INDEX "enrollments_dateEnrolled_idx" ON "enrollments"("dateEnrolled");
+CREATE INDEX "exam_results_courseId_idx" ON "exam_results"("courseId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "enrollments_student_id_course_id_key" ON "enrollments"("studentId", "courseId");
+CREATE INDEX "exam_results_examId_idx" ON "exam_results"("examId");
+
+-- CreateIndex
+CREATE INDEX "exam_results_isPublished_idx" ON "exam_results"("isPublished");
+
+-- CreateIndex
+CREATE INDEX "exam_results_grade_idx" ON "exam_results"("grade");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "exam_results_examId_studentId_key" ON "exam_results"("examId", "studentId");
+
+-- CreateIndex
+CREATE INDEX "enrollments_courseId_isCompleted_idx" ON "enrollments"("courseId", "isCompleted");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "enrollments_studentId_courseId_key" ON "enrollments"("studentId", "courseId");
 
 -- CreateIndex
 CREATE INDEX "assignments_courseId_idx" ON "assignments"("courseId");
@@ -736,43 +752,31 @@ CREATE INDEX "assignments_courseId_idx" ON "assignments"("courseId");
 CREATE INDEX "assignments_dueDate_idx" ON "assignments"("dueDate");
 
 -- CreateIndex
-CREATE INDEX "assignments_isPublished_idx" ON "assignments"("isPublished");
+CREATE INDEX "assignment_submissions_assignmentId_isGraded_idx" ON "assignment_submissions"("assignmentId", "isGraded");
 
 -- CreateIndex
-CREATE INDEX "assignment_submissions_studentId_idx" ON "assignment_submissions"("studentId");
+CREATE UNIQUE INDEX "assignment_submissions_studentId_assignmentId_attemptNumber_key" ON "assignment_submissions"("studentId", "assignmentId", "attemptNumber");
 
 -- CreateIndex
-CREATE INDEX "assignment_submissions_assignmentId_idx" ON "assignment_submissions"("assignmentId");
-
--- CreateIndex
-CREATE INDEX "assignment_submissions_submittedAt_idx" ON "assignment_submissions"("submittedAt");
-
--- CreateIndex
-CREATE INDEX "assignment_submissions_isGraded_idx" ON "assignment_submissions"("isGraded");
-
--- CreateIndex
-CREATE UNIQUE INDEX "assignment_submissions_student_assignment_attempt_key" ON "assignment_submissions"("studentId", "assignmentId", "attemptNumber");
-
--- CreateIndex
-CREATE INDEX "submissions_studentId_idx" ON "submissions"("studentId");
-
--- CreateIndex
-CREATE INDEX "submissions_lectureId_idx" ON "submissions"("lectureId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "submissions_student_id_lecture_id_key" ON "submissions"("studentId", "lectureId");
+CREATE UNIQUE INDEX "submissions_studentId_lectureId_key" ON "submissions"("studentId", "lectureId");
 
 -- CreateIndex
 CREATE INDEX "portfolios_studentId_idx" ON "portfolios"("studentId");
 
 -- CreateIndex
-CREATE INDEX "portfolios_courseId_idx" ON "portfolios"("courseId");
-
--- CreateIndex
-CREATE INDEX "portfolios_submittedAt_idx" ON "portfolios"("submittedAt");
-
--- CreateIndex
 CREATE INDEX "portfolios_isPublished_idx" ON "portfolios"("isPublished");
+
+-- CreateIndex
+CREATE INDEX "attendance_courseId_idx" ON "attendance"("courseId");
+
+-- CreateIndex
+CREATE INDEX "attendance_status_idx" ON "attendance"("status");
+
+-- CreateIndex
+CREATE INDEX "attendance_verified_idx" ON "attendance"("verified");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "attendance_studentId_lectureId_key" ON "attendance"("studentId", "lectureId");
 
 -- CreateIndex
 CREATE INDEX "audit_logs_userId_idx" ON "audit_logs"("userId");
@@ -781,13 +785,7 @@ CREATE INDEX "audit_logs_userId_idx" ON "audit_logs"("userId");
 CREATE INDEX "audit_logs_action_idx" ON "audit_logs"("action");
 
 -- CreateIndex
-CREATE INDEX "audit_logs_resourceType_resourceId_idx" ON "audit_logs"("resourceType", "resourceId");
-
--- CreateIndex
 CREATE INDEX "audit_logs_createdAt_idx" ON "audit_logs"("createdAt");
-
--- CreateIndex
-CREATE INDEX "audit_logs_securityLevel_idx" ON "audit_logs"("securityLevel");
 
 -- CreateIndex
 CREATE INDEX "notifications_userId_idx" ON "notifications"("userId");
@@ -799,40 +797,10 @@ CREATE INDEX "notifications_isRead_idx" ON "notifications"("isRead");
 CREATE INDEX "notifications_createdAt_idx" ON "notifications"("createdAt");
 
 -- CreateIndex
-CREATE INDEX "notifications_type_idx" ON "notifications"("type");
-
--- CreateIndex
-CREATE INDEX "notifications_priority_idx" ON "notifications"("priority");
-
--- CreateIndex
 CREATE UNIQUE INDEX "system_configs_key_key" ON "system_configs"("key");
 
 -- CreateIndex
-CREATE INDEX "system_configs_key_idx" ON "system_configs"("key");
-
--- CreateIndex
 CREATE INDEX "system_configs_category_idx" ON "system_configs"("category");
-
--- CreateIndex
-CREATE INDEX "metrics_name_idx" ON "metrics"("name");
-
--- CreateIndex
-CREATE INDEX "metrics_timestamp_idx" ON "metrics"("timestamp");
-
--- CreateIndex
-CREATE INDEX "metrics_userId_idx" ON "metrics"("userId");
-
--- CreateIndex
-CREATE INDEX "rate_limits_key_idx" ON "rate_limits"("key");
-
--- CreateIndex
-CREATE INDEX "rate_limits_windowStart_idx" ON "rate_limits"("windowStart");
-
--- CreateIndex
-CREATE INDEX "rate_limits_windowEnd_idx" ON "rate_limits"("windowEnd");
-
--- CreateIndex
-CREATE UNIQUE INDEX "rate_limits_key_window_start_key" ON "rate_limits"("key", "windowStart");
 
 -- CreateIndex
 CREATE INDEX "security_events_userId_idx" ON "security_events"("userId");
@@ -841,49 +809,34 @@ CREATE INDEX "security_events_userId_idx" ON "security_events"("userId");
 CREATE INDEX "security_events_eventType_idx" ON "security_events"("eventType");
 
 -- CreateIndex
-CREATE INDEX "security_events_severity_idx" ON "security_events"("severity");
-
--- CreateIndex
 CREATE INDEX "security_events_createdAt_idx" ON "security_events"("createdAt");
-
--- CreateIndex
-CREATE INDEX "security_events_resolved_idx" ON "security_events"("resolved");
-
--- CreateIndex
-CREATE INDEX "user_activities_userId_idx" ON "user_activities"("userId");
-
--- CreateIndex
-CREATE INDEX "user_activities_action_idx" ON "user_activities"("action");
-
--- CreateIndex
-CREATE INDEX "user_activities_resourceType_resourceId_idx" ON "user_activities"("resourceType", "resourceId");
-
--- CreateIndex
-CREATE INDEX "user_activities_createdAt_idx" ON "user_activities"("createdAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "user_preferences_userId_key" ON "user_preferences"("userId");
 
 -- CreateIndex
-CREATE INDEX "attendance_studentId_idx" ON "attendance"("studentId");
+CREATE UNIQUE INDEX "nin_cache_nin_key" ON "nin_cache"("nin");
 
 -- CreateIndex
-CREATE INDEX "attendance_courseId_idx" ON "attendance"("courseId");
+CREATE INDEX "nin_cache_nin_idx" ON "nin_cache"("nin");
 
 -- CreateIndex
-CREATE INDEX "attendance_lectureId_idx" ON "attendance"("lectureId");
+CREATE INDEX "nin_cache_phoneNumber_idx" ON "nin_cache"("phoneNumber");
 
 -- CreateIndex
-CREATE INDEX "attendance_status_idx" ON "attendance"("status");
+CREATE INDEX "metrics_name_idx" ON "metrics"("name");
 
 -- CreateIndex
-CREATE INDEX "attendance_markedAt_idx" ON "attendance"("markedAt");
+CREATE INDEX "metrics_timestamp_idx" ON "metrics"("timestamp");
 
 -- CreateIndex
-CREATE INDEX "attendance_verified_idx" ON "attendance"("verified");
+CREATE UNIQUE INDEX "rate_limits_key_windowStart_key" ON "rate_limits"("key", "windowStart");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "attendance_student_lecture_key" ON "attendance"("studentId", "lectureId");
+CREATE INDEX "user_activities_userId_idx" ON "user_activities"("userId");
+
+-- CreateIndex
+CREATE INDEX "user_activities_createdAt_idx" ON "user_activities"("createdAt");
 
 -- AddForeignKey
 ALTER TABLE "accounts" ADD CONSTRAINT "accounts_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -911,6 +864,21 @@ ALTER TABLE "courses" ADD CONSTRAINT "courses_creatorId_fkey" FOREIGN KEY ("crea
 
 -- AddForeignKey
 ALTER TABLE "lectures" ADD CONSTRAINT "lectures_courseId_fkey" FOREIGN KEY ("courseId") REFERENCES "courses"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "exams" ADD CONSTRAINT "exams_courseId_fkey" FOREIGN KEY ("courseId") REFERENCES "courses"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "exam_results" ADD CONSTRAINT "exam_results_examId_fkey" FOREIGN KEY ("examId") REFERENCES "exams"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "exam_results" ADD CONSTRAINT "exam_results_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "exam_results" ADD CONSTRAINT "exam_results_courseId_fkey" FOREIGN KEY ("courseId") REFERENCES "courses"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "exam_results" ADD CONSTRAINT "exam_results_recordedBy_fkey" FOREIGN KEY ("recordedBy") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "enrollments" ADD CONSTRAINT "enrollments_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -943,22 +911,7 @@ ALTER TABLE "portfolios" ADD CONSTRAINT "portfolios_courseId_fkey" FOREIGN KEY (
 ALTER TABLE "portfolios" ADD CONSTRAINT "portfolios_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "notifications" ADD CONSTRAINT "notifications_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "metrics" ADD CONSTRAINT "metrics_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "security_events" ADD CONSTRAINT "security_events_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "user_activities" ADD CONSTRAINT "user_activities_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "user_preferences" ADD CONSTRAINT "user_preferences_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "attendance" ADD CONSTRAINT "attendance_markedBy_fkey" FOREIGN KEY ("markedBy") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "attendance" ADD CONSTRAINT "attendance_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -968,3 +921,27 @@ ALTER TABLE "attendance" ADD CONSTRAINT "attendance_courseId_fkey" FOREIGN KEY (
 
 -- AddForeignKey
 ALTER TABLE "attendance" ADD CONSTRAINT "attendance_lectureId_fkey" FOREIGN KEY ("lectureId") REFERENCES "lectures"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "system_configs" ADD CONSTRAINT "system_configs_updatedBy_fkey" FOREIGN KEY ("updatedBy") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "security_events" ADD CONSTRAINT "security_events_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "security_events" ADD CONSTRAINT "security_events_resolvedBy_fkey" FOREIGN KEY ("resolvedBy") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "user_preferences" ADD CONSTRAINT "user_preferences_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "metrics" ADD CONSTRAINT "metrics_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "user_activities" ADD CONSTRAINT "user_activities_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;

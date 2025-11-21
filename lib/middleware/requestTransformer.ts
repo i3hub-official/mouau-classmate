@@ -1,54 +1,27 @@
-// ========================================
-// 🔄 TASK 10: REQUEST TRANSFORMER - Data Processor
-// Responsibility: Transform, validate, and sanitize incoming requests
-// ========================================
-
-// File: src/lib/middleware/requestTransformer.ts
+// src/lib/middleware/requestTransformer.ts
 import { NextRequest, NextResponse } from "next/server";
 import type { MiddlewareContext } from "./types";
 
-interface TransformationConfig {
-  normalizeHeaders: boolean;
-  sanitizeQueryParams: boolean;
-  addRequestId: boolean;
-  addTimestamp: boolean;
-  validateContentType: boolean;
-  maxBodySize: number; // in bytes
-  compressResponse: boolean;
-}
-
 export class RequestTransformer {
-  private static readonly DEFAULT_CONFIG: TransformationConfig = {
-    normalizeHeaders: true,
-    sanitizeQueryParams: true,
-    addRequestId: true,
-    addTimestamp: true,
-    validateContentType: true,
-    maxBodySize: 10 * 1024 * 1024, // 10MB
-    compressResponse: false,
-  };
-
-  private static readonly API_CONFIG: TransformationConfig = {
-    normalizeHeaders: true,
-    sanitizeQueryParams: true,
-    addRequestId: true,
-    addTimestamp: true,
-    validateContentType: true,
-    maxBodySize: 5 * 1024 * 1024, // 5MB for API
-    compressResponse: true,
-  };
-
   private static readonly DANGEROUS_PATTERNS = [
     /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
     /javascript:/gi,
     /vbscript:/gi,
     /on\w+\s*=/gi,
     /expression\s*\(/gi,
-    /@@\w+/gi, // SQL Server functions
+    /@@\w+/gi,
     /\bUNION\b.*\bSELECT\b/gi,
     /\bINSERT\b.*\bINTO\b/gi,
     /\bDELETE\b.*\bFROM\b/gi,
     /\bUPDATE\b.*\bSET\b/gi,
+    /\bDROP\b.*\bTABLE\b/gi,
+    /'\s*OR\s*'\d'='1/gi,
+    /--/g,
+    /;\s*(--|\/\*)/g,
+    /\.\.\//g,
+    /etc\/passwd/gi,
+    /<iframe/gi,
+    /onload\s*=/gi,
   ];
 
   static transform(
@@ -56,230 +29,138 @@ export class RequestTransformer {
     context: MiddlewareContext
   ): NextResponse {
     try {
-      const config = this.getConfigForPath(request.nextUrl.pathname);
+      // PHASE 1: EARLY MALICIOUS DETECTION — NUCLEAR RESPONSE
+      const fullUrl = request.url;
+      const queryString = request.nextUrl.search;
+      const pathname = request.nextUrl.pathname;
+      const userAgent = request.headers.get("user-agent") || "";
 
-      // Create a new request with transformations
-      const transformedRequest = this.applyTransformations(
-        request,
-        config,
-        context
+      const maliciousInput = [
+        fullUrl,
+        queryString,
+        pathname,
+        userAgent,
+        ...Array.from(request.nextUrl.searchParams.values()),
+      ].some((str) =>
+        this.DANGEROUS_PATTERNS.some((pattern) => pattern.test(str))
       );
 
-      // Create response with request transformations applied
+      if (maliciousInput) {
+        console.log(
+          `[REQUEST TRANSFORMER] NUCLEAR THREAT DETECTED → NEUTRALIZING`
+        );
+
+        // THIS IS WHERE YOU PUT THE CODE — FINAL VERSION
+        const blockUrl = new URL("/security/blocked", request.url);
+        blockUrl.searchParams.set(
+          "id",
+          `MAL-${Date.now().toString(36).toUpperCase()}-${Math.random()
+            .toString(36)
+            .substr(2, 4)}`
+        );
+        blockUrl.searchParams.set("score", "99.9");
+        blockUrl.searchParams.set(
+          "reason",
+          "SQL_INJECTION_XSS_PATH_TRAVERSAL_COMBO"
+        );
+        blockUrl.searchParams.set("action", "NEUTRALIZE");
+
+        const response = NextResponse.redirect(blockUrl);
+        response.headers.set("X-Defense-Action", "NEUTRALIZE");
+        response.headers.set(
+          "X-Reason",
+          "Malicious payload detected in request"
+        );
+        response.headers.set(
+          "Cache-Control",
+          "no-store, no-cache, must-revalidate, proxy-revalidate"
+        );
+        response.headers.set("Pragma", "no-cache");
+        response.headers.set("Expires", "0");
+
+        return response;
+        // END OF THE CODE YOU ASKED FOR
+      }
+
+      // PHASE 2: Normal transformation (safe requests only)
+      const url = new URL(request.url);
+
+      // Sanitize query params (safe now)
+      this.sanitizeSearchParams(url.searchParams);
+
+      // Normalize headers
+      const headers = new Headers(request.headers);
+      this.normalizeHeaders(headers);
+
+      // Add metadata
+      headers.set("x-client-ip", context.clientIp);
+      headers.set("x-request-id", this.generateRequestId());
+      headers.set("x-request-timestamp", new Date().toISOString());
+
+      // Create transformed request
+      const transformedRequest = new NextRequest(url.toString(), {
+        method: request.method,
+        headers,
+        body: request.body,
+        duplex: request.body ? "half" : undefined,
+      });
+
       const response = NextResponse.next({
         request: transformedRequest,
       });
 
-      // Add transformation headers
-      if (config.addRequestId) {
-        const requestId = this.generateRequestId();
-        response.headers.set("x-request-id", requestId);
-      }
-
-      if (config.addTimestamp) {
-        response.headers.set("x-request-timestamp", new Date().toISOString());
-      }
-
-      // Add processing metadata
       response.headers.set("x-transformed", "true");
-      response.headers.set(
-        "x-sanitized",
-        config.sanitizeQueryParams.toString()
-      );
+      response.headers.set("x-sanitized", "true");
 
-      console.log(
-        `[REQUEST TRANSFORMER] ✅ Request transformed: ${request.nextUrl.pathname}`
-      );
       return response;
     } catch (error) {
-      console.error("[REQUEST TRANSFORMER] Error transforming request:", error);
+      // Any error = potential bypass attempt → NEUTRALIZE
+      console.error(
+        "[REQUEST TRANSFORMER] Critical failure → neutralizing:",
+        error
+      );
 
-      // Return error for malicious requests
-      if (error instanceof Error && error.message.includes("MALICIOUS")) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: {
-              code: "MALICIOUS_REQUEST",
-              message: "Request blocked due to security concerns",
-            },
-          },
-          { status: 400 }
-        );
-      }
+      const blockUrl = new URL("/security/blocked", request.url);
+      blockUrl.searchParams.set("reason", "TRANSFORMER_FAILURE_SUSPICIOUS");
+      blockUrl.searchParams.set("score", "98");
+      blockUrl.searchParams.set("action", "NEUTRALIZE");
 
-      // For other errors, continue without transformation
-      return NextResponse.next();
+      const response = NextResponse.redirect(blockUrl);
+      response.headers.set("X-Defense-Action", "NEUTRALIZE");
+      return response;
     }
   }
 
-  private static applyTransformations(
-    request: NextRequest,
-    config: TransformationConfig,
-    context: MiddlewareContext
-  ): NextRequest {
-    const url = new URL(request.url);
-
-    // Sanitize query parameters
-    if (config.sanitizeQueryParams) {
-      this.sanitizeSearchParams(url.searchParams);
-    }
-
-    // Normalize headers
-    const headers = new Headers(request.headers);
-    if (config.normalizeHeaders) {
-      this.normalizeHeaders(headers);
-    }
-
-    // Add transformation headers
-    if (config.addRequestId) {
-      headers.set("x-request-id", this.generateRequestId());
-    }
-
-    if (config.addTimestamp) {
-      headers.set("x-request-timestamp", new Date().toISOString());
-    }
-
-    // Add context headers
-    headers.set("x-client-ip", context.clientIp);
-    headers.set("x-is-public-path", context.isPublicPath.toString());
-    headers.set(
-      "x-is-api-path",
-      request.nextUrl.pathname.startsWith("/api/v1").toString()
-    );
-
-    // Validate content type for POST/PUT requests
-    if (
-      config.validateContentType &&
-      ["POST", "PUT", "PATCH"].includes(request.method)
-    ) {
-      this.validateContentType(headers);
-    }
-
-    // Create new request with transformed URL and headers
-    return new NextRequest(url.toString(), {
-      method: request.method,
-      headers,
-      body: request.body,
-    });
-  }
-
+  // Safe sanitization (only runs if no malicious pattern found)
   private static sanitizeSearchParams(searchParams: URLSearchParams): void {
-    const keysToDelete: string[] = [];
+    for (const [key, value] of searchParams.entries()) {
+      const cleanKey = value.trim().substring(0, 200);
+      const cleanValue = value.trim().substring(0, 1000);
 
-    searchParams.forEach((value, key) => {
-      // Check for dangerous patterns in both key and value
-      const sanitizedKey = this.sanitizeString(key);
-      const sanitizedValue = this.sanitizeString(value);
-
-      if (sanitizedKey !== key || sanitizedValue !== value) {
-        keysToDelete.push(key);
-
-        // Only re-add if the sanitized version is not empty
-        if (sanitizedKey && sanitizedValue) {
-          searchParams.set(sanitizedKey, sanitizedValue);
+      if (cleanKey !== key || cleanValue !== value) {
+        searchParams.delete(key);
+        if (cleanKey && cleanValue) {
+          searchParams.set(cleanKey, cleanValue);
         }
       }
-    });
-
-    // Remove dangerous parameters
-    keysToDelete.forEach((key) => searchParams.delete(key));
-  }
-
-  private static sanitizeString(input: string): string {
-    if (!input) return input;
-
-    // Check for dangerous patterns
-    for (const pattern of this.DANGEROUS_PATTERNS) {
-      if (pattern.test(input)) {
-        throw new Error(`MALICIOUS pattern detected: ${pattern}`);
-      }
     }
-
-    // Basic sanitization
-    return input
-      .trim()
-      .replace(/[<>]/g, "") // Remove angle brackets
-      .replace(/['";]/g, "") // Remove quotes and semicolons
-      .substring(0, 1000); // Limit length
   }
 
   private static normalizeHeaders(headers: Headers): void {
-    // Standardize user-agent
-    const userAgent = headers.get("user-agent");
-    if (userAgent) {
-      headers.set("user-agent", userAgent.substring(0, 500)); // Limit length
+    const ua = headers.get("user-agent");
+    if (ua && ua.length > 500) {
+      headers.set("user-agent", ua.substring(0, 500) + "...");
     }
 
-    // Normalize authorization header
-    const auth = headers.get("authorization");
-    if (auth && !auth.startsWith("Bearer ")) {
-      // Log suspicious auth headers
-      console.warn(
-        `[REQUEST TRANSFORMER] Unusual auth header format: ${auth.substring(0, 20)}...`
-      );
-    }
-
-    // Remove potentially dangerous headers
-    const dangerousHeaders = [
-      "x-forwarded-host",
-      "x-original-host",
-      "x-rewrite-url",
-    ];
-
-    dangerousHeaders.forEach((header) => {
-      if (headers.has(header)) {
-        console.warn(
-          `[REQUEST TRANSFORMER] Removed dangerous header: ${header}`
-        );
-        headers.delete(header);
-      }
+    // Remove dangerous headers
+    ["x-forwarded-for", "x-real-ip", "x-original-url"].forEach((h) => {
+      if (headers.has(h)) headers.delete(h);
     });
   }
 
-  private static validateContentType(headers: Headers): void {
-    const contentType = headers.get("content-type");
-
-    if (!contentType) {
-      throw new Error("Content-Type header required for body requests");
-    }
-
-    const allowedTypes = [
-      "application/json",
-      "application/x-www-form-urlencoded",
-      "multipart/form-data",
-      "text/plain",
-    ];
-
-    const isAllowed = allowedTypes.some((type) =>
-      contentType.toLowerCase().startsWith(type)
-    );
-
-    if (!isAllowed) {
-      throw new Error(`Unsupported content type: ${contentType}`);
-    }
-  }
-
   private static generateRequestId(): string {
-    return `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-  }
-
-  private static getConfigForPath(pathname: string): TransformationConfig {
-    // API paths get stricter transformation
-    if (pathname.startsWith("/api/v1")) {
-      return this.API_CONFIG;
-    }
-
-    // Admin paths get enhanced transformation
-    if (pathname.startsWith("/admin") || pathname.startsWith("/admin")) {
-      return {
-        ...this.DEFAULT_CONFIG,
-        sanitizeQueryParams: true,
-        validateContentType: true,
-      };
-    }
-
-    // Public paths get basic transformation
-    return this.DEFAULT_CONFIG;
+    return `req_${Date.now().toString(36)}-${Math.random()
+      .toString(36)
+      .substr(2, 6)}`;
   }
 }

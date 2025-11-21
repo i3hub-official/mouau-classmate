@@ -1,7 +1,7 @@
 {
   "name": "MOUAU Classmate",
   "short_name": "Classmate",
-  "description": "A modern academic management and collaboration platform for MOUAU students and lecturers.",
+  "description": "A modern academic management and collaboration platform for MOUAU students and teachers.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

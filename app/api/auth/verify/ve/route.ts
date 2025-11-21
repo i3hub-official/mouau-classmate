@@ -1,4 +1,4 @@
-// app/api/auth/verify-email/route.ts
+// app/api/auth/verify/ve/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { StudentEmailService } from "@/lib/services/s/emailService";

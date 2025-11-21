@@ -1,50 +1,86 @@
 // app/api/auth/signout/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/server/prisma";
-import { AuditAction } from "@prisma/client";
+
+type SessionUser = {
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  id?: string;
+  role?: string;
+  matricNumber?: string;
+  teacherId?: string;
+};
 
 export async function POST(request: NextRequest) {
   try {
-    // Get user ID from session or token
-    const userId = request.headers.get("x-user-id");
+    // Get session (works for Student, Lecturer, Admin — all use same authOptions)
+    const session = (await getServerSession(authOptions)) as {
+      user?: SessionUser;
+    } | null;
 
-    if (!userId) {
+    if (!session?.user?.id) {
       return NextResponse.json(
-        { success: false, error: "User not authenticated" },
+        { success: false, error: "Not authenticated" },
         { status: 401 }
       );
     }
 
-    // Clear session (implementation depends on your session management)
-    // This would involve clearing cookies, server-side sessions, etc.
+    const userId = session.user.id;
 
-    // Log the sign out
+    // Log the logout — with full context
     await prisma.auditLog.create({
       data: {
+        userId,
         action: "USER_LOGGED_OUT",
         resourceType: "USER",
         resourceId: userId,
+        details: {
+          role: session.user.role,
+          identifier:
+            session.user.matricNumber ||
+            session.user.teacherId ||
+            session.user.email,
+        },
         ipAddress: request.headers.get("x-forwarded-for"),
         userAgent: request.headers.get("user-agent"),
       },
     });
 
-    // Return success response
-    return NextResponse.json(
+    // Let NextAuth clear the session cookie automatically
+    const response = NextResponse.json(
       { success: true, message: "Signed out successfully" },
-      {
-        status: 200,
-        // Clear any auth cookies
-        headers: {
-          "Set-Cookie":
-            "auth_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax, refresh_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax",
-        },
-      }
+      { status: 200 }
     );
+
+    // This is the correct way: use NextAuth's built-in cookie clearing
+    response.cookies.set({
+      name: "next-auth.session-token",
+      value: "",
+      path: "/",
+      expires: new Date(0),
+      httpOnly: true,
+      sameSite: "lax",
+    });
+
+    // Also clear __Secure-next-auth.session-token if using secure cookies
+    response.cookies.set({
+      name: "__Secure-next-auth.session-token",
+      value: "",
+      path: "/",
+      expires: new Date(0),
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+
+    return response;
   } catch (error) {
     console.error("Sign out error:", error);
     return NextResponse.json(
-      { success: false, error: "An error occurred while signing out" },
+      { success: false, error: "Failed to sign out" },
       { status: 500 }
     );
   }

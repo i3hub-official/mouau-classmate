@@ -1,3 +1,4 @@
+// src/lib/middleware/Orchestrator.ts
 import { NextRequest, NextResponse } from "next/server";
 import { ContextBuilder } from "./contextBuilder";
 import { SessionTokenValidator } from "./sessionTokenValidator";
@@ -12,10 +13,6 @@ import { CacheManager } from "./cacheManager";
 import { ActivityLogger } from "./activityLogger";
 import { ResponseMerger } from "./responseMerger";
 import {
-  UnifiedThreatSystem,
-  ThreatDetectionResult,
-} from "./UnifiedThreatSystem";
-import {
   AuthenticatedActionHandler,
   AuthenticatedActionContext,
 } from "./authenticatedActionHandler";
@@ -23,9 +20,9 @@ import { ComprehensiveHealthMonitor } from "./healthMonitor";
 import { enhancedExecute } from "./executionWrapper";
 import { type MiddlewareContext } from "./types";
 
-/**
- * Defines the comprehensive result object returned by each middleware component.
- */
+// Import the NEW defense system (singleton)
+import { Defense } from "./UnifiedThreatDefenseSystem";
+
 interface MiddlewareResult {
   name: string;
   result: NextResponse;
@@ -39,13 +36,10 @@ interface MiddlewareResult {
   decision?: string;
 }
 
-// 🚀 MAIN ORCHESTRATOR - Component Coordination
-// ========================================
-
 export class Orchestrator {
   static async execute(request: NextRequest): Promise<NextResponse> {
     const startTime = performance.now();
-    let baseContext: MiddlewareContext;
+    let baseContext: MiddlewareContext = {} as MiddlewareContext;
     let authContext: AuthenticatedActionContext = {
       actionType: "none",
       sensitivity: "low",
@@ -62,10 +56,9 @@ export class Orchestrator {
       userAgent: "",
       timestamp: Date.now(),
     };
-    let response = NextResponse.next();
 
     const middlewareResults: MiddlewareResult[] = [];
-    let threatDetectionResult: ThreatDetectionResult | null = null;
+    let finalResponse: NextResponse = NextResponse.next();
 
     try {
       // Initialize trusted sources
@@ -73,7 +66,7 @@ export class Orchestrator {
         TrustedSourceManager.initialize();
       }
 
-      // STEP 1: Build Enhanced Context
+      // STEP 1: Build Context
       const contextResult = await enhancedExecute(
         () => ContextBuilder.build(request),
         {} as MiddlewareContext,
@@ -92,79 +85,116 @@ export class Orchestrator {
         logs: contextResult.logs,
         executionTime: contextResult.executionTime,
         status: 200,
-        success: contextResult.success,
+        success: true,
       });
 
       console.log(
-        `[ORCHESTRATOR] Auth-aware execution: ${authContext.actionType} (${authContext.sensitivity})`
+        `[ORCHESTRATOR] Action: ${authContext.actionType} | Sensitivity: ${authContext.sensitivity}`
       );
 
-      // STEP 2: Foundation Security Layer (SecurityGuard, EncryptionEnforcer, SessionTokenValidator)
-      response = await this.executeFoundationLayer(
+      // STEP 2: Foundation Security (Critical)
+      finalResponse = await this.executeFoundationLayer(
         request,
         authContext,
         middlewareResults
       );
-
-      // Check if foundation layer returned a final response (e.g., redirect or block)
-      if (response.status !== 200 || response.redirected) {
+      if (finalResponse.status !== 200 || finalResponse.redirected) {
         return this.finalizeResponse(
-          response,
+          finalResponse,
           middlewareResults,
           startTime,
-          threatDetectionResult,
           authContext.authAdjustments
         );
       }
 
-      // STEP 3: Threat Detection
-      threatDetectionResult = await this.executeThreatDetection(
+      // STEP 3: ULTIMATE THREAT DEFENSE (AI-Powered)
+      const defenseResponse = await Defense.defend(request, baseContext);
+
+      // Check if defense blocked or challenged
+      const defenseAction = defenseResponse.headers.get("x-action") || "ALLOW";
+      const finalScore = parseFloat(
+        defenseResponse.headers.get("x-threat-final") || "0"
+      );
+
+      middlewareResults.push({
+        name: "UnifiedThreatDefense",
+        result: defenseResponse,
+        logs: [`Action: ${defenseAction}`, `Score: ${finalScore.toFixed(1)}`],
+        executionTime: 0,
+        status: defenseResponse.status,
+        success: defenseAction === "ALLOW",
+        threatScore: finalScore,
+        decision: defenseAction,
+        earlyExit: !["ALLOW", "RATE_LIMIT"].includes(defenseAction),
+      });
+
+      // BLOCK, CHALLENGE, NEUTRALIZE → return immediately
+      if (!["ALLOW", "RATE_LIMIT"].includes(defenseAction)) {
+        console.log(
+          `[DEFENSE] ${defenseAction} → Blocking request (Score: ${finalScore})`
+        );
+        return this.finalizeResponse(
+          defenseResponse,
+          middlewareResults,
+          startTime,
+          authContext.authAdjustments
+        );
+      }
+
+      // Optional: Validate PoW if challenge was issued previously
+      if (defenseResponse.status === 401) {
+        const solved = Defense.validatePoW(request, baseContext.clientIp);
+        if (solved) {
+          console.log(
+            `[DEFENSE] PoW solved by ${baseContext.clientIp} → granting access`
+          );
+          finalResponse = NextResponse.next();
+        } else {
+          return this.finalizeResponse(
+            defenseResponse,
+            middlewareResults,
+            startTime,
+            authContext.authAdjustments
+          );
+        }
+      }
+
+      // STEP 4: Secondary Layer (Non-critical)
+      finalResponse = await this.executeSecondaryLayer(
         request,
         authContext,
+        defenseResponse,
         middlewareResults
       );
 
-      // Note: Threat detection throws an error on block, handled by the catch block.
-
-      // STEP 4: Secondary Security & Processing (GeoGuard, Cache, Behavior, Compliance, Transformer)
-      response = await this.executeSecondaryLayer(
-        request,
-        authContext,
-        response,
-        middlewareResults
-      );
-
-      // STEP 5: Request passes all gates - Process the request, then log and finalize the response.
-
-      // STEP 6: Activity Logging (Asynchronous, best effort)
+      // STEP 5: Async Logging
       enhancedExecute(
         () => ActivityLogger.log(request, authContext),
         undefined,
-        "ActivityLogger",
-        authContext
+        "ActivityLogger"
       ).catch(() => {});
 
       return this.finalizeResponse(
-        response,
+        finalResponse,
         middlewareResults,
         startTime,
-        threatDetectionResult,
         authContext.authAdjustments
       );
     } catch (error) {
-      const totalTime = performance.now() - startTime;
       console.error(
-        `[ORCHESTRATOR] CRITICAL ERROR after ${Math.round(totalTime)}ms:`,
+        `[ORCHESTRATOR] Fatal error after ${(
+          performance.now() - startTime
+        ).toFixed(1)}ms:`,
         error
       );
-
-      // If an error occurred (e.g., threat block or critical failure), return a 503/error response
+      const errorResponse = new NextResponse("Internal Server Error", {
+        status: 503,
+      });
       return this.finalizeResponse(
-        new NextResponse("Service Temporarily Unavailable", { status: 503 }),
+        errorResponse,
         middlewareResults,
         startTime,
-        threatDetectionResult,
-        authContext?.authAdjustments || {
+        authContext.authAdjustments || {
           sensitivityReduction: 0,
           trustBonus: 0,
         }
@@ -172,18 +202,17 @@ export class Orchestrator {
     }
   }
 
-  /**
-   * Executes the critical, foundational security middleware.
-   * Execution stops and the response is returned immediately if a critical middleware fails.
-   */
+  // ... (keep your foundation & secondary layer methods unchanged below)
+  // Only minor improvements below:
+
   private static async executeFoundationLayer(
     request: NextRequest,
     authContext: AuthenticatedActionContext,
-    middlewareResults: MiddlewareResult[]
+    results: MiddlewareResult[]
   ): Promise<NextResponse> {
     let response = NextResponse.next();
 
-    const foundationMiddleware = [
+    const layers = [
       {
         name: "SecurityGuard",
         fn: () => SecurityGuard.apply(request, authContext),
@@ -197,133 +226,47 @@ export class Orchestrator {
       {
         name: "SessionTokenValidator",
         fn: () => SessionTokenValidator.validate(request, authContext),
-        critical: false, // Non-critical as it primarily updates authContext
+        critical: false,
       },
     ];
 
-    for (const middleware of foundationMiddleware) {
+    for (const layer of layers) {
       if (
-        AuthenticatedActionHandler.shouldSkipMiddleware(
-          middleware.name,
-          authContext
-        )
-      ) {
-        console.log(
-          `[ORCHESTRATOR] Skipping ${middleware.name} for ${authContext.actionType}`
-        );
+        AuthenticatedActionHandler.shouldSkipMiddleware(layer.name, authContext)
+      )
         continue;
-      }
 
-      const executionResult = await enhancedExecute(
-        middleware.fn,
+      const res = await enhancedExecute(
+        layer.fn,
         NextResponse.next(),
-        middleware.name,
+        layer.name,
         authContext
       );
-
-      middlewareResults.push({
-        name: middleware.name,
-        result: executionResult.result,
-        logs: executionResult.logs,
-        executionTime: executionResult.executionTime,
-        status: executionResult.result.status,
-        success: executionResult.success,
-        authAdjustments: executionResult.authAdjustments,
-        earlyExit: executionResult.result.status !== 200,
+      results.push({
+        ...res,
+        name: layer.name,
+        status: res.result.status,
+        earlyExit: res.result.status !== 200,
       });
 
-      // Critical failure check
-      if (middleware.critical && executionResult.result.status !== 200) {
-        return executionResult.result;
-      }
+      if (layer.critical && res.result.status !== 200) return res.result;
+      if (res.result.redirected) return res.result;
 
-      // Handle redirect or early exit
-      if (
-        executionResult.result.redirected ||
-        executionResult.result.status === 302
-      ) {
-        return executionResult.result;
-      }
-
-      response = ResponseMerger.merge(response, executionResult.result);
+      response = ResponseMerger.merge(response, res.result);
     }
 
     return response;
   }
 
-  /**
-   * Executes the Unified Threat System (UTS) to score the request.
-   * Throws an error if the threat score exceeds the adaptive threshold.
-   */
-  private static async executeThreatDetection(
-    request: NextRequest,
-    authContext: AuthenticatedActionContext,
-    middlewareResults: MiddlewareResult[]
-  ): Promise<ThreatDetectionResult> {
-    const threatSystem = UnifiedThreatSystem.getInstance();
-    const totalAuthAdjustments =
-      authContext.authAdjustments.sensitivityReduction +
-      authContext.authAdjustments.trustBonus;
-
-    const threatResult = await enhancedExecute(
-      () =>
-        threatSystem.analyzeRequest(request, authContext, totalAuthAdjustments),
-      {
-        threatScore: 0,
-        decision: "ALLOW",
-        details: {},
-        response: NextResponse.next(),
-      },
-      "UnifiedThreatSystem",
-      authContext
-    );
-
-    middlewareResults.push({
-      name: "UnifiedThreatSystem",
-      result: threatResult.result.response,
-      logs: threatResult.logs,
-      executionTime: threatResult.executionTime,
-      status: threatResult.result.response.status,
-      success: threatResult.success,
-      threatScore: threatResult.result.threatScore,
-      decision: threatResult.result.decision,
-      earlyExit:
-        threatResult.result.threatScore >
-        AuthenticatedActionHandler.getThreatThreshold(authContext),
-    });
-
-    // Check for early exit due to high threat
-    const blockThreshold =
-      AuthenticatedActionHandler.getThreatThreshold(authContext);
-    if (
-      threatResult.result.threatScore > blockThreshold ||
-      threatResult.result.response.redirected
-    ) {
-      console.log(
-        `[ORCHESTRATOR] Threat block: ${threatResult.result.decision} (Score: ${threatResult.result.threatScore} / Threshold: ${blockThreshold})`
-      );
-      // Throw an error to trigger the main try/catch block for graceful exit
-      throw new Error(
-        "Threat detected: Request blocked by UnifiedThreatSystem."
-      );
-    }
-
-    return threatResult.result;
-  }
-
-  /**
-   * Executes the secondary, non-critical middleware components.
-   * Checks for Cache Hit or Geo-block early exits.
-   */
   private static async executeSecondaryLayer(
     request: NextRequest,
     authContext: AuthenticatedActionContext,
-    currentResponse: NextResponse,
-    middlewareResults: MiddlewareResult[]
+    current: NextResponse,
+    results: MiddlewareResult[]
   ): Promise<NextResponse> {
-    let response = currentResponse;
+    let response = current;
 
-    const secondaryMiddleware = [
+    const layers = [
       { name: "GeoGuard", fn: () => GeoGuard.guard(request, authContext) },
       {
         name: "CacheManager",
@@ -343,237 +286,100 @@ export class Orchestrator {
       },
     ];
 
-    for (const middleware of secondaryMiddleware) {
+    for (const layer of layers) {
       if (
-        AuthenticatedActionHandler.shouldSkipMiddleware(
-          middleware.name,
-          authContext
-        )
+        AuthenticatedActionHandler.shouldSkipMiddleware(layer.name, authContext)
       ) {
-        console.log(
-          `[ORCHESTRATOR] Skipping ${middleware.name} for auth action`
-        );
         continue;
       }
 
-      const executionResult = await enhancedExecute(
-        middleware.fn,
-        NextResponse.next(),
-        middleware.name,
-        authContext
-      );
+      try {
+        const res = await enhancedExecute(
+          layer.fn,
+          NextResponse.next(),
+          layer.name,
+          authContext
+        );
 
-      middlewareResults.push({
-        name: middleware.name,
-        result: executionResult.result,
-        logs: executionResult.logs,
-        executionTime: executionResult.executionTime,
-        status: executionResult.result.status,
-        success: executionResult.success,
-      });
+        results.push({
+          ...res,
+          name: layer.name,
+          status: res.result.status,
+          executionTime: res.executionTime,
+        });
 
-      // Handle early exits: Cache Hit or Geo-block
-      if (
-        executionResult.result.headers.get("x-cache") === "HIT" &&
-        !authContext.isAuthAction
-      ) {
-        console.log(`[ORCHESTRATOR] Cache hit early exit.`);
-        return executionResult.result;
+        // Early cache hit?
+        if (res.result.headers.get("x-cache")?.startsWith("HIT")) {
+          return res.result;
+        }
+
+        // Hard reject?
+        if (res.result.status >= 400 && res.result.status < 500) {
+          return res.result;
+        }
+
+        response = ResponseMerger.merge(response, res.result);
+      } catch (err) {
+        console.error(`[ORCHESTRATOR] ${layer.name} crashed:`, err);
+        // Don't let one bad module kill everything
+        continue;
       }
-
-      if (executionResult.result.status === 403) {
-        console.log(`[ORCHESTRATOR] ${middleware.name} 403 early exit.`);
-        return executionResult.result;
-      }
-
-      response = ResponseMerger.merge(response, executionResult.result);
     }
 
     return response;
   }
 
-  /**
-   * Adds final headers and prints the comprehensive execution summary.
-   */
   private static finalizeResponse(
     response: NextResponse,
-    middlewareResults: MiddlewareResult[],
+    results: MiddlewareResult[],
     startTime: number,
-    threatResult: ThreatDetectionResult | null,
-    authAdjustments: { sensitivityReduction: number; trustBonus: number }
+    adjustments: { sensitivityReduction: number; trustBonus: number }
   ): NextResponse {
     const totalTime = performance.now() - startTime;
-
     response = ResponseMerger.addSystemHeaders(response, Math.round(totalTime));
 
-    // Add comprehensive intelligence headers
-    if (threatResult) {
+    const defenseResult = results.find(
+      (r) => r.name === "UnifiedThreatDefense"
+    );
+    if (defenseResult) {
       response.headers.set(
-        "X-Total-Threat-Score",
-        threatResult.threatScore.toString()
+        "X-Threat-Final",
+        defenseResult.threatScore?.toFixed(1) || "0"
       );
-      response.headers.set("X-Threat-Decision", threatResult.decision);
+      response.headers.set(
+        "X-Defense-Action",
+        defenseResult.decision || "ALLOW"
+      );
     }
 
-    const totalAuthAdjustments =
-      authAdjustments.sensitivityReduction + authAdjustments.trustBonus;
-    response.headers.set("X-Auth-Adjustments", totalAuthAdjustments.toString());
-    response.headers.set(
-      "X-Middleware-Count",
-      middlewareResults.length.toString()
-    );
-
-    this.addComprehensiveLogsToResponse(response, middlewareResults);
-    this.printComprehensiveExecutionSummary(
-      middlewareResults,
-      totalTime,
-      threatResult,
-      authAdjustments
-    );
-
+    this.printSummary(results, totalTime, adjustments);
     return response;
   }
 
-  /**
-   * Adds a compressed summary of middleware execution to a response header.
-   */
-  private static addComprehensiveLogsToResponse(
-    response: NextResponse,
-    results: MiddlewareResult[]
-  ): void {
-    try {
-      const summary = results.map((result) => ({
-        name: result.name,
-        status: result.status,
-        executionTime: Math.round(result.executionTime * 100) / 100,
-        threatScore: result.threatScore || 0,
-        success: result.success,
-        decision: result.decision,
-        earlyExit: result.earlyExit,
-      }));
-
-      const summaryString = JSON.stringify(summary);
-      if (summaryString.length <= 4000) {
-        response.headers.set("X-Comprehensive-Summary", summaryString);
-      } else {
-        // Truncate if too long for a single header
-        response.headers.set(
-          "X-Comprehensive-Summary",
-          summaryString.substring(0, 3997) + "..."
-        );
-        response.headers.set("X-Summary-Truncated", "true");
-      }
-    } catch (error) {
-      console.error("[ORCHESTRATOR] Error adding logs:", error);
-    }
-  }
-
-  /**
-   * Prints a clean, console-based summary of the request execution flow.
-   */
-  private static printComprehensiveExecutionSummary(
+  private static printSummary(
     results: MiddlewareResult[],
     totalTime: number,
-    threatResult: ThreatDetectionResult | null,
-    authAdjustments: { sensitivityReduction: number; trustBonus: number }
-  ): void {
-    console.log("\n[ORCHESTRATOR] COMPREHENSIVE EXECUTION SUMMARY:");
-    console.log("=".repeat(100));
-
-    results.forEach((result, index) => {
-      const statusIcon = result.success ? "✅" : "❌";
-      const threatIcon = (result.threatScore || 0) > 50 ? "⚠️" : "";
-
-      console.log(
-        `${(index + 1).toString().padStart(2)}. ${statusIcon}${threatIcon} ` +
-          `${result.name.padEnd(25)} | ` +
-          `Status: ${result.status.toString().padStart(3)} | ` +
-          `Time: ${result.executionTime.toFixed(2).padStart(8)}ms | ` +
-          `Threat: ${(result.threatScore || 0).toString().padStart(2)} | ` +
-          `Decision: ${(result.decision || "N/A").padEnd(10)}`
-      );
-
-      // console.info(`\n    Logs: ${result.logs.join(" | ")}`);
+    adj: any
+  ) {
+    console.log("\n[ORCHESTRATOR] EXECUTION COMPLETE");
+    console.log("=".repeat(80));
+    results.forEach((r, i) => {
+      const icon = r.success ? "Success" : "Failed";
+      if (r.name === "UnifiedThreatDefense") {
+        console.log(
+          `${i + 1}. ${icon} ${r.name.padEnd(28)} → ${
+            r.decision
+          } (Score: ${r.threatScore?.toFixed(1)})`
+        );
+      } else {
+        console.log(
+          `${i + 1}. ${icon} ${r.name.padEnd(28)} → ${
+            r.status
+          } ${r.executionTime.toFixed(1)}ms`
+        );
+      }
     });
-
-    console.log("=".repeat(100));
-
-    if (threatResult) {
-      console.log(
-        `[INTELLIGENCE] Total Threat: ${threatResult.threatScore}, ` +
-          `Decision: ${threatResult.decision}, ` +
-          `Auth Adjustments: ${
-            authAdjustments.sensitivityReduction + authAdjustments.trustBonus
-          }`
-      );
-    }
-
-    const healthStatus = ComprehensiveHealthMonitor.getComprehensiveStatus();
-    const unhealthyCount = Object.values(healthStatus).filter(
-      (h: { healthy: boolean }) => !h.healthy
-    ).length;
-
-    console.log(
-      `[ORCHESTRATOR] ✅ ${results.length} MIDDLEWARE COMPLETED in ${Math.round(
-        totalTime
-      )}ms | ` +
-        `Health: ${
-          unhealthyCount === 0
-            ? "✅ ALL HEALTHY"
-            : `⚠️ ${unhealthyCount} ISSUES`
-        } | ` +
-        `Mode: COMPONENT-COORDINATED`
-    );
-  }
-
-  /**
-   * Provides a comprehensive report on the Orchestrator's status and capabilities.
-   */
-  static getComprehensiveReport() {
-    return {
-      health: ComprehensiveHealthMonitor.getComprehensiveStatus(),
-      features: {
-        comprehensiveThreatDetection: true,
-        authenticatedActionHandling: true,
-        trustedSourceManagement: true,
-        adaptiveLearning: true,
-        authAwareExecution: true,
-        circuitBreaker: true,
-        enhancedLogging: true,
-        detailedResponseHeaders: true,
-        componentCoordination: true,
-        performanceOptimizations: true,
-        modularArchitecture: true,
-        unifiedThreatSystem: true,
-        executionWrapper: true,
-        contextBuilder: true,
-        sessionTokenValidator: true,
-        securityGuard: true,
-        encryptionEnforcer: true,
-        geoGuard: true,
-        trustedSourceManager: true,
-        behaviorAnalyst: true,
-        complianceMonitor: true,
-        requestTransformer: true,
-        cacheManager: true,
-        apiAccessGuardian: true,
-        enhancedRateEnforcer: true,
-        activityLogger: true,
-        accessController: true,
-        responseMerger: true,
-        authenticatedActionHandler: true,
-        healthMonitor: true,
-        orchestrator: true,
-      },
-      version: "2.0.0",
-      timestamp: new Date().toISOString(),
-      generatedAt: new Date().toISOString(),
-      generatedBy: "Orchestrator v2.0.0",
-      environment: process.env.NODE_ENV || "development",
-      // Optional runtime environment details are commented out as they rely on node-specific globals:
-      // nodeVersion: process.version,
-      // platform: process.platform,
-      // memoryUsage: process.memoryUsage(),
-    };
+    console.log("=".repeat(80));
+    console.log(`Completed in ${totalTime.toFixed(1)}ms | Mode: AI-DEFENDED\n`);
   }
 }
