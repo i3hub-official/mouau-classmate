@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { format, isPast, isFuture, addDays } from "date-fns";
 import { cn } from "@/lib/utils";
-import AssignmentCard from "./components/AssignmentCard";
+import AssignmentCard from "@/app/components/p/s/AssignmentCard";
 
 export const metadata: Metadata = {
   title: "Assignments | Student Portal",
