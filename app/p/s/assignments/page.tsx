@@ -26,11 +26,6 @@ import {
 import { format, isPast, isFuture, addDays } from "date-fns";
 import { cn } from "@/lib/utils";
 
-export const metadata: Metadata = {
-  title: "Assignments | Student Portal",
-  description: "View and submit your course assignments",
-};
-
 interface AssignmentWithDetails {
   id: string;
   title: string;
