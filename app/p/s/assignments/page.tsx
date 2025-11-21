@@ -1,4 +1,5 @@
 // app/p/s/assignments/page.tsx
+"use client";
 import { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
