@@ -6,6 +6,7 @@
 // File: src/lib/middleware/behaviorAnalyst.ts
 import { NextRequest, NextResponse } from "next/server";
 import type { MiddlewareContext } from "./types";
+import { isPublicPath, isPrivatePath, isAuthPath } from "@/lib/utils/pathUtils";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // INTERFACES
@@ -79,24 +80,6 @@ export class BehaviorAnalyst {
   private static readonly MAX_REQUESTS_PER_MINUTE = 60;
   private static readonly IMPOSSIBLE_TRAVEL_SPEED = 1000; // km/h (faster than commercial flights)
 
-  private static readonly COMMON_PATHS = [
-    "/",
-    "/auth/login",
-    "/auth/register",
-    "/dashboard",
-    "/api/health",
-    "/api/auth",
-    "/_next",
-    "/favicon.ico",
-  ];
-
-  private static readonly SENSITIVE_PATHS = [
-    "/admin",
-    "/settings/security",
-    "/api/admin",
-    "/api/s/signup",
-  ];
-
   // ─────────────────────────────────────────────────────────────────────────
   // STATE
   // ─────────────────────────────────────────────────────────────────────────
@@ -120,40 +103,44 @@ export class BehaviorAnalyst {
     context: MiddlewareContext
   ): NextResponse {
     try {
-      this.updateMetrics();
-      this.cleanupStaleProfiles();
+      BehaviorAnalyst.updateMetrics();
+      BehaviorAnalyst.cleanupStaleProfiles();
 
       // Generate user identifier
-      const userId = this.getUserIdentifier(request, context);
+      const userId = BehaviorAnalyst.getUserIdentifier(request, context);
 
       // Skip analysis for certain conditions
-      if (this.shouldSkipAnalysis(request, context)) {
+      if (BehaviorAnalyst.shouldSkipAnalysis(request, context)) {
         return NextResponse.next();
       }
 
-      this.metrics.totalAnalyzed++;
+      BehaviorAnalyst.metrics.totalAnalyzed++;
 
       // Get or create user profile
-      const profile = this.getOrCreateProfile(userId);
-      const isLearning = this.isInLearningPhase(profile);
+      const profile = BehaviorAnalyst.getOrCreateProfile(userId);
+      const isLearning = BehaviorAnalyst.isInLearningPhase(profile);
 
       // Detect anomalies
       const anomalies = isLearning
         ? []
-        : this.detectAnomalies(request, context, profile);
+        : BehaviorAnalyst.detectAnomalies(request, context, profile);
 
       // Update user profile with current request
-      this.updateUserProfile(request, context, profile);
+      BehaviorAnalyst.updateUserProfile(request, context, profile);
 
       // Calculate risk score
-      const riskScore = this.calculateRiskScore(anomalies, profile);
+      const riskScore = BehaviorAnalyst.calculateRiskScore(anomalies, profile);
       profile.riskScore = riskScore;
 
       // Handle anomalies based on severity
-      const response = this.handleAnomalies(anomalies, riskScore, profile);
+      const response = BehaviorAnalyst.handleAnomalies(
+        anomalies,
+        riskScore,
+        profile
+      );
 
       // Log significant events
-      this.logAnalysis(userId, anomalies, riskScore, isLearning);
+      BehaviorAnalyst.logAnalysis(userId, anomalies, riskScore, isLearning);
 
       return response;
     } catch (error) {
@@ -173,40 +160,49 @@ export class BehaviorAnalyst {
     const anomalies: BehaviorAnomaly[] = [];
 
     // 1. Time-based anomaly
-    const timeAnomaly = this.detectTimeAnomaly(profile);
+    const timeAnomaly = BehaviorAnalyst.detectTimeAnomaly(profile);
     if (timeAnomaly) anomalies.push(timeAnomaly);
 
     // 2. Path anomaly
-    const pathAnomaly = this.detectPathAnomaly(request, profile);
+    const pathAnomaly = BehaviorAnalyst.detectPathAnomaly(request, profile);
     if (pathAnomaly) anomalies.push(pathAnomaly);
 
     // 3. Geographic anomaly
-    const geoAnomaly = this.detectGeographicAnomaly(request, profile);
+    const geoAnomaly = BehaviorAnalyst.detectGeographicAnomaly(
+      request,
+      profile
+    );
     if (geoAnomaly) anomalies.push(geoAnomaly);
 
     // 4. Velocity anomaly (too many requests)
-    const velocityAnomaly = this.detectVelocityAnomaly(profile);
+    const velocityAnomaly = BehaviorAnalyst.detectVelocityAnomaly(profile);
     if (velocityAnomaly) anomalies.push(velocityAnomaly);
 
     // 5. Device fingerprint change
-    const deviceAnomaly = this.detectDeviceAnomaly(request, profile);
+    const deviceAnomaly = BehaviorAnalyst.detectDeviceAnomaly(request, profile);
     if (deviceAnomaly) anomalies.push(deviceAnomaly);
 
     // 6. Impossible travel detection
-    const travelAnomaly = this.detectImpossibleTravel(request, profile);
+    const travelAnomaly = BehaviorAnalyst.detectImpossibleTravel(
+      request,
+      profile
+    );
     if (travelAnomaly) anomalies.push(travelAnomaly);
 
     // 7. Brute force detection
-    const bruteForceAnomaly = this.detectBruteForce(request, profile);
+    const bruteForceAnomaly = BehaviorAnalyst.detectBruteForce(
+      request,
+      profile
+    );
     if (bruteForceAnomaly) anomalies.push(bruteForceAnomaly);
 
     // 8. Behavioral drift
-    const driftAnomaly = this.detectBehavioralDrift(profile);
+    const driftAnomaly = BehaviorAnalyst.detectBehavioralDrift(profile);
     if (driftAnomaly) anomalies.push(driftAnomaly);
 
     // Update metrics
-    this.metrics.anomaliesDetected += anomalies.length;
-    this.metrics.highSeverityCount += anomalies.filter(
+    BehaviorAnalyst.metrics.anomaliesDetected += anomalies.length;
+    BehaviorAnalyst.metrics.highSeverityCount += anomalies.filter(
       (a) => a.severity === "HIGH" || a.severity === "CRITICAL"
     ).length;
 
@@ -250,7 +246,7 @@ export class BehaviorAnalyst {
     const requestPath = request.nextUrl.pathname;
 
     // Skip common paths
-    if (this.isCommonPath(requestPath)) return null;
+    if (BehaviorAnalyst.isCommonPath(requestPath)) return null;
 
     const pathCount = profile.typicalPaths.get(requestPath) || 0;
     const totalPaths = Array.from(profile.typicalPaths.values()).reduce(
@@ -260,7 +256,7 @@ export class BehaviorAnalyst {
 
     // New path for this user
     if (pathCount === 0 && totalPaths > 20) {
-      const isSensitive = this.isSensitivePath(requestPath);
+      const isSensitive = BehaviorAnalyst.isSensitivePath(requestPath);
 
       return {
         type: "UNUSUAL_PATH",
@@ -312,10 +308,10 @@ export class BehaviorAnalyst {
   ): BehaviorAnomaly | null {
     const now = Date.now();
     const recentRequests = profile.requestTimestamps.filter(
-      (ts) => now - ts < this.VELOCITY_WINDOW
+      (ts) => now - ts < BehaviorAnalyst.VELOCITY_WINDOW
     );
 
-    if (recentRequests.length > this.MAX_REQUESTS_PER_MINUTE) {
+    if (recentRequests.length > BehaviorAnalyst.MAX_REQUESTS_PER_MINUTE) {
       return {
         type: "VELOCITY_ANOMALY",
         severity: "HIGH",
@@ -332,7 +328,7 @@ export class BehaviorAnalyst {
     request: NextRequest,
     profile: UserBehaviorProfile
   ): BehaviorAnomaly | null {
-    const fingerprint = this.generateDeviceFingerprint(request);
+    const fingerprint = BehaviorAnalyst.generateDeviceFingerprint(request);
 
     if (
       profile.deviceFingerprints.size > 0 &&
@@ -363,11 +359,11 @@ export class BehaviorAnalyst {
 
     if (!currentLat || !currentLon || !currentCountry) return null;
 
-    const lastLocation = this.recentGeoLocations.get(profile.userId);
+    const lastLocation = BehaviorAnalyst.recentGeoLocations.get(profile.userId);
     const timeSinceLastRequest = Date.now() - profile.lastRequestTime;
 
     if (lastLocation && lastLocation.lat && lastLocation.lon) {
-      const distance = this.calculateDistance(
+      const distance = BehaviorAnalyst.calculateDistance(
         lastLocation.lat,
         lastLocation.lon,
         currentLat,
@@ -377,7 +373,10 @@ export class BehaviorAnalyst {
       const hoursElapsed = timeSinceLastRequest / (1000 * 60 * 60);
       const impliedSpeed = distance / hoursElapsed;
 
-      if (impliedSpeed > this.IMPOSSIBLE_TRAVEL_SPEED && hoursElapsed < 24) {
+      if (
+        impliedSpeed > BehaviorAnalyst.IMPOSSIBLE_TRAVEL_SPEED &&
+        hoursElapsed < 24
+      ) {
         return {
           type: "IMPOSSIBLE_TRAVEL",
           severity: "CRITICAL",
@@ -399,7 +398,7 @@ export class BehaviorAnalyst {
     }
 
     // Update last location
-    this.recentGeoLocations.set(profile.userId, {
+    BehaviorAnalyst.recentGeoLocations.set(profile.userId, {
       country: currentCountry,
       lat: currentLat,
       lon: currentLon,
@@ -415,7 +414,7 @@ export class BehaviorAnalyst {
     const path = request.nextUrl.pathname;
 
     // Only check auth-related paths
-    if (!path.includes("/auth") && !path.includes("/login")) {
+    if (!isAuthPath(path)) {
       return null;
     }
 
@@ -440,7 +439,7 @@ export class BehaviorAnalyst {
     const profileAge = now - profile.firstSeen;
 
     // Only check for drift after sufficient history
-    if (profileAge < this.LEARNING_PERIOD * 2) return null;
+    if (profileAge < BehaviorAnalyst.LEARNING_PERIOD * 2) return null;
 
     // Calculate path diversity change
     const recentPaths = profile.typicalPaths.size;
@@ -463,7 +462,7 @@ export class BehaviorAnalyst {
   // PROFILE MANAGEMENT
   // ─────────────────────────────────────────────────────────────────────────
   private static getOrCreateProfile(userId: string): UserBehaviorProfile {
-    let profile = this.userProfiles.get(userId);
+    let profile = BehaviorAnalyst.userProfiles.get(userId);
 
     if (!profile) {
       profile = {
@@ -482,7 +481,7 @@ export class BehaviorAnalyst {
         lastAnalysis: Date.now(),
         riskScore: 0,
       };
-      this.userProfiles.set(userId, profile);
+      BehaviorAnalyst.userProfiles.set(userId, profile);
     }
 
     return profile;
@@ -497,13 +496,14 @@ export class BehaviorAnalyst {
     const currentHour = new Date().getHours();
     const currentPath = request.nextUrl.pathname;
     const geoCountry = request.headers.get("x-geo-country") || "unknown";
-    const deviceFingerprint = this.generateDeviceFingerprint(request);
+    const deviceFingerprint =
+      BehaviorAnalyst.generateDeviceFingerprint(request);
 
     // Update request timestamps
     profile.requestTimestamps.push(now);
-    if (profile.requestTimestamps.length > this.MAX_TIMESTAMPS) {
+    if (profile.requestTimestamps.length > BehaviorAnalyst.MAX_TIMESTAMPS) {
       profile.requestTimestamps = profile.requestTimestamps.slice(
-        -this.MAX_TIMESTAMPS
+        -BehaviorAnalyst.MAX_TIMESTAMPS
       );
     }
 
@@ -551,20 +551,21 @@ export class BehaviorAnalyst {
     profile.lastRequestTime = now;
     profile.lastAnalysis = now;
 
-    this.userProfiles.set(profile.userId, profile);
-    this.metrics.profilesActive = this.userProfiles.size;
+    BehaviorAnalyst.userProfiles.set(profile.userId, profile);
+    BehaviorAnalyst.metrics.profilesActive = BehaviorAnalyst.userProfiles.size;
   }
 
   private static cleanupStaleProfiles(): void {
     const now = Date.now();
 
     // Only cleanup periodically
-    if (this.userProfiles.size < this.MAX_PROFILES) return;
+    if (BehaviorAnalyst.userProfiles.size < BehaviorAnalyst.MAX_PROFILES)
+      return;
 
-    for (const [userId, profile] of this.userProfiles) {
-      if (now - profile.lastAnalysis > this.PROFILE_TTL) {
-        this.userProfiles.delete(userId);
-        this.recentGeoLocations.delete(userId);
+    for (const [userId, profile] of BehaviorAnalyst.userProfiles) {
+      if (now - profile.lastAnalysis > BehaviorAnalyst.PROFILE_TTL) {
+        BehaviorAnalyst.userProfiles.delete(userId);
+        BehaviorAnalyst.recentGeoLocations.delete(userId);
       }
     }
   }
@@ -632,7 +633,7 @@ export class BehaviorAnalyst {
       "unknown";
     const ua = request.headers.get("user-agent") || "unknown";
 
-    return `anon:${this.simpleHash(ip + ua)}`;
+    return `anon:${BehaviorAnalyst.simpleHash(ip + ua)}`;
   }
 
   private static generateDeviceFingerprint(request: NextRequest): string {
@@ -640,7 +641,7 @@ export class BehaviorAnalyst {
     const acceptLang = request.headers.get("accept-language") || "";
     const acceptEnc = request.headers.get("accept-encoding") || "";
 
-    return this.simpleHash(ua + acceptLang + acceptEnc);
+    return BehaviorAnalyst.simpleHash(ua + acceptLang + acceptEnc);
   }
 
   private static simpleHash(str: string): string {
@@ -661,12 +662,12 @@ export class BehaviorAnalyst {
   ): number {
     // Haversine formula
     const R = 6371; // Earth's radius in km
-    const dLat = this.toRad(lat2 - lat1);
-    const dLon = this.toRad(lon2 - lon1);
+    const dLat = BehaviorAnalyst.toRad(lat2 - lat1);
+    const dLon = BehaviorAnalyst.toRad(lon2 - lon1);
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(this.toRad(lat1)) *
-        Math.cos(this.toRad(lat2)) *
+      Math.cos(BehaviorAnalyst.toRad(lat1)) *
+        Math.cos(BehaviorAnalyst.toRad(lat2)) *
         Math.sin(dLon / 2) *
         Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
@@ -678,19 +679,31 @@ export class BehaviorAnalyst {
   }
 
   private static isCommonPath(path: string): boolean {
-    return this.COMMON_PATHS.some(
-      (common) => path === common || path.startsWith(common + "/")
+    // Use the paths from pathsUtils
+    return (
+      isPublicPath(path) ||
+      path.startsWith("/_next") ||
+      path.startsWith("/static") ||
+      path.includes("favicon") ||
+      path.startsWith("/api/health") ||
+      path.startsWith("/api/auth")
     );
   }
 
   private static isSensitivePath(path: string): boolean {
-    return this.SENSITIVE_PATHS.some(
-      (sensitive) => path === sensitive || path.startsWith(sensitive + "/")
+    // Use the paths from pathsUtils
+    return (
+      isPrivatePath(path) ||
+      path.startsWith("/api/admin") ||
+      path.startsWith("/api/a") ||
+      path.startsWith("/api/payment") ||
+      path.startsWith("/api/transfer") ||
+      path.startsWith("/settings/security")
     );
   }
 
   private static isInLearningPhase(profile: UserBehaviorProfile): boolean {
-    return Date.now() - profile.firstSeen < this.LEARNING_PERIOD;
+    return Date.now() - profile.firstSeen < BehaviorAnalyst.LEARNING_PERIOD;
   }
 
   private static shouldSkipAnalysis(
@@ -747,19 +760,22 @@ export class BehaviorAnalyst {
   // METRICS & LOGGING
   // ─────────────────────────────────────────────────────────────────────────
   private static updateMetrics(): void {
-    if (Date.now() - this.metrics.lastReset > this.METRICS_RESET_INTERVAL) {
+    if (
+      Date.now() - BehaviorAnalyst.metrics.lastReset >
+      BehaviorAnalyst.METRICS_RESET_INTERVAL
+    ) {
       console.log(`[BEHAVIOR ANALYST] 📊 Hourly Stats:`, {
-        analyzed: this.metrics.totalAnalyzed,
-        anomalies: this.metrics.anomaliesDetected,
-        highSeverity: this.metrics.highSeverityCount,
-        activeProfiles: this.metrics.profilesActive,
+        analyzed: BehaviorAnalyst.metrics.totalAnalyzed,
+        anomalies: BehaviorAnalyst.metrics.anomaliesDetected,
+        highSeverity: BehaviorAnalyst.metrics.highSeverityCount,
+        activeProfiles: BehaviorAnalyst.metrics.profilesActive,
       });
 
-      this.metrics = {
+      BehaviorAnalyst.metrics = {
         totalAnalyzed: 0,
         anomaliesDetected: 0,
         highSeverityCount: 0,
-        profilesActive: this.userProfiles.size,
+        profilesActive: BehaviorAnalyst.userProfiles.size,
         averageRiskScore: 0,
         lastReset: Date.now(),
       };
@@ -805,28 +821,28 @@ export class BehaviorAnalyst {
   // PUBLIC API
   // ─────────────────────────────────────────────────────────────────────────
   static getMetrics(): BehaviorMetrics {
-    return { ...this.metrics };
+    return { ...BehaviorAnalyst.metrics };
   }
 
   static getUserProfile(userId: string): UserBehaviorProfile | undefined {
-    return this.userProfiles.get(userId);
+    return BehaviorAnalyst.userProfiles.get(userId);
   }
 
   static recordFailedAuth(userId: string): void {
-    const profile = this.getOrCreateProfile(userId);
+    const profile = BehaviorAnalyst.getOrCreateProfile(userId);
     profile.failedAuthAttempts++;
-    this.userProfiles.set(userId, profile);
+    BehaviorAnalyst.userProfiles.set(userId, profile);
   }
 
   static recordSuccessfulAuth(userId: string): void {
-    const profile = this.getOrCreateProfile(userId);
+    const profile = BehaviorAnalyst.getOrCreateProfile(userId);
     profile.successfulAuthCount++;
     profile.failedAuthAttempts = 0; // Reset on success
-    this.userProfiles.set(userId, profile);
+    BehaviorAnalyst.userProfiles.set(userId, profile);
   }
 
   static resetUserProfile(userId: string): void {
-    this.userProfiles.delete(userId);
-    this.recentGeoLocations.delete(userId);
+    BehaviorAnalyst.userProfiles.delete(userId);
+    BehaviorAnalyst.recentGeoLocations.delete(userId);
   }
 }

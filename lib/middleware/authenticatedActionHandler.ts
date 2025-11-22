@@ -1,9 +1,7 @@
-// ========================================
-// 🔐 AUTHENTICATED ACTION HANDLER
-// ========================================
-
+// src/lib/middleware/authenticatedActionHandler.ts
 import { NextRequest } from "next/server";
-import { type MiddlewareContext } from "./types";
+import type { MiddlewareContext } from "./types";
+import { Role } from "@prisma/client";
 
 export interface AuthenticatedActionContext extends MiddlewareContext {
   isAuthAction: boolean;
@@ -12,162 +10,283 @@ export interface AuthenticatedActionContext extends MiddlewareContext {
     | "signout"
     | "signup"
     | "password_reset"
+    | "verify_email"
+    | "refresh_token"
     | "user_action"
+    | "admin_action"
     | "none";
-  userContext?: {
-    userId: string | null;
-    role: string;
-    sessionAge: number;
-    trustLevel: number;
-  };
   sensitivity: "low" | "medium" | "high" | "critical";
+  userContext?: {
+    userId: string;
+    role: Role | string;
+    sessionAgeMs: number;
+    trustScore: number; // 0–100
+    isFreshSession: boolean;
+    isElevatedRole: boolean;
+  };
   authAdjustments: {
-    sensitivityReduction: number;
+    threatThreshold: number;
     trustBonus: number;
+    falsePositiveReduction: number;
   };
 }
 
 export class AuthenticatedActionHandler {
-  private static readonly AUTH_PATHS = {
-    "/signin": { type: "signin", sensitivity: "critical" as const },
-    "/auth/signout": { type: "signout", sensitivity: "high" as const },
-    "/auth/signup": { type: "signup", sensitivity: "critical" as const },
-    "/reset-password": {
-      type: "password_reset",
-      sensitivity: "critical" as const,
-    },
-    "/auth/refresh": { type: "user_action", sensitivity: "high" as const },
-    "/api/v1/auth/access-code": {
-      type: "signin",
-      sensitivity: "critical" as const,
-    },
-    "/api/v1/auth/token": { type: "signin", sensitivity: "critical" as const },
+  // ─────────────────────────────────────────────────────────────────────
+  // Known Auth & Sensitive Routes
+  // ─────────────────────────────────────────────────────────────────────
+  private static readonly AUTH_ROUTES = new Map<
+    string,
+    AuthenticatedActionContext["actionType"]
+  >([
+    ["/signin", "signin"],
+    ["/auth/signin", "signin"],
+    ["/api/auth/signin", "signin"],
+    ["/api/v1/auth/token", "signin"],
+    ["/api/v1/auth/access-code", "signin"],
+
+    ["/signout", "signout"],
+    ["/auth/signout", "signout"],
+    ["/api/auth/signout", "signout"],
+
+    ["/signup", "signup"],
+    ["/auth/signup", "signup"],
+    ["/register", "signup"],
+    ["/api/auth/signup", "signup"],
+
+    ["/reset-password", "password_reset"],
+    ["/auth/reset-password", "password_reset"],
+    ["/api/auth/reset-password", "password_reset"],
+
+    ["/verify-email", "verify_email"],
+    ["/auth/verify-email", "verify_email"],
+    ["/api/auth/verify-email", "verify_email"],
+
+    ["/auth/refresh", "refresh_token"],
+    ["/api/auth/refresh", "refresh_token"],
+  ]);
+
+  private static readonly SENSITIVITY_MAP = {
+    signin: "critical" as const,
+    signup: "critical" as const,
+    password_reset: "critical" as const,
+    verify_email: "critical" as const,
+    refresh_token: "high" as const,
+    signout: "high" as const,
+    user_action: "medium" as const,
+    admin_action: "high" as const,
+    none: "low" as const,
   };
 
-  private static readonly USER_ACTION_PATTERNS = [
-    "/dashboard/",
-    "/dashboard/*",
+  private static readonly PROTECTED_PREFIXES = [
+    "/dashboard",
     "/profile",
     "/settings",
+    "/courses",
+    "/gradebook",
+    "/admin",
+    "/api/v1/user",
+    "/api/v1/student",
+    "/api/v1/teacher",
   ];
 
+  private static readonly ADMIN_PREFIXES = ["/admin", "/api/v1/admin"];
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Main Enhancement
+  // ─────────────────────────────────────────────────────────────────────
   static enhanceContext(
     request: NextRequest,
     baseContext: MiddlewareContext
   ): AuthenticatedActionContext {
     const pathname = request.nextUrl.pathname;
+    const method = request.method;
 
-    const authAction =
-      this.AUTH_PATHS[pathname as keyof typeof this.AUTH_PATHS];
-    const isUserAction = this.USER_ACTION_PATTERNS.some((pattern) =>
-      pathname.startsWith(pattern)
-    );
+    // Detect action type
+    const actionType = this.detectActionType(pathname);
+    const sensitivity = this.SENSITIVITY_MAP[actionType];
 
-    let actionType: AuthenticatedActionContext["actionType"] = "none";
-    let sensitivity: AuthenticatedActionContext["sensitivity"] = "low";
+    // Extract user context from trusted headers (set by SessionTokenValidator)
+    const userContext = this.buildUserContext(request, baseContext);
 
-    if (authAction) {
-      actionType = authAction.type as AuthenticatedActionContext["actionType"];
-      sensitivity = authAction.sensitivity;
-    } else if (isUserAction) {
-      actionType = "user_action";
-      sensitivity = "medium";
-    }
-
-    const userContext = this.extractUserContext(request, baseContext);
-    const authAdjustments = this.calculateAuthAdjustments(
-      sensitivity,
-      userContext
+    // Calculate dynamic threat adjustments
+    const authAdjustments = this.calculateAdjustments(
+      actionType,
+      userContext,
+      sensitivity
     );
 
     return {
       ...baseContext,
-      isAuthAction: !!authAction,
+      isAuthAction:
+        actionType !== "none" &&
+        actionType !== "user_action" &&
+        actionType !== "admin_action",
       actionType,
-      userContext,
       sensitivity,
+      userContext,
       authAdjustments,
     };
   }
 
-  private static extractUserContext(
+  // ─────────────────────────────────────────────────────────────────────
+  // Action Detection
+  // ─────────────────────────────────────────────────────────────────────
+  private static detectActionType(
+    pathname: string
+  ): AuthenticatedActionContext["actionType"] {
+    // Exact matches first
+    const exactMatch = this.AUTH_ROUTES.get(pathname);
+    if (exactMatch) return exactMatch;
+
+    // Admin routes
+    if (this.ADMIN_PREFIXES.some((p) => pathname.startsWith(p))) {
+      return "admin_action";
+    }
+
+    // Protected user routes
+    if (this.PROTECTED_PREFIXES.some((p) => pathname.startsWith(p))) {
+      return "user_action";
+    }
+
+    return "none";
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // User Context Builder
+  // ─────────────────────────────────────────────────────────────────────
+  private static buildUserContext(
     request: NextRequest,
     context: MiddlewareContext
-  ) {
+  ): AuthenticatedActionContext["userContext"] | undefined {
     const userId = request.headers.get("x-user-id");
-    const userRole = request.headers.get("x-user-role");
+    const roleHeader = request.headers.get("x-user-role");
     const sessionRefreshed =
       request.headers.get("x-session-refreshed") === "true";
-    const sessionToken = context.sessionToken;
 
-    if (!userId || !userRole) return undefined;
+    if (!userId || !roleHeader) return undefined;
 
-    const sessionAge = sessionToken
-      ? Date.now() - parseInt(sessionToken.substring(-13), 36)
-      : 0;
+    const role = roleHeader as Role;
+    const sessionCreatedHeader = request.headers.get("x-session-created");
+    const sessionAgeMs = sessionCreatedHeader
+      ? Date.now() - parseInt(sessionCreatedHeader)
+      : context.sessionAgeMs || 0;
 
-    let trustLevel = 50;
-    if (sessionRefreshed) trustLevel += 10;
-    if (userRole === "Super_dashboard") trustLevel += 20;
-    else if (userRole === "dashboard") trustLevel += 10;
-    if (sessionAge < 3600000) trustLevel += 15;
+    let trustScore = 50;
+
+    // Fresh session = higher trust
+    if (sessionAgeMs < 5 * 60 * 1000) trustScore += 20; // < 5 min
+    else if (sessionAgeMs < 30 * 60 * 1000) trustScore += 10; // < 30 min
+
+    // Recently refreshed = trust boost
+    if (sessionRefreshed) trustScore += 15;
+
+    // Role-based trust
+    if (role === Role.ADMIN) trustScore += 25;
+    else if (role === Role.TEACHER) trustScore += 10;
 
     return {
       userId,
-      role: userRole,
-      sessionAge,
-      trustLevel: Math.min(100, trustLevel),
+      role,
+      sessionAgeMs,
+      trustScore: Math.min(100, Math.max(0, trustScore)),
+      isFreshSession: sessionAgeMs < 10 * 60 * 1000,
+      isElevatedRole: ["ADMIN", "TEACHER"].includes(String(role)),
     };
   }
 
-  private static calculateAuthAdjustments(
-    sensitivity: AuthenticatedActionContext["sensitivity"],
-    userContext?: AuthenticatedActionContext["userContext"]
-  ) {
-    let sensitivityReduction = 0;
+  // ─────────────────────────────────────────────────────────────────────
+  // Dynamic Threat Adjustments
+  // ─────────────────────────────────────────────────────────────────────
+  private static calculateAdjustments(
+    actionType: AuthenticatedActionContext["actionType"],
+    userContext?: AuthenticatedActionContext["userContext"],
+    sensitivity?: AuthenticatedActionContext["sensitivity"]
+  ): AuthenticatedActionContext["authAdjustments"] {
+    let threatThreshold = 80;
     let trustBonus = 0;
+    let falsePositiveReduction = 0;
 
-    // Adjust based on action sensitivity
-    if (sensitivity === "critical") {
-      sensitivityReduction = 20;
-    } else if (sensitivity === "high") {
-      sensitivityReduction = 10;
+    // Critical auth actions: be more lenient to reduce lockouts
+    if (
+      ["signin", "signup", "password_reset", "verify_email"].includes(
+        actionType
+      )
+    ) {
+      threatThreshold = 92;
+      falsePositiveReduction = 25;
     }
 
-    // Adjust based on user trust level
-    if (userContext && userContext.trustLevel > 70) {
-      trustBonus = 15;
-    } else if (userContext && userContext.trustLevel > 50) {
-      trustBonus = 5;
+    // Refresh token: slightly higher threshold
+    if (actionType === "refresh_token") {
+      threatThreshold = 88;
     }
 
-    return { sensitivityReduction, trustBonus };
+    // Trusted users get lower effective threat
+    if (userContext) {
+      if (userContext.trustScore >= 85) {
+        trustBonus = 20;
+        threatThreshold += 10;
+      } else if (userContext.trustScore >= 70) {
+        trustBonus = 10;
+        threatThreshold += 5;
+      }
+    }
+
+    return {
+      threatThreshold: Math.min(98, threatThreshold),
+      trustBonus,
+      falsePositiveReduction,
+    };
   }
 
+  // ─────────────────────────────────────────────────────────────────────
+  // Middleware Skip Logic
+  // ─────────────────────────────────────────────────────────────────────
   static shouldSkipMiddleware(
     middlewareName: string,
     context: AuthenticatedActionContext
   ): boolean {
-    // Skip session validation for signin/signup
+    const { actionType, userContext } = context;
+
+    // Never run session validator on signin/signup
     if (
       middlewareName === "SessionTokenValidator" &&
-      (context.actionType === "signin" || context.actionType === "signup")
+      (actionType === "signin" ||
+        actionType === "signup" ||
+        actionType === "password_reset")
     ) {
       return true;
     }
 
-    // Skip cache for auth actions
-    if (middlewareName === "CacheManager" && context.isAuthAction) {
+    // Skip rate limiter on password reset (users forget passwords)
+    if (middlewareName === "RateLimiter" && actionType === "password_reset") {
       return true;
     }
 
-    // Skip access control for signin/signup/logout
+    // Skip bot detection false positives on signin
+    if (middlewareName === "BotDetector" && actionType === "signin") {
+      return true;
+    }
+
+    // Allow signout even if session expired
     if (
-      (middlewareName === "AccessController" ||
-        middlewareName === "ApiAccessGuardian") &&
-      (context.actionType === "signin" ||
-        context.actionType === "signup" ||
-        (context.actionType === "signout" && context.userContext))
+      middlewareName === "SessionTokenValidator" &&
+      actionType === "signout"
+    ) {
+      return true;
+    }
+
+    // Skip access control for auth flows
+    if (
+      ["AccessController", "RoleGuard"].includes(middlewareName) &&
+      [
+        "signin",
+        "signup",
+        "signout",
+        "password_reset",
+        "verify_email",
+      ].includes(actionType)
     ) {
       return true;
     }
@@ -175,11 +294,25 @@ export class AuthenticatedActionHandler {
     return false;
   }
 
+  // ─────────────────────────────────────────────────────────────────────
+  // Threat Threshold (used by WAF, RateLimiter, etc.)
+  // ─────────────────────────────────────────────────────────────────────
   static getThreatThreshold(context: AuthenticatedActionContext): number {
-    // Higher threshold for auth actions to reduce false positives
-    if (context.actionType === "signin" || context.actionType === "signup") {
-      return 90;
-    }
-    return 80;
+    return context.authAdjustments.threatThreshold;
+  }
+
+  static getEffectiveThreatScore(
+    baseScore: number,
+    context: AuthenticatedActionContext
+  ): number {
+    let score = baseScore;
+
+    // Apply trust reduction
+    score -= context.authAdjustments.trustBonus;
+
+    // Apply false positive reduction for sensitive auth flows
+    score -= context.authAdjustments.falsePositiveReduction;
+
+    return Math.max(0, Math.min(100, score));
   }
 }

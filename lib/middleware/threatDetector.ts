@@ -317,7 +317,7 @@ export class ThreatDetector {
       if (TrustedSourceManager) {
         const trustCheck = TrustedSourceManager.isTrusted(request, {
           clientIp: context.clientIp,
-          userAgent: context.userAgent,
+          userAgent: context.userAgent || "",
         });
 
         if (trustCheck.isTrusted) {

@@ -1,122 +1,149 @@
-// ========================================
-// 🔥 EXECUTION WRAPPER - Fixed
-// ========================================
-
+// src/lib/middleware/executionWrapper.ts
+import { performance } from "perf_hooks";
 import { ComprehensiveHealthMonitor } from "./healthMonitor";
-import { AuthenticatedActionContext } from "./authenticatedActionHandler";
+import type { AuthenticatedActionContext } from "./authenticatedActionHandler";
 
-export const enhancedExecute = async <T>(
-  fn: () => Promise<T> | T,
-  fallback: T,
-  name: string,
-  authContext?: AuthenticatedActionContext
+/**
+ * enhancedExecute — The Ultimate Safe Executor
+ * Zero-crash, observable, circuit-breaker aware, auth-smart.
+ */
+export async function enhancedExecute<T>(
+  operation: () => Promise<T> | T,
+  options: {
+    fallback: T;
+    name: string;
+    context?: AuthenticatedActionContext;
+    request?: Request;
+  }
 ): Promise<{
   result: T;
   logs: string[];
   executionTime: number;
-  threatScore?: number;
   success: boolean;
+  threatScore?: number;
   authAdjustments?: {
     sensitivityReduction: number;
     trustBonus: number;
   };
-}> => {
-  const startTime = performance.now();
+}> {
+  const start = performance.now();
   const logs: string[] = [];
   let threatScore: number | undefined;
   let success = false;
+
+  const { fallback, name, context } = options;
+
+  // Circuit breaker check
+  if (ComprehensiveHealthMonitor.shouldSkip(name)) {
+    logs.push(`[CIRCUIT] ${name} skipped — circuit breaker open`);
+    return {
+      result: fallback,
+      logs,
+      executionTime: 0,
+      success: false,
+      authAdjustments: { sensitivityReduction: 0, trustBonus: 0 },
+    };
+  }
+
+  // Auth-aware adjustments
   const authAdjustments = { sensitivityReduction: 0, trustBonus: 0 };
+  if (context) {
+    if (context.sensitivity === "critical") {
+      authAdjustments.sensitivityReduction = 25;
+      logs.push(`[AUTH] Critical action → reducing threat sensitivity by 25`);
+    } else if (context.sensitivity === "high") {
+      authAdjustments.sensitivityReduction = 12;
+    }
 
-  const originalMethods = {
-    log: console.log,
-    warn: console.warn,
-    error: console.error,
-  };
-
-  const logCapture =
-    (level: string) =>
-    (...args: unknown[]) => {
-      const message = args.join(" ");
+    if (
+      context.userContext &&
+      typeof context.userContext.trustScore === "number" &&
+      context.userContext.trustScore >= 85
+    ) {
+      authAdjustments.trustBonus = 20;
       logs.push(
-        `[${level}] [${name}] ${authContext ? `[${authContext.actionType}] ` : ""}${message}`
+        `[AUTH] Trusted user (score: ${context.userContext.trustScore}) → +20 trust bonus`
       );
+    } else if (
+      context.userContext &&
+      typeof context.userContext.trustScore === "number" &&
+      context.userContext.trustScore >= 70
+    ) {
+      authAdjustments.trustBonus = 10;
+    }
+  }
 
-      // Extract threat scores from logs
-      const scoreMatch = message.match(/(?:threat|score).*?(\d+)/i);
-      if (scoreMatch) threatScore = parseInt(scoreMatch[1]);
+  // Capture console logs (safe & scoped)
+  const originalLog = console.log;
+  const originalWarn = console.warn;
+  const originalError = console.error;
 
-      // Fix: Convert level to lowercase to match originalMethods properties
-      const methodName = level.toLowerCase() as keyof typeof originalMethods;
-      originalMethods[methodName](...args);
+  const capture =
+    (level: "LOG" | "WARN" | "ERROR") =>
+    (...args: any[]) => {
+      const msg = args
+        .map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
+        .join(" ");
+      logs.push(`[${level}] [${name}] ${msg}`);
+
+      // Extract threat scores
+      const match = msg.match(/(?:threat|risk|score)[\s:]*(\d+(?:\.\d+)?)/i);
+      if (match) threatScore = parseFloat(match[1]);
+
+      // Forward to real console
+      if (level === "ERROR") originalError(...args);
+      else if (level === "WARN") originalWarn(...args);
+      else originalLog(...args);
     };
 
-  console.log = logCapture("LOG");
-  console.warn = logCapture("WARN");
-  console.error = logCapture("ERROR");
+  console.log = capture("LOG");
+  console.warn = capture("WARN");
+  console.error = capture("ERROR");
 
   try {
-    if (ComprehensiveHealthMonitor.shouldSkip(name)) {
-      logs.push(`[CIRCUIT] ${name} skipped due to circuit breaker`);
-      return { result: fallback, logs, executionTime: 0, success: false };
-    }
-
-    // Apply authentication-aware adjustments
-    if (authContext) {
-      if (authContext.sensitivity === "critical") {
-        authAdjustments.sensitivityReduction = 20;
-        logs.push(`[AUTH] Critical action - reducing threat sensitivity by 20`);
-      } else if (authContext.sensitivity === "high") {
-        authAdjustments.sensitivityReduction = 10;
-      }
-
-      if (authContext.userContext && authContext.userContext.trustLevel > 70) {
-        authAdjustments.trustBonus = 15;
-        logs.push(`[AUTH] High trust user - applying bonus`);
-      }
-    }
-
-    const result = await Promise.resolve(fn());
+    const result = await Promise.resolve(operation());
     success = true;
+    const duration = performance.now() - start;
 
-    const executionTime = performance.now() - startTime;
+    logs.push(`[SUCCESS] ${name} → ${duration.toFixed(2)}ms`);
     ComprehensiveHealthMonitor.recordExecution(
       name,
-      executionTime,
-      threatScore,
-      success
+      duration,
+      threatScore ?? 0,
+      true
     );
-    logs.push(`[SUCCESS] ${name} completed in ${executionTime.toFixed(2)}ms`);
 
     return {
       result,
       logs,
-      executionTime,
-      threatScore,
+      executionTime: duration,
       success,
+      threatScore,
       authAdjustments,
     };
-  } catch (error) {
-    const executionTime = performance.now() - startTime;
+  } catch (error: any) {
+    const duration = performance.now() - start;
+    const errMsg = error?.message || String(error);
+    logs.push(`[FAIL] ${name} → ${duration.toFixed(2)}ms | ${errMsg}`);
     ComprehensiveHealthMonitor.recordExecution(
       name,
-      executionTime,
-      threatScore,
+      duration,
+      threatScore ?? 0,
       false
     );
-    logs.push(`[ERROR] ${name} failed: ${error}`);
 
     return {
       result: fallback,
       logs,
-      executionTime,
-      threatScore,
+      executionTime: duration,
       success: false,
+      threatScore,
       authAdjustments,
     };
   } finally {
-    // Restore original methods properly
-    console.log = originalMethods.log;
-    console.warn = originalMethods.warn;
-    console.error = originalMethods.error;
+    // Always restore console
+    console.log = originalLog;
+    console.warn = originalWarn;
+    console.error = originalError;
   }
-};
+}

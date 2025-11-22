@@ -3,6 +3,8 @@
  * Updated to match Prisma schema structure
  */
 
+// File: lib/config/a/index.ts
+
 export const adminConfig = {
   // System-wide settings
   system: {
@@ -35,7 +37,7 @@ export const adminConfig = {
       securityLevels: ["LOW", "MEDIUM", "HIGH"] as const,
     },
     password: {
-      minLength: 12,
+      minLength: 8,
       requireSpecialChars: true,
       requireNumbers: true,
       requireUppercase: true,

@@ -1,75 +1,77 @@
-// ========================================
-// 🎯 MAIN MIDDLEWARE - Entry Point
-// ========================================
-
-// File: src/middleware.ts
+// src/proxy.ts
 import { NextRequest, NextResponse } from "next/server";
-import "./registry";
-import { Orchestrator } from "@/lib/middleware/orchestrator";
+import { orchestrator } from "@/lib/middleware/orchestrator";
 
-// Matcher Config - Define what gets processed
+// ─────────────────────────────────────────────────────────────────────────────
+// PROXY MATCHER — Apply to all real routes
+// ─────────────────────────────────────────────────────────────────────────────
 export const config = {
   matcher: [
-    "/((?!auth|auth|security-block|_next/static|_next/image|favicon.ico|manifest.json|robots.txt|health).*)",
+    "/((?!_next/static|_next/image|favicon\\.ico|robots\\.txt|manifest\\.json|health|auth/callback).*)",
   ],
 };
 
-// Main Middleware Function
-export async function proxy(request: NextRequest) {
+// REQUIRED: Must be named `proxy` when file is proxy.ts
+export async function proxy(request: NextRequest): Promise<NextResponse> {
   try {
-    const response = await Orchestrator.execute(request);
+    const response = await orchestrator.execute(request);
 
-    // If Orchestrator returns a redirect to not-found, handle it
-    if (response.headers.get("x-redirect-to-not-found") === "true") {
-      return redirectToNotFound(request);
+    // Custom 404 handling
+    if (response.headers.get("x-middleware-404") === "true") {
+      return handleNotFound(request);
+    }
+
+    // Force redirect support
+    const redirectUrl = response.headers.get("x-redirect-url");
+    if (redirectUrl) {
+      return NextResponse.redirect(new URL(redirectUrl, request.url));
     }
 
     return response;
-  } catch (error) {
-    console.error("🔥 MIDDLEWARE ERROR:", error);
+  } catch (error: any) {
+    console.error("PROXY CRITICAL FAILURE:", error);
 
-    // If it's a not found error from the orchestrator, show custom 404
-    if (isNotFoundError(error)) {
-      return redirectToNotFound(request);
+    if (
+      error?.code === "ENOENT" ||
+      error?.status === 404 ||
+      /not found/i.test(error?.message)
+    ) {
+      return handleNotFound(request);
     }
 
-    // For other errors, let the orchestrator handle them or rethrow
-    throw error;
+    return NextResponse.json(
+      {
+        error: "Service Unavailable",
+        message: "System temporarily down. Please try again later.",
+        code: "PROXY_FAILURE",
+      },
+      { status: 503 }
+    );
   }
 }
 
-// ========================================
-// 🎯 404 REDIRECT HANDLER
-// ========================================
+// ─────────────────────────────────────────────────────────────────────────────
+// 404 Handler — Clean & Consistent
+// ─────────────────────────────────────────────────────────────────────────────
+function handleNotFound(request: NextRequest): NextResponse {
+  console.log(`404 → ${request.nextUrl.pathname}`);
 
-function isNotFoundError(error: any): boolean {
-  return (
-    error?.message?.includes("not found") ||
-    error?.code === "ENOENT" ||
-    error?.status === 404
-  );
-}
-
-function redirectToNotFound(request: NextRequest): NextResponse {
-  console.log("🔍 [MIDDLEWARE] Route not found, showing custom 404");
-
-  // For API routes, return JSON response
   if (request.nextUrl.pathname.startsWith("/api/")) {
     return NextResponse.json(
       {
         error: "Not Found",
-        message: "The requested resource was not found",
+        message: "Endpoint does not exist",
         path: request.nextUrl.pathname,
+        timestamp: new Date().toISOString(),
       },
       { status: 404 }
     );
   }
 
-  // For pages, rewrite to custom not-found page
-  const notFoundUrl = new URL("/not-found", request.url);
-
-  // Preserve the original path for the 404 page to display
-  notFoundUrl.searchParams.set("originalPath", request.nextUrl.pathname);
-
-  return NextResponse.rewrite(notFoundUrl);
+  const url = new URL("/404", request.url);
+  url.searchParams.set("from", request.nextUrl.pathname);
+  return NextResponse.rewrite(url);
 }
+
+// Optional: Force Node.js runtime (recommended for full defense stack)
+export const runtime = "nodejs";

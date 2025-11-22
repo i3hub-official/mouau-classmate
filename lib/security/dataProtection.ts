@@ -178,7 +178,7 @@ export class PasswordSecurity {
 
   static validatePasswordStrength(password: string) {
     const errors: string[] = [];
-    if (password.length < 12) errors.push("At least 12 characters");
+    if (password.length < 8) errors.push("At least 8 characters");
     if (!/(?=.*[a-z])/.test(password)) errors.push("One lowercase");
     if (!/(?=.*[A-Z])/.test(password)) errors.push("One uppercase");
     if (!/(?=.*\d)/.test(password)) errors.push("One number");

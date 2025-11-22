@@ -28,6 +28,11 @@ export class RequestTransformer {
     request: NextRequest,
     context: MiddlewareContext
   ): NextResponse {
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[RequestTransformer] Dev mode → bypassed");
+      return NextResponse.next();
+    }
+    
     try {
       // PHASE 1: EARLY MALICIOUS DETECTION — NUCLEAR RESPONSE
       const fullUrl = request.url;

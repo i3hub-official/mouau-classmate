@@ -101,48 +101,48 @@ export class EncryptionEnforcer {
     context: MiddlewareContext
   ): NextResponse {
     try {
-      this.updateMetrics();
-      this.metrics.totalRequests++;
+      EncryptionEnforcer.updateMetrics(); // Fixed: Added class prefix
+      EncryptionEnforcer.metrics.totalRequests++; // Fixed: Added class prefix
 
       const pathname = request.nextUrl.pathname;
       const violations: EncryptionViolation[] = [];
 
       // Skip enforcement for allowed insecure paths
-      if (this.isAllowedInsecurePath(pathname)) {
+      if (EncryptionEnforcer.isAllowedInsecurePath(pathname)) {
         return NextResponse.next();
       }
 
       // 1. Check HTTPS enforcement
-      const httpsViolation = this.checkHTTPSEnforcement(request);
+      const httpsViolation = EncryptionEnforcer.checkHTTPSEnforcement(request);
       if (httpsViolation) {
         violations.push(httpsViolation);
         if (httpsViolation.action === "REDIRECT") {
-          this.metrics.redirects++;
-          this.logViolation(request, httpsViolation);
-          return this.redirectToHTTPS(request);
+          EncryptionEnforcer.metrics.redirects++; // Fixed: Added class prefix
+          EncryptionEnforcer.logViolation(request, httpsViolation);
+          return EncryptionEnforcer.redirectToHTTPS(request);
         }
       } else {
-        this.metrics.secureRequests++;
+        EncryptionEnforcer.metrics.secureRequests++; // Fixed: Added class prefix
       }
 
       // 2. Check for sensitive data in URL
-      const urlViolation = this.checkSensitiveDataInURL(request);
+      const urlViolation = EncryptionEnforcer.checkSensitiveDataInURL(request);
       if (urlViolation) {
         violations.push(urlViolation);
         if (urlViolation.action === "BLOCK") {
-          this.metrics.violations++;
-          this.logViolation(request, urlViolation);
-          return this.blockRequest(urlViolation);
+          EncryptionEnforcer.metrics.violations++; // Fixed: Added class prefix
+          EncryptionEnforcer.logViolation(request, urlViolation);
+          return EncryptionEnforcer.blockRequest(urlViolation);
         }
       }
 
       // 3. Check request headers for security issues
-      const headerViolations = this.checkRequestHeaders(request);
+      const headerViolations = EncryptionEnforcer.checkRequestHeaders(request);
       violations.push(...headerViolations);
 
       // 4. Check content type for sensitive paths
-      if (this.isHighlySensitivePath(pathname)) {
-        const contentViolation = this.checkContentType(request);
+      if (EncryptionEnforcer.isHighlySensitivePath(pathname)) {
+        const contentViolation = EncryptionEnforcer.checkContentType(request);
         if (contentViolation) {
           violations.push(contentViolation);
         }
@@ -151,17 +151,17 @@ export class EncryptionEnforcer {
       // Log warnings for non-blocking violations
       violations
         .filter((v) => v.action === "WARN")
-        .forEach((v) => this.logViolation(request, v));
+        .forEach((v) => EncryptionEnforcer.logViolation(request, v));
 
       // Build response with security headers
       const response = NextResponse.next();
-      this.addSecurityHeaders(response, pathname);
+      EncryptionEnforcer.addSecurityHeaders(response, pathname);
 
       // Add enforcement metadata
       response.headers.set("x-encryption-enforced", "true");
       response.headers.set(
         "x-security-score",
-        this.calculateSecurityScore(violations).toString()
+        EncryptionEnforcer.calculateSecurityScore(violations).toString()
       );
 
       if (violations.length > 0) {
@@ -185,7 +185,7 @@ export class EncryptionEnforcer {
   private static checkHTTPSEnforcement(
     request: NextRequest
   ): EncryptionViolation | null {
-    if (this.isSecureConnection(request)) {
+    if (EncryptionEnforcer.isSecureConnection(request)) {
       return null;
     }
 
@@ -233,7 +233,7 @@ export class EncryptionEnforcer {
     // Check URL and query parameters
     const fullUrl = url + searchParams;
 
-    for (const { pattern, name } of this.SENSITIVE_URL_PATTERNS) {
+    for (const { pattern, name } of EncryptionEnforcer.SENSITIVE_URL_PATTERNS) {
       if (pattern.test(fullUrl)) {
         return {
           type: "SENSITIVE_DATA_IN_URL",
@@ -245,7 +245,7 @@ export class EncryptionEnforcer {
     }
 
     // Check for base64 encoded sensitive data
-    if (this.containsEncodedSensitiveData(searchParams)) {
+    if (EncryptionEnforcer.containsEncodedSensitiveData(searchParams)) {
       return {
         type: "ENCODED_SENSITIVE_DATA",
         severity: "MEDIUM",
@@ -277,7 +277,7 @@ export class EncryptionEnforcer {
 
     // Warn about requests without origin on sensitive paths
     if (
-      this.isSensitivePath(request.nextUrl.pathname) &&
+      EncryptionEnforcer.isSensitivePath(request.nextUrl.pathname) &&
       request.method !== "GET" &&
       !origin
     ) {
@@ -333,19 +333,19 @@ export class EncryptionEnforcer {
   // PATH UTILITIES
   // ─────────────────────────────────────────────────────────────────────────
   private static isSensitivePath(pathname: string): boolean {
-    return this.SENSITIVE_PATHS.some(
+    return EncryptionEnforcer.SENSITIVE_PATHS.some(
       (path) => pathname === path || pathname.startsWith(path + "/")
     );
   }
 
   private static isHighlySensitivePath(pathname: string): boolean {
-    return this.HIGHLY_SENSITIVE_PATHS.some(
+    return EncryptionEnforcer.HIGHLY_SENSITIVE_PATHS.some(
       (path) => pathname === path || pathname.startsWith(path)
     );
   }
 
   private static isAllowedInsecurePath(pathname: string): boolean {
-    return this.ALLOWED_INSECURE_PATHS.some(
+    return EncryptionEnforcer.ALLOWED_INSECURE_PATHS.some(
       (path) => pathname === path || pathname.startsWith(path)
     );
   }
@@ -398,7 +398,7 @@ export class EncryptionEnforcer {
     }
 
     // Add extra headers for sensitive paths
-    if (this.isSensitivePath(pathname)) {
+    if (EncryptionEnforcer.isSensitivePath(pathname)) {
       // Upgrade insecure requests
       response.headers.set(
         "Content-Security-Policy",
@@ -418,7 +418,7 @@ export class EncryptionEnforcer {
     }
 
     // Extra protection for highly sensitive paths
-    if (this.isHighlySensitivePath(pathname)) {
+    if (EncryptionEnforcer.isHighlySensitivePath(pathname)) {
       // Prevent embedding
       response.headers.set("X-Frame-Options", "DENY");
 
@@ -440,22 +440,22 @@ export class EncryptionEnforcer {
   // METRICS & LOGGING
   // ─────────────────────────────────────────────────────────────────────────
   private static updateMetrics(): void {
-    if (Date.now() - this.metrics.lastReset > this.METRICS_RESET_INTERVAL) {
+    if (Date.now() - EncryptionEnforcer.metrics.lastReset > EncryptionEnforcer.METRICS_RESET_INTERVAL) {
       console.log(`[ENCRYPTION ENFORCER] 📊 Hourly Stats:`, {
-        total: this.metrics.totalRequests,
-        secure: this.metrics.secureRequests,
-        violations: this.metrics.violations,
-        redirects: this.metrics.redirects,
+        total: EncryptionEnforcer.metrics.totalRequests,
+        secure: EncryptionEnforcer.metrics.secureRequests,
+        violations: EncryptionEnforcer.metrics.violations,
+        redirects: EncryptionEnforcer.metrics.redirects,
         securePercentage:
-          this.metrics.totalRequests > 0
+          EncryptionEnforcer.metrics.totalRequests > 0
             ? (
-                (this.metrics.secureRequests / this.metrics.totalRequests) *
+                (EncryptionEnforcer.metrics.secureRequests / EncryptionEnforcer.metrics.totalRequests) *
                 100
               ).toFixed(1) + "%"
             : "N/A",
       });
 
-      this.metrics = {
+      EncryptionEnforcer.metrics = {
         totalRequests: 0,
         secureRequests: 0,
         violations: 0,
@@ -519,11 +519,11 @@ export class EncryptionEnforcer {
   // PUBLIC UTILITY METHODS
   // ─────────────────────────────────────────────────────────────────────────
   static getMetrics(): EncryptionMetrics {
-    return { ...this.metrics };
+    return { ...EncryptionEnforcer.metrics };
   }
 
   static resetMetrics(): void {
-    this.metrics = {
+    EncryptionEnforcer.metrics = {
       totalRequests: 0,
       secureRequests: 0,
       violations: 0,

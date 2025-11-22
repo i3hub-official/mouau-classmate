@@ -1,25 +1,29 @@
-// File: src/lib/utils/pathsUtils.ts
+// src/lib/utils/pathsUtils.ts
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUBLIC PATHS — No auth required
+// ─────────────────────────────────────────────────────────────────────────────
 export const PUBLIC_PATHS = [
   "/",
   "/sitemap",
-  "/signin",
-  "/signup",
   "/about",
   "/contact",
+  "/school",
+  "/help",
+  "/faq",
+  "/terms",
+  "/privacy",
+  "/support",
+  "/news",
+  "/blog",
+  "/events",
+  "/gallery",
   "/public",
 ] as const;
 
-export const PRIVATE_PATHS = [
-  "/dashboard",
-  "/dashboard/*",
-  "/profile",
-  "/courses",
-  "/grades",
-  "/admin",
-  "/assignments",
-  "/schedule",
-] as const;
-
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTH PATHS — Login, signup, password reset, etc.
+// ─────────────────────────────────────────────────────────────────────────────
 export const AUTH_PATHS = [
   "/signin",
   "/signup",
@@ -27,156 +31,165 @@ export const AUTH_PATHS = [
   "/reset-password",
   "/verify-email",
   "/resend-verification",
+  "/auth/callback",
 ] as const;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PRIVATE PATHS — Require authentication
+// ─────────────────────────────────────────────────────────────────────────────
+export const PRIVATE_PATHS = [
+  "/dashboard",
+  "/profile",
+  "/courses",
+  "/grades",
+  "/assignments",
+  "/schedule",
+  "/admin",
+  "/settings",
+  "/notifications",
+  "/messages",
+] as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CACHEABLE PATHS — Safe to cache (GET-only, stable data)
+// ─────────────────────────────────────────────────────────────────────────────
 export const CACHEABLE_PATHS = [
   // Public pages
   "/",
   "/about",
   "/contact",
   "/school",
-  "/school/*",
   "/help",
-  "/help/*",
   "/faq",
   "/terms",
   "/privacy",
   "/support",
   "/news",
-  "/news/*",
   "/blog",
-  "/blog/*",
   "/events",
-  "/events/*",
   "/gallery",
+
+  // Wildcard public sections
+  "/school/*",
+  "/help/*",
+  "/news/*",
+  "/blog/*",
+  "/events/*",
   "/gallery/*",
 
-  // Authentication pages (read-only data)
+  // Auth pages (static forms)
   "/signin",
+  "/signup",
   "/forgot-password",
   "/reset-password",
 
-  // File uploads/downloads (static content)
-  "/uploads/*",
-  "/downloads/*",
-  "/documents/public/*", // Only public documents
-  "/media/*",
-
   // Static assets
+  "/_next/*",
   "/static/*",
   "/assets/*",
   "/images/*",
-  "/css/*",
-  "/js/*",
-  "/fonts/*",
-  "/icons/*",
+  "/uploads/public/*",
+  "/media/*",
   "/favicon.ico",
-  "/manifest.json",
   "/robots.txt",
   "/sitemap.xml",
-  "/sitemap/*",
+  "/manifest.json",
 
-  // API Routes - Cacheable (GET requests with stable data)
-  "/api/courses/public/*", // Public course information
-  "/api/school/*", // School information (faculties, departments, etc.)
-  "/api/events/*", // Public events
-  "/api/news/*", // News and announcements
-  "/api/static/*", // Static data endpoints
+  // Public API routes (stable data)
+  "/api/public/*",
+  "/api/courses/public",
+  "/api/courses/list",
+  "/api/courses/details/*",
+  "/api/school/info",
+  "/api/school/faculties",
+  "/api/school/departments",
+  "/api/events/public",
+  "/api/news/public",
+  "/api/static/*",
 
-  // Grade-related API routes with appropriate caching
-  "/api/grades/summary", // Grade summary (cache for 5 minutes)
-  "/api/grades/performance", // Performance metrics (cache for 2 minutes)
-  "/api/grades/recent", // Recent grades (cache for 1 minute)
-  "/api/grades/course", // Course grades (cache for 5 minutes)
+  // Grade summary (short cache)
+  "/api/grades/summary",
+  "/api/grades/performance",
+  "/api/grades/recent",
 
-  // Course-related cacheable APIs
-  "/api/courses/list", // Course list (cache for 10 minutes)
-  "/api/courses/public", // Public course catalog
-  "/api/courses/details/*", // Course details
-
-  // User profile (cache for short periods)
-  "/api/user/profile/public/*", // Public profile data
-
-  // Assignment-related cacheable APIs
-  "/api/assignments/public/*", // Public assignment info
-  "/api/assignments/course/*", // Course assignments (cache for 2 minutes)
+  // User public profile
+  "/api/user/profile/public/*",
 ] as const;
 
-// NON-CACHEABLE PATHS (Dynamic/User-specific data)
+// ─────────────────────────────────────────────────────────────────────────────
+// NON-CACHEABLE PATHS — Dynamic, user-specific, or mutating
+// ─────────────────────────────────────────────────────────────────────────────
 export const NON_CACHEABLE_PATHS = [
-  // User-specific data (should never be cached)
+  // Auth endpoints
+  "/api/auth/*",
+
+  // User-specific
   "/api/user/me",
   "/api/user/profile",
   "/api/user/settings",
 
-  // Grade-related APIs that should not be cached
-  "/api/grades/export", // Export functionality (dynamic)
-  "/api/grades/raw", // Raw grade data
+  // Grades (sensitive/full)
+  "/api/grades/raw",
+  "/api/grades/export",
 
-  // Assignment submission endpoints
+  // Assignments
   "/api/assignments/submit",
   "/api/assignments/submissions/*",
   "/api/assignments/grade",
 
-  // Authentication endpoints
-  "/api/auth/*",
-
-  // Admin endpoints
+  // Admin & sensitive operations
+  "/api/admin/*",
   "/api/a/*",
 
-  // Payment/transaction endpoints
+  // Payments & transactions
   "/api/payments/*",
   "/api/transactions/*",
 
-  // Real-time data
+  // Real-time / dynamic
   "/api/notifications",
   "/api/messages",
   "/api/chat/*",
 
   // Form submissions
-  "/api/forms/*",
   "/api/contact",
+  "/api/forms/*",
 
-  // Any POST/PUT/DELETE endpoints
+  // Any mutation endpoints
   "/api/*/create",
   "/api/*/update",
   "/api/*/delete",
   "/api/*/submit",
+  "/api/*/upload",
 ] as const;
 
-// Type exports
+// ─────────────────────────────────────────────────────────────────────────────
+// TYPE EXPORTS
+// ─────────────────────────────────────────────────────────────────────────────
 export type PublicPath = (typeof PUBLIC_PATHS)[number];
-export type PrivatePath = (typeof PRIVATE_PATHS)[number];
 export type AuthPath = (typeof AUTH_PATHS)[number];
+export type PrivatePath = (typeof PRIVATE_PATHS)[number];
 export type CacheablePath = (typeof CACHEABLE_PATHS)[number];
 export type NonCacheablePath = (typeof NON_CACHEABLE_PATHS)[number];
 
-// Utility function for path matching - improved version
+// ─────────────────────────────────────────────────────────────────────────────
+// IMPROVED PATH MATCHER (supports /* wildcards correctly)
+// ─────────────────────────────────────────────────────────────────────────────
 export function matchPath(
   targetPath: string,
   patterns: readonly string[]
 ): boolean {
   return patterns.some((pattern) => {
-    // Handle exact match
     if (pattern === targetPath) return true;
 
-    // Handle wildcard patterns
     if (pattern.endsWith("/*")) {
-      const basePattern = pattern.slice(0, -2); // Remove the trailing /*
-
-      // Check if targetPath starts with the base pattern
-      if (targetPath === basePattern) return true;
-
-      // Check if targetPath starts with basePattern followed by a slash
-      if (targetPath.startsWith(`${basePattern}/`)) return true;
+      const base = pattern.slice(0, -2);
+      return targetPath === base || targetPath.startsWith(base + "/");
     }
 
-    // Handle single wildcard in the middle
     if (pattern.includes("*")) {
-      const regexPattern = pattern
-        .replace(/\*/g, "[^/]*") // Replace * with regex for any characters except /
-        .replace(/\//g, "\\/"); // Escape slashes
-      const regex = new RegExp(`^${regexPattern}$`);
+      const regex = new RegExp(
+        "^" + pattern.replace(/\*/g, "[^/]*").replace(/\//g, "\\/") + "$"
+      );
       return regex.test(targetPath);
     }
 
@@ -184,115 +197,95 @@ export function matchPath(
   });
 }
 
-// Type guard functions
-export function isPublicPath(path: string): path is PublicPath {
-  return matchPath(path, PUBLIC_PATHS);
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// TYPE GUARDS
+// ─────────────────────────────────────────────────────────────────────────────
+export const isPublicPath = (path: string): path is PublicPath =>
+  matchPath(path, PUBLIC_PATHS);
 
-export function isPrivatePath(path: string): path is PrivatePath {
-  return matchPath(path, PRIVATE_PATHS);
-}
+export const isAuthPath = (path: string): path is AuthPath =>
+  matchPath(path, AUTH_PATHS);
 
-export function isAuthPath(path: string): path is AuthPath {
-  return matchPath(path, AUTH_PATHS);
-}
+export const isPrivatePath = (path: string): path is PrivatePath =>
+  matchPath(path, PRIVATE_PATHS);
 
-export function isCacheablePath(path: string): path is CacheablePath {
-  return matchPath(path, CACHEABLE_PATHS);
-}
+export const isCacheablePath = (path: string): path is CacheablePath =>
+  matchPath(path, CACHEABLE_PATHS);
 
-export function isNonCacheablePath(path: string): path is NonCacheablePath {
-  return matchPath(path, NON_CACHEABLE_PATHS);
-}
+export const isNonCacheablePath = (path: string): path is NonCacheablePath =>
+  matchPath(path, NON_CACHEABLE_PATHS);
 
-// Cache duration utilities
-export function getCacheDuration(path: string): number {
-  // Return cache duration in milliseconds
-  if (matchPath(path, ["/api/grades/summary", "/api/grades/course"])) {
-    return 5 * 60 * 1000; // 5 minutes for grade summaries
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTH & ACCESS HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+export const requiresAuth = (path: string): boolean =>
+  isPrivatePath(path) && !isAuthPath(path);
+
+export const isAccessibleWithoutAuth = (path: string): boolean =>
+  isPublicPath(path) || isAuthPath(path);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CACHE DURATION (ms)
+// ─────────────────────────────────────────────────────────────────────────────
+export const getCacheDuration = (path: string): number => {
+  if (matchPath(path, ["/api/grades/summary", "/api/courses/details/*"])) {
+    return 5 * 60 * 1000; // 5 min
   }
-
-  if (matchPath(path, ["/api/grades/performance"])) {
-    return 2 * 60 * 1000; // 2 minutes for performance metrics
+  if (
+    matchPath(path, ["/api/grades/performance", "/api/assignments/course/*"])
+  ) {
+    return 2 * 60 * 1000; // 2 min
   }
-
-  if (matchPath(path, ["/api/grades/recent"])) {
-    return 1 * 60 * 1000; // 1 minute for recent grades
+  if (path === "/api/grades/recent") {
+    return 60 * 1000; // 1 min
   }
-
-  if (matchPath(path, ["/api/courses/list", "/api/courses/details/*"])) {
-    return 10 * 60 * 1000; // 10 minutes for course data
+  if (path.startsWith("/api/courses/") || path.startsWith("/api/school/")) {
+    return 10 * 60 * 1000; // 10 min
   }
-
-  if (matchPath(path, ["/api/assignments/course/*"])) {
-    return 2 * 60 * 1000; // 2 minutes for course assignments
-  }
-
-  // Default cache durations for other cacheable paths
   if (isCacheablePath(path)) {
-    if (path.startsWith("/api/")) {
-      return 5 * 60 * 1000; // 5 minutes for API routes
-    }
-    return 30 * 60 * 1000; // 30 minutes for static pages
+    return path.startsWith("/api/") ? 5 * 60 * 1000 : 30 * 60 * 1000;
   }
+  return 0;
+};
 
-  return 0; // No caching
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// CACHE KEY GENERATOR
+// ─────────────────────────────────────────────────────────────────────────────
+export const generateCacheKey = (path: string, userId?: string): string => {
+  if (userId && path.startsWith("/api/grades/")) {
+    return `cache:${path}:user:${userId}`;
+  }
+  if (path.includes("/api/courses/details/")) {
+    const courseId = path.split("/").pop();
+    return `cache:${path}:course:${courseId}`;
+  }
+  return `cache:${path}`;
+};
 
-// Additional utility functions
-export function getPathType(
+// ─────────────────────────────────────────────────────────────────────────────
+// CACHE INVALIDATION PATTERNS
+// ─────────────────────────────────────────────────────────────────────────────
+export const CACHE_INVALIDATION_PATTERNS = {
+  GRADES_UPDATED: ["/api/grades/*"],
+  ASSIGNMENTS_UPDATED: ["/api/assignments/*", "/api/grades/*"],
+  COURSES_UPDATED: ["/api/courses/*"],
+  USER_PROFILE_UPDATED: ["/api/user/profile/public/*"],
+  NEWS_EVENTS_UPDATED: ["/api/news/*", "/api/events/*"],
+} as const;
+
+export const shouldInvalidateCache = (
+  path: string,
+  operation: keyof typeof CACHE_INVALIDATION_PATTERNS
+): boolean => matchPath(path, CACHE_INVALIDATION_PATTERNS[operation]);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATH TYPE DETECTION
+// ─────────────────────────────────────────────────────────────────────────────
+export const getPathType = (
   path: string
-): "public" | "private" | "auth" | "unknown" {
+): "public" | "private" | "auth" | "unknown" => {
   if (isPublicPath(path)) return "public";
   if (isPrivatePath(path)) return "private";
   if (isAuthPath(path)) return "auth";
   return "unknown";
-}
-
-export function requiresAuth(path: string): boolean {
-  return isPrivatePath(path);
-}
-
-export function isAccessibleWithoutAuth(path: string): boolean {
-  return isPublicPath(path) || isAuthPath(path);
-}
-
-// Cache key generator for API routes
-export function generateCacheKey(path: string, userId?: string): string {
-  const baseKey = `cache:${path}`;
-
-  // For user-specific cacheable data, include user ID in the key
-  if (userId && path.startsWith("/api/grades/")) {
-    return `${baseKey}:user:${userId}`;
-  }
-
-  // For course-specific data, extract course ID if present
-  if (path.includes("/api/courses/details/")) {
-    const courseId = path.split("/").pop();
-    return `${baseKey}:course:${courseId}`;
-  }
-
-  return baseKey;
-}
-
-// Cache invalidation patterns
-export const CACHE_INVALIDATION_PATTERNS = {
-  GRADES_UPDATED: [
-    "/api/grades/summary*",
-    "/api/grades/performance*",
-    "/api/grades/recent*",
-    "/api/grades/course*",
-  ],
-  ASSIGNMENTS_UPDATED: ["/api/assignments/course/*", "/api/grades/*"],
-  COURSES_UPDATED: ["/api/courses/list", "/api/courses/details/*"],
-  USER_PROFILE_UPDATED: ["/api/user/profile/public/*"],
-} as const;
-
-// Check if path matches any invalidation pattern
-export function shouldInvalidateCache(
-  path: string,
-  operation: keyof typeof CACHE_INVALIDATION_PATTERNS
-): boolean {
-  const patterns = CACHE_INVALIDATION_PATTERNS[operation];
-  return matchPath(path, patterns);
-}
+};

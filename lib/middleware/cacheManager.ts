@@ -35,7 +35,8 @@ export class CacheManager {
     context: MiddlewareContext
   ): Promise<NextResponse> {
     try {
-      const pathname = request.nextUrl.pathname;
+      // Fixed: Add null check for pathname
+      const pathname = request.nextUrl?.pathname || "";
 
       // 1. Block sensitive paths
       if (CacheManager.isSensitivePath(pathname)) {
@@ -52,24 +53,29 @@ export class CacheManager {
         return NextResponse.next();
       }
 
-      const config = { ...this.DEFAULT_CONFIG, ...this.PATH_CONFIGS[pathname] };
+      // Fixed: Use CacheManager.DEFAULT_CONFIG instead of this.DEFAULT_CONFIG
+      const config = {
+        ...CacheManager.DEFAULT_CONFIG,
+        ...CacheManager.PATH_CONFIGS[pathname],
+      };
 
       if (!config.enabled || request.method !== "GET") {
         return NextResponse.next();
       }
 
-      const key = await this.generateKey(request, config);
-      const cached = this.cache.get(key);
+      // Fixed: Use CacheManager.generateKey instead of this.generateKey
+      const key = await CacheManager.generateKey(request, config);
+      const cached = CacheManager.cache.get(key);
 
       if (cached && Date.now() < cached.expiry) {
-        this.cacheStats.hits++;
+        CacheManager.cacheStats.hits++;
         return new NextResponse(cached.body, {
           status: cached.status,
           headers: cached.headers,
         });
       }
 
-      this.cacheStats.misses++;
+      CacheManager.cacheStats.misses++;
       const res = NextResponse.next();
       res.headers.set("x-cache", "MISS");
       return res;
@@ -81,7 +87,8 @@ export class CacheManager {
 
   // These must be static methods
   private static isSensitivePath(path: string): boolean {
-    return this.NEVER_CACHE.some((regex) => regex.test(path));
+    // Fixed: Use CacheManager.NEVER_CACHE instead of this.NEVER_CACHE
+    return CacheManager.NEVER_CACHE.some((regex) => regex.test(path));
   }
 
   private static async generateKey(
@@ -108,7 +115,8 @@ export class CacheManager {
     if (response.headers.has("set-cookie")) return;
 
     const cloned = response.clone();
-    this.cache.set(key, {
+    // Fixed: Use CacheManager.cache instead of this.cache
+    CacheManager.cache.set(key, {
       body: await cloned.text(),
       status: cloned.status,
       headers: Object.fromEntries(cloned.headers.entries()),
@@ -117,12 +125,13 @@ export class CacheManager {
   }
 
   static getStats() {
+    // Fixed: Use CacheManager.cacheStats instead of this.cacheStats
     return {
-      ...this.cacheStats,
-      size: this.cache.size,
+      ...CacheManager.cacheStats,
+      size: CacheManager.cache.size,
       hitRate:
-        this.cacheStats.hits /
-          (this.cacheStats.hits + this.cacheStats.misses) || 0,
+        CacheManager.cacheStats.hits /
+          (CacheManager.cacheStats.hits + CacheManager.cacheStats.misses) || 0,
     };
   }
 }

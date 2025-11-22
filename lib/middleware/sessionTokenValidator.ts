@@ -1,47 +1,46 @@
-// lib/middleware/sessionTokenValidator.ts
-
+// src/lib/middleware/sessionTokenValidator.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-import { JWTUtils, JWTClientUtils } from "@/lib/server/jwt";
+import { JWTUtils, type TokenPayload } from "@/lib/server/jwt";
 import { nanoid } from "nanoid";
+import { ClientIPDetector } from "@/lib/clientIp";
 import type { MiddlewareContext } from "./types";
 import { Role } from "@prisma/client";
+
+interface SessionUser {
+  id: string;
+  name: string | null;
+  email: string;
+  role: Role;
+  matricNumber?: string | null;
+  teacherId?: string | null;
+  department?: string | null;
+}
 
 interface SessionValidationResult {
   isValid: boolean;
   needsRefresh: boolean;
   shouldLogout: boolean;
-  user?: {
-    id: string;
-    name: string;
-    email: string;
-    role: Role;
-    matricNumber?: string;
-    department?: string;
-  };
+  user?: SessionUser;
   action: "continue" | "refresh" | "logout" | "redirect_login";
   errorCode?:
-    | "SESSION_EXPIRED"
-    | "USER_INACTIVE"
     | "TOKEN_INVALID"
+    | "TOKEN_EXPIRED"
+    | "INVALID_SIGNATURE"
+    | "USER_INACTIVE"
     | "DEVICE_MISMATCH"
+    | "SUSPICIOUS_ACTIVITY"
     | "RATE_LIMITED"
     | "SYSTEM_ERROR";
-  securityLevel?: "low" | "medium" | "high";
-}
-
-interface RateLimitResult {
-  isLimited: boolean;
-  retryAfter?: number;
-  remainingAttempts?: number;
+  securityLevel: "low" | "medium" | "high";
 }
 
 export class SessionTokenValidator {
-  private static readonly SESSION_EXPIRY_HOURS = 8;
-  private static readonly REFRESH_THRESHOLD_HOURS = 2;
-  private static readonly MAX_SESSION_AGE_DAYS = 7;
-  private static readonly REFRESH_RATE_LIMIT = 5; // Max 5 refreshes per minute per user
-  private static readonly MAX_CONCURRENT_SESSIONS = 3;
+  private static readonly CONFIG = {
+    MAX_CONCURRENT_SESSIONS: 5,
+    REFRESH_RATE_LIMIT_PER_MIN: 10,
+    DEVICE_SIMILARITY_THRESHOLD: 0.75,
+  };
 
   private static initialized = false;
 
@@ -49,96 +48,84 @@ export class SessionTokenValidator {
     request: NextRequest,
     context: MiddlewareContext
   ): Promise<NextResponse> {
-    // Initialize on first run
-    if (!this.initialized) {
-      this.initialize();
+    if (!SessionTokenValidator.initialized) {
+      console.log("[SESSION VALIDATOR] Shield Activated — JWT Aligned");
+      SessionTokenValidator.initialized = true;
     }
 
+    const ipInfo = ClientIPDetector.getClientIP(request);
     const startTime = Date.now();
-    let success = false;
 
     try {
-      const validationResult = await this.validateSession(request, context);
-      success = validationResult.isValid;
+      const result = await SessionTokenValidator.validateSession(
+        request,
+        context,
+        ipInfo
+      );
 
-      switch (validationResult.action) {
+      // Audit significant events
+      if (!result.isValid || result.action === "refresh") {
+        await SessionTokenValidator.auditEvent(
+          request,
+          result,
+          ipInfo,
+          Date.now() - startTime
+        );
+      }
+
+      switch (result.action) {
         case "logout":
-          return await this.performLogout(request, validationResult);
-
-        case "refresh":
-          const rateLimitResult = await this.checkRefreshRateLimit(
-            validationResult.user!.id,
-            request
+          return await SessionTokenValidator.secureLogout(
+            request,
+            result,
+            ipInfo
           );
-          if (rateLimitResult.isLimited) {
-            return this.handleRateLimitExceeded(request, rateLimitResult);
+        case "refresh":
+          if (
+            result.user &&
+            (await SessionTokenValidator.isRefreshRateLimited(result.user.id))
+          ) {
+            return SessionTokenValidator.rateLimitedResponse(request);
           }
-          return await this.performTokenRefresh(request, validationResult);
-
+          return await SessionTokenValidator.silentRefresh(
+            request,
+            result,
+            ipInfo
+          );
         case "redirect_login":
-          return this.redirectToLogin(request);
-
-        case "continue":
+          return SessionTokenValidator.redirectToLogin(request);
         default:
-          return this.continueWithSession(request, validationResult);
+          return SessionTokenValidator.attachUserContext(request, result);
       }
     } catch (error) {
-      console.error("[SESSION VALIDATOR] Error validating session:", error);
-      success = false;
-      return this.handleValidationError(request, error);
-    } finally {
-      const duration = Date.now() - startTime;
-      await this.recordMetric("session_validation", success, duration);
-    }
-  }
-
-  private static initialize(): void {
-    this.validateConfig();
-    this.initialized = true;
-    console.log("[SESSION VALIDATOR] ✅ Initialized with valid configuration");
-  }
-
-  private static validateConfig(): void {
-    const requiredEnvVars = ["DATABASE_URL", "JWT_SECRET", "NEXTAUTH_SECRET"];
-
-    const missing = requiredEnvVars.filter((envVar) => !process.env[envVar]);
-
-    if (missing.length > 0) {
-      throw new Error(
-        `Missing required environment variables: ${missing.join(", ")}`
+      console.error("[SESSION VALIDATOR] Critical failure:", error);
+      await SessionTokenValidator.auditError(request, error, ipInfo);
+      return SessionTokenValidator.secureLogout(
+        request,
+        {
+          isValid: false,
+          needsRefresh: false,
+          shouldLogout: true,
+          action: "logout",
+          errorCode: "SYSTEM_ERROR",
+          securityLevel: "high",
+        },
+        ipInfo
       );
-    }
-
-    if (this.SESSION_EXPIRY_HOURS < 1) {
-      throw new Error("SESSION_EXPIRY_HOURS must be at least 1");
-    }
-
-    if (this.REFRESH_THRESHOLD_HOURS >= this.SESSION_EXPIRY_HOURS) {
-      throw new Error(
-        "REFRESH_THRESHOLD_HOURS must be less than SESSION_EXPIRY_HOURS"
-      );
-    }
-
-    if (this.REFRESH_RATE_LIMIT < 1) {
-      throw new Error("REFRESH_RATE_LIMIT must be at least 1");
-    }
-
-    if (this.MAX_CONCURRENT_SESSIONS < 1) {
-      throw new Error("MAX_CONCURRENT_SESSIONS must be at least 1");
     }
   }
 
   private static async validateSession(
     request: NextRequest,
-    context: MiddlewareContext
+    context: MiddlewareContext,
+    ipInfo: any
   ): Promise<SessionValidationResult> {
     const sessionToken = request.cookies.get("session-token")?.value;
     const refreshToken = request.cookies.get("refresh-token")?.value;
-    const userId = request.cookies.get("userId")?.value;
-    const authToken = request.headers.get("authorization");
+    const authHeader = request.headers.get("authorization");
 
-    // No tokens present
-    if (!sessionToken && !refreshToken && !authToken) {
+    // No credentials → public route or login redirect
+    if (!sessionToken && !refreshToken && !authHeader) {
       return {
         isValid: false,
         needsRefresh: false,
@@ -148,41 +135,36 @@ export class SessionTokenValidator {
       };
     }
 
-    // Validate session token first
+    // 1. Primary: Session Token (DB-backed)
     if (sessionToken) {
-      const sessionResult = await this.validateSessionToken(
+      const result = await SessionTokenValidator.validateDbSession(
         sessionToken,
-        request
+        request,
+        ipInfo
       );
-      if (sessionResult.isValid) {
-        // Check if session needs refresh
-        if (sessionResult.needsRefresh) {
-          return { ...sessionResult, action: "refresh" };
-        }
-        return { ...sessionResult, action: "continue" };
-      }
+      if (result.isValid) return result;
     }
 
-    // Session token invalid, try refresh token
+    // 2. Refresh Token → triggers silent refresh
     if (refreshToken) {
-      const refreshResult = await this.validateRefreshToken(
-        refreshToken,
-        request
+      const result = await SessionTokenValidator.validateRefreshJwt(
+        refreshToken
       );
-      if (refreshResult.isValid) {
-        return { ...refreshResult, action: "refresh" };
+      if (result.isValid && result.user) {
+        return { ...result, action: "refresh" };
       }
     }
 
-    // Try JWT auth token (for API requests)
-    if (authToken) {
-      const jwtResult = await this.validateAuthToken(authToken, request);
-      if (jwtResult.isValid) {
-        return { ...jwtResult, action: "continue" };
+    // 3. Bearer Token (API auth)
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.slice(7);
+      const result = await SessionTokenValidator.validateAuthJwt(token);
+      if (result.isValid && result.user) {
+        return { ...result, action: "continue" };
       }
     }
 
-    // All tokens invalid - logout required
+    // All failed
     return {
       isValid: false,
       needsRefresh: false,
@@ -193,183 +175,82 @@ export class SessionTokenValidator {
     };
   }
 
-  private static async validateSessionToken(
-    sessionToken: string,
-    request: NextRequest
+  // ─────────────────────────────────────────────────────────────────────
+  // 1. DB Session Validation (Primary)
+  // ─────────────────────────────────────────────────────────────────────
+  private static async validateDbSession(
+    token: string,
+    request: NextRequest,
+    ipInfo: any
   ): Promise<SessionValidationResult> {
-    try {
-      // Find session in database
-      const session = await prisma.session.findUnique({
-        where: { sessionToken },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              role: true,
-              isActive: true,
-              // Student specific fields
-              student: {
-                select: {
-                  matricNumber: true,
-                  department: true,
-                },
-              },
-              // Teacher specific fields
-              teacher: {
-                select: {
-                  teacherId: true,
-                  department: true,
-                },
-              },
-            },
+    const session = await prisma.session.findUnique({
+      where: { sessionToken: token },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            isActive: true,
+            student: { select: { matricNumber: true, department: true } },
+            teacher: { select: { teacherId: true, department: true } },
           },
         },
-      });
+      },
+    });
 
-      if (!session) {
-        return {
-          isValid: false,
-          needsRefresh: false,
-          shouldLogout: true,
-          action: "logout",
-          errorCode: "TOKEN_INVALID",
-          securityLevel: "medium",
-        };
-      }
-
-      // Check if session expired
-      if (session.expires < new Date()) {
-        // Clean up expired session
-        await prisma.session.delete({ where: { id: session.id } });
-        return {
-          isValid: false,
-          needsRefresh: false,
-          shouldLogout: true,
-          action: "logout",
-          errorCode: "SESSION_EXPIRED",
-          securityLevel: "low",
-        };
-      }
-
-      // Check if user is still active
-      if (!session.user.isActive) {
-        await prisma.session.delete({ where: { id: session.id } });
-        return {
-          isValid: false,
-          needsRefresh: false,
-          shouldLogout: true,
-          action: "logout",
-          errorCode: "USER_INACTIVE",
-          securityLevel: "high",
-        };
-      }
-
-      // Check if session is too old
-      const sessionAge = Date.now() - session.createdAt.getTime();
-      const maxAge = this.MAX_SESSION_AGE_DAYS * 24 * 60 * 60 * 1000;
-      if (sessionAge > maxAge) {
-        await prisma.session.delete({ where: { id: session.id } });
-        return {
-          isValid: false,
-          needsRefresh: false,
-          shouldLogout: true,
-          action: "logout",
-          errorCode: "SESSION_EXPIRED",
-          securityLevel: "medium",
-        };
-      }
-
-      // Validate device fingerprint
-      const deviceCheck = await this.validateDeviceFingerprint(
-        session,
-        request
-      );
-      if (!deviceCheck.isValid) {
-        await this.handleSuspiciousActivity(
-          session.userId,
-          request,
-          "device_mismatch"
-        );
-        return {
-          isValid: false,
-          needsRefresh: false,
-          shouldLogout: true,
-          action: "logout",
-          errorCode: "DEVICE_MISMATCH",
-          securityLevel: "high",
-        };
-      }
-
-      // Check if session needs refresh (less than 2 hours left)
-      const timeLeft = session.expires.getTime() - Date.now();
-      const refreshThreshold = this.REFRESH_THRESHOLD_HOURS * 60 * 60 * 1000;
-      const needsRefresh = timeLeft < refreshThreshold;
-
-      // Extract user information based on role
-      let matricNumber = undefined;
-      let department = undefined;
-
-      if (session.user.role === Role.STUDENT && session.user.student) {
-        matricNumber = session.user.student.matricNumber;
-        department = session.user.student.department;
-      } else if (session.user.role === Role.TEACHER && session.user.teacher) {
-        matricNumber = session.user.teacher.teacherId;
-        department = session.user.teacher.department;
-      }
-
-      return {
-        isValid: true,
-        needsRefresh,
-        shouldLogout: false,
-        user: {
-          id: session.user.id,
-          name: session.user.name || "",
-          email: session.user.email,
-          role: session.user.role,
-          matricNumber,
-          department: department ?? undefined,
-        },
-        action: needsRefresh ? "refresh" : "continue",
-        securityLevel: deviceCheck.securityLevel,
-      };
-    } catch (error) {
-      console.error(
-        "[SESSION VALIDATOR] Error validating session token:",
-        error
-      );
-      return {
-        isValid: false,
-        needsRefresh: false,
-        shouldLogout: true,
-        action: "logout",
-        errorCode: "SYSTEM_ERROR",
-        securityLevel: "high",
-      };
+    if (!session?.user || !session.user.isActive) {
+      if (session)
+        await SessionTokenValidator.cleanupSession(session.id, "INVALID_USER");
+      return SessionTokenValidator.invalid("USER_INACTIVE");
     }
+
+    if (session.expires < new Date()) {
+      await SessionTokenValidator.cleanupSession(session.id, "SESSION_EXPIRED");
+      return SessionTokenValidator.invalid("TOKEN_EXPIRED");
+    }
+
+    // Device fingerprint check
+    const fpCheck = SessionTokenValidator.checkFingerprint(
+      session.deviceFingerprint,
+      request
+    );
+    if (!fpCheck.valid) {
+      await SessionTokenValidator.flagSuspicious(
+        session.userId,
+        "DEVICE_MISMATCH",
+        request,
+        ipInfo
+      );
+      return SessionTokenValidator.invalid("DEVICE_MISMATCH");
+    }
+
+    const needsRefresh = session.expires.getTime() - Date.now() < 2 * 3600000; // < 2h
+
+    return {
+      isValid: true,
+      needsRefresh,
+      shouldLogout: false,
+      user: SessionTokenValidator.mapUser(session.user),
+      action: needsRefresh ? "refresh" : "continue",
+      securityLevel: fpCheck.level,
+    };
   }
 
-  private static async validateRefreshToken(
-    refreshToken: string,
-    request: NextRequest
+  // ─────────────────────────────────────────────────────────────────────
+  // 2. Refresh Token Validation (JWTUtils aligned)
+  // ─────────────────────────────────────────────────────────────────────
+  private static async validateRefreshJwt(
+    token: string
   ): Promise<SessionValidationResult> {
     try {
-      // Verify refresh token JWT
-      const payload = await JWTUtils.verifyToken(refreshToken);
+      const payload = await JWTUtils.verifyToken(token);
 
       if (payload.type !== "refresh" || !payload.userId) {
-        return {
-          isValid: false,
-          needsRefresh: false,
-          shouldLogout: true,
-          action: "logout",
-          errorCode: "TOKEN_INVALID",
-          securityLevel: "high",
-        };
+        return SessionTokenValidator.invalid("TOKEN_INVALID");
       }
 
-      // Find user
       const user = await prisma.user.findUnique({
         where: { id: payload.userId as string },
         select: {
@@ -378,97 +259,35 @@ export class SessionTokenValidator {
           email: true,
           role: true,
           isActive: true,
-          // Student specific fields
-          student: {
-            select: {
-              matricNumber: true,
-              department: true,
-            },
-          },
-          // Teacher specific fields
-          teacher: {
-            select: {
-              teacherId: true,
-              department: true,
-            },
-          },
         },
       });
 
-      if (!user || !user.isActive) {
-        return {
-          isValid: false,
-          needsRefresh: false,
-          shouldLogout: true,
-          action: "logout",
-          errorCode: "USER_INACTIVE",
-          securityLevel: "high",
-        };
-      }
-
-      // Extract user information based on role
-      let matricNumber = undefined;
-      let department = undefined;
-
-      if (user.role === Role.STUDENT && user.student) {
-        matricNumber = user.student.matricNumber;
-        department = user.student.department;
-      } else if (user.role === Role.TEACHER && user.teacher) {
-        matricNumber = user.teacher.teacherId;
-        department = user.teacher.department;
-      }
+      if (!user || !user.isActive)
+        return SessionTokenValidator.invalid("USER_INACTIVE");
 
       return {
         isValid: true,
         needsRefresh: true,
         shouldLogout: false,
-        user: {
-          id: user.id,
-          name: user.name || "",
-          email: user.email,
-          role: user.role,
-          matricNumber,
-          department: department ?? undefined,
-        },
+        user: { ...user, matricNumber: null, department: null },
         action: "refresh",
         securityLevel: "medium",
       };
-    } catch (error) {
-      console.error(
-        "[SESSION VALIDATOR] Error validating refresh token:",
-        error
-      );
-      return {
-        isValid: false,
-        needsRefresh: false,
-        shouldLogout: true,
-        action: "logout",
-        errorCode: "TOKEN_INVALID",
-        securityLevel: "high",
-      };
+    } catch (error: any) {
+      const code = error.code || "TOKEN_INVALID";
+      return SessionTokenValidator.invalid(code as any);
     }
   }
 
-  private static async validateAuthToken(
-    authHeader: string,
-    request: NextRequest
+  // ─────────────────────────────────────────────────────────────────────
+  // 3. Auth Bearer Token Validation (JWTUtils aligned)
+  // ─────────────────────────────────────────────────────────────────────
+  private static async validateAuthJwt(
+    token: string
   ): Promise<SessionValidationResult> {
     try {
-      const token = JWTClientUtils.extractTokenFromHeader(authHeader);
-      if (!token) {
-        return {
-          isValid: false,
-          needsRefresh: false,
-          shouldLogout: false,
-          action: "continue",
-          securityLevel: "low",
-        };
-      }
-
-      // Verify auth token
       const payload = await JWTUtils.verifyAuthToken(token);
 
-      // Find user to ensure they're still active
       const user = await prisma.user.findUnique({
         where: { id: payload.userId },
         select: {
@@ -477,63 +296,23 @@ export class SessionTokenValidator {
           email: true,
           role: true,
           isActive: true,
-          // Student specific fields
-          student: {
-            select: {
-              matricNumber: true,
-              department: true,
-            },
-          },
-          // Teacher specific fields
-          teacher: {
-            select: {
-              teacherId: true,
-              department: true,
-            },
-          },
+          student: { select: { matricNumber: true, department: true } },
+          teacher: { select: { teacherId: true, department: true } },
         },
       });
 
-      if (!user || !user.isActive) {
-        return {
-          isValid: false,
-          needsRefresh: false,
-          shouldLogout: true,
-          action: "logout",
-          errorCode: "USER_INACTIVE",
-          securityLevel: "high",
-        };
-      }
-
-      // Extract user information based on role
-      let matricNumber = undefined;
-      let department = undefined;
-
-      if (user.role === Role.STUDENT && user.student) {
-        matricNumber = user.student.matricNumber;
-        department = user.student.department;
-      } else if (user.role === Role.TEACHER && user.teacher) {
-        matricNumber = user.teacher.teacherId;
-        department = user.teacher.department;
-      }
+      if (!user || !user.isActive)
+        return SessionTokenValidator.invalid("USER_INACTIVE");
 
       return {
         isValid: true,
         needsRefresh: false,
         shouldLogout: false,
-        user: {
-          id: user.id,
-          name: user.name || "",
-          email: user.email,
-          role: user.role,
-          matricNumber,
-          department: department ?? undefined,
-        },
+        user: SessionTokenValidator.mapUser(user),
         action: "continue",
-        securityLevel: "medium",
+        securityLevel: "high",
       };
-    } catch (error) {
-      // JWT verification failed - not necessarily an error for API tokens
+    } catch (error: any) {
       return {
         isValid: false,
         needsRefresh: false,
@@ -544,622 +323,312 @@ export class SessionTokenValidator {
     }
   }
 
-  private static async performTokenRefresh(
+  // ─────────────────────────────────────────────────────────────────────
+  // Silent Refresh — 100% aligned with JWTUtils
+  // ─────────────────────────────────────────────────────────────────────
+  private static async silentRefresh(
     request: NextRequest,
-    validationResult: SessionValidationResult
+    result: SessionValidationResult,
+    ipInfo: any
   ): Promise<NextResponse> {
-    try {
-      if (!validationResult.user) {
-        return await this.performLogout(request, validationResult);
-      }
+    const user = result.user!;
+    const oldToken = request.cookies.get("session-token")?.value;
 
-      const user = validationResult.user;
+    // Enforce max concurrent sessions
+    await SessionTokenValidator.enforceConcurrentLimit(user.id);
 
-      // Check concurrent sessions
-      const sessionCount = await prisma.session.count({
-        where: { userId: user.id, expires: { gt: new Date() } },
-      });
-
-      if (sessionCount >= this.MAX_CONCURRENT_SESSIONS) {
-        // Remove oldest session to make room
-        const oldestSession = await prisma.session.findFirst({
-          where: { userId: user.id },
-          orderBy: { createdAt: "asc" },
-        });
-
-        if (oldestSession) {
-          await prisma.session.delete({ where: { id: oldestSession.id } });
-        }
-      }
-
-      // Generate new tokens
-      const newSessionToken = nanoid();
-      const newRefreshToken = await JWTUtils.generateRefreshToken(user.id);
-      const newAuthToken = await JWTUtils.generateAuthToken({
+    // Generate new tokens using your JWTUtils
+    const [newSessionToken, newRefreshToken, newAuthToken] = await Promise.all([
+      nanoid(32),
+      JWTUtils.generateRefreshToken(user.id),
+      JWTUtils.generateAuthToken({
         userId: user.id,
         email: user.email,
         schoolId: user.id,
         role: user.role,
         schoolNumber: user.matricNumber || "",
-      });
+      }),
+    ]);
 
-      // Update session in database
-      const expires = new Date();
-      expires.setHours(expires.getHours() + this.SESSION_EXPIRY_HOURS);
+    const expires = new Date(Date.now() + 8 * 3600000); // 8h
 
-      // Delete old session and create new one
-      const oldSessionToken = request.cookies.get("session-token")?.value;
-      if (oldSessionToken) {
-        await prisma.session.deleteMany({
-          where: { sessionToken: oldSessionToken },
-        });
-      }
-
-      // Generate device fingerprint
-      const deviceFingerprint = this.generateDeviceFingerprint(request);
-
-      await prisma.session.create({
-        data: {
-          sessionToken: newSessionToken,
-          userId: user.id,
-          expires,
-          deviceFingerprint,
-          userAgent: request.headers.get("user-agent") || "unknown",
-          ipAddress:
-            request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
-            "unknown",
-        },
-      });
-
-      // Update last login
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { lastLoginAt: new Date() },
-      });
-
-      // Log refresh action
-      await prisma.auditLog.create({
-        data: {
-          userId: user.id,
-          action: "SESSION_REFRESHED",
-          details: {
-            automatic: true,
-            userAgent: request.headers.get("user-agent"),
-            deviceFingerprint,
-            securityLevel: validationResult.securityLevel,
-          },
-          ipAddress:
-            request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
-            "unknown",
-          userAgent: request.headers.get("user-agent") || "unknown",
-        },
-      });
-
-      // Create response with new cookies
-      const response = NextResponse.next();
-
-      // Set new cookies
-      response.cookies.set("session-token", newSessionToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        expires,
-      });
-
-      response.cookies.set("refresh-token", newRefreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-      });
-
-      response.cookies.set("userId", user.id, {
-        httpOnly: false, // This one can be accessible by client
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        expires,
-      });
-
-      // Add user info to response headers for other middleware
-      response.headers.set("x-user-id", user.id);
-      response.headers.set("x-user-role", user.role);
-      response.headers.set("x-user-matric", user.matricNumber || "");
-      response.headers.set("x-session-refreshed", "true");
-      response.headers.set(
-        "x-security-level",
-        validationResult.securityLevel || "low"
-      );
-
-      console.log(
-        `[SESSION VALIDATOR] ✅ Session refreshed for user: ${user.id}`
-      );
-      return response;
-    } catch (error) {
-      console.error("[SESSION VALIDATOR] Error refreshing tokens:", error);
-      return await this.performLogout(request, validationResult);
-    }
-  }
-
-  private static async performLogout(
-    request: NextRequest,
-    validationResult: SessionValidationResult
-  ): Promise<NextResponse> {
-    console.log("[SESSION VALIDATOR] 🚪 Performing automatic logout");
-
-    // Clean up database session
-    const sessionToken = request.cookies.get("session-token")?.value;
-    if (sessionToken) {
-      await this.cleanupSession(sessionToken).catch((error) =>
-        console.error("[SESSION VALIDATOR] Error cleaning up session:", error)
-      );
-    }
-
-    const loginUrl = new URL("/signin", request.url);
-    loginUrl.searchParams.set("reason", "session_expired");
-
-    if (validationResult.errorCode) {
-      loginUrl.searchParams.set("error", validationResult.errorCode);
-    }
-
-    const response = NextResponse.redirect(loginUrl);
-
-    // Clear all session cookies
-    const cookiesToClear = ["session-token", "refresh-token", "userId"];
-
-    cookiesToClear.forEach((cookieName) => {
-      response.cookies.set(cookieName, "", {
-        expires: new Date(0),
-        path: "/",
-      });
-    });
-
-    response.headers.set("x-session-invalidated", "true");
-    response.headers.set("x-logout-reason", "automatic");
-
-    if (validationResult.errorCode) {
-      response.headers.set("x-error-code", validationResult.errorCode);
-    }
-
-    return response;
-  }
-
-  private static redirectToLogin(request: NextRequest): NextResponse {
-    console.log("[SESSION VALIDATOR] 🔄 Redirecting to login");
-
-    const loginUrl = new URL("/signin", request.url);
-    if (request.nextUrl.pathname !== "/signin") {
-      loginUrl.searchParams.set("redirect", request.nextUrl.pathname);
-    }
-
-    return NextResponse.redirect(loginUrl);
-  }
-
-  private static continueWithSession(
-    request: NextRequest,
-    validationResult: SessionValidationResult
-  ): NextResponse {
-    const response = NextResponse.next();
-
-    if (validationResult.user) {
-      // Add user info to headers for other middleware
-      response.headers.set("x-user-id", validationResult.user.id);
-      response.headers.set("x-user-role", validationResult.user.role);
-      response.headers.set(
-        "x-user-matric",
-        validationResult.user.matricNumber || ""
-      );
-      response.headers.set(
-        "x-user-department",
-        validationResult.user.department || ""
-      );
-      response.headers.set("x-session-valid", "true");
-      response.headers.set(
-        "x-security-level",
-        validationResult.securityLevel || "low"
-      );
-    }
-
-    return response;
-  }
-
-  private static handleValidationError(
-    request: NextRequest,
-    error?: any
-  ): NextResponse {
-    console.log(
-      "[SESSION VALIDATOR] ⚠️ Validation error, redirecting to login"
-    );
-
-    const response = NextResponse.redirect(new URL("/signin", request.url));
-
-    // Clear potentially corrupted cookies
-    const cookiesToClear = ["session-token", "refresh-token", "userId"];
-    cookiesToClear.forEach((cookieName) => {
-      response.cookies.set(cookieName, "", {
-        expires: new Date(0),
-        path: "/",
-      });
-    });
-
-    // Log the error for debugging
-    if (error) {
-      console.error("[SESSION VALIDATOR] Detailed error:", error);
-    }
-
-    return response;
-  }
-
-  private static async cleanupSession(sessionToken: string): Promise<void> {
-    try {
-      const session = await prisma.session.findUnique({
-        where: { sessionToken },
-        include: { user: true },
-      });
-
-      if (session) {
-        await prisma.auditLog.create({
-          data: {
-            userId: session.userId,
-            action: "SESSION_CLEANED_UP",
-            details: { automatic: true },
-            ipAddress: "middleware",
-            userAgent: "SessionTokenValidator",
-          },
-        });
-
-        await prisma.session.delete({
-          where: { sessionToken },
-        });
-      }
-
-      // Clean up expired sessions while we're here
-      await prisma.session.deleteMany({
-        where: {
-          expires: { lt: new Date() },
-        },
-      });
-    } catch (error) {
-      console.error("[SESSION VALIDATOR] Error in cleanup:", error);
-    }
-  }
-
-  // Device fingerprinting
-  private static generateDeviceFingerprint(request: NextRequest): string {
-    const components = [
-      request.headers.get("user-agent") || "unknown",
-      request.headers.get("accept-language") || "unknown",
-      request.headers.get("accept-encoding") || "unknown",
-      request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown",
-    ];
-
-    // Simple hash of the components
-    const fingerprint = components.join("|");
-    return Buffer.from(fingerprint).toString("base64").substring(0, 32);
-  }
-
-  private static async validateDeviceFingerprint(
-    session: any,
-    request: NextRequest
-  ): Promise<{ isValid: boolean; securityLevel: "low" | "medium" | "high" }> {
-    const currentFingerprint = this.generateDeviceFingerprint(request);
-
-    // If no existing fingerprint, set it and continue
-    if (!session.deviceFingerprint) {
-      await prisma.session.update({
-        where: { id: session.id },
-        data: { deviceFingerprint: currentFingerprint },
-      });
-      return { isValid: true, securityLevel: "medium" };
-    }
-
-    // Compare fingerprints
-    if (session.deviceFingerprint === currentFingerprint) {
-      return { isValid: true, securityLevel: "high" };
-    }
-
-    // Fingerprint mismatch - check if it's a minor change
-    const similarity = this.calculateFingerprintSimilarity(
-      session.deviceFingerprint,
-      currentFingerprint
-    );
-
-    if (similarity > 0.7) {
-      // Minor change - update fingerprint and continue with medium security
-      await prisma.session.update({
-        where: { id: session.id },
-        data: { deviceFingerprint: currentFingerprint },
-      });
-      return { isValid: true, securityLevel: "medium" };
-    }
-
-    // Major change - invalid session
-    return { isValid: false, securityLevel: "high" };
-  }
-
-  private static calculateFingerprintSimilarity(
-    fp1: string,
-    fp2: string
-  ): number {
-    // Simple similarity calculation based on common components
-    const components1 = Buffer.from(fp1, "base64").toString().split("|");
-    const components2 = Buffer.from(fp2, "base64").toString().split("|");
-
-    let matches = 0;
-    for (let i = 0; i < Math.min(components1.length, components2.length); i++) {
-      if (components1[i] === components2[i]) matches++;
-    }
-
-    return matches / Math.max(components1.length, components2.length);
-  }
-
-  // Rate limiting
-  private static async checkRefreshRateLimit(
-    userId: string,
-    request: NextRequest
-  ): Promise<RateLimitResult> {
-    const now = Date.now();
-    const windowStart = now - 60000; // 1 minute window
-
-    // Count refresh attempts in the last minute
-    const recentRefreshes = await prisma.auditLog.count({
-      where: {
-        userId,
-        action: "SESSION_REFRESHED",
-        createdAt: {
-          gte: new Date(windowStart),
-        },
-      },
-    });
-
-    if (recentRefreshes >= this.REFRESH_RATE_LIMIT) {
-      return {
-        isLimited: true,
-        retryAfter: Math.ceil((now - windowStart) / 1000),
-        remainingAttempts: 0,
-      };
-    }
-
-    return {
-      isLimited: false,
-      remainingAttempts: this.REFRESH_RATE_LIMIT - recentRefreshes,
-    };
-  }
-
-  private static handleRateLimitExceeded(
-    request: NextRequest,
-    rateLimitResult: RateLimitResult
-  ): NextResponse {
-    console.log("[SESSION VALIDATOR] 🚫 Rate limit exceeded");
-
-    const response = NextResponse.redirect(new URL("/signin", request.url));
-    response.cookies.set("session-token", "", {
-      expires: new Date(0),
-      path: "/",
-    });
-    response.cookies.set("refresh-token", "", {
-      expires: new Date(0),
-      path: "/",
-    });
-
-    response.headers.set("x-rate-limit-exceeded", "true");
-    response.headers.set(
-      "x-retry-after",
-      rateLimitResult.retryAfter?.toString() || "60"
-    );
-
-    return response;
-  }
-
-  // Security monitoring
-  private static async handleSuspiciousActivity(
-    userId: string,
-    request: NextRequest,
-    reason: string
-  ): Promise<void> {
-    console.log(
-      `[SESSION VALIDATOR] 🚨 Suspicious activity detected: ${reason}`
-    );
-
-    await prisma.auditLog.create({
+    await prisma.session.create({
       data: {
-        userId,
-        action: "SUSPICIOUS_ACTIVITY_DETECTED",
-        details: {
-          reason,
-          ipAddress: request.headers.get("x-forwarded-for") || "unknown",
-          userAgent: request.headers.get("user-agent") || "unknown",
-          timestamp: new Date().toISOString(),
-        },
-        ipAddress:
-          request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
-          "unknown",
+        sessionToken: newSessionToken,
+        userId: user.id,
+        expires,
+        deviceFingerprint: SessionTokenValidator.generateFingerprint(request),
+        ipAddress: ipInfo.ip,
         userAgent: request.headers.get("user-agent") || "unknown",
       },
     });
 
-    // In high-security scenarios, you might want to:
-    // - Send email notification to user
-    // - Temporarily lock the account
-    // - Require additional verification
+    if (oldToken) {
+      await prisma.session.deleteMany({ where: { sessionToken: oldToken } });
+    }
+
+    const response = NextResponse.next();
+    response.cookies.set("session-token", newSessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      expires,
+    });
+    response.cookies.set("refresh-token", newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      expires: new Date(Date.now() + 7 * 24 * 3600000),
+    });
+    response.cookies.set("userId", user.id, { path: "/", expires });
+
+    SessionTokenValidator.attachHeaders(response, user, true);
+    return response;
   }
 
-  // Public methods
-  static async validateSessionManually(
-    sessionToken: string
-  ): Promise<SessionValidationResult> {
-    const mockRequest = new NextRequest("http://localhost");
-    return this.validateSessionToken(sessionToken, mockRequest);
-  }
-
-  static async invalidateAllUserSessions(userId: string): Promise<void> {
-    try {
-      await prisma.session.deleteMany({
-        where: { userId },
+  // ─────────────────────────────────────────────────────────────────────
+  // Secure Logout (aligned with signout route)
+  // ─────────────────────────────────────────────────────────────────────
+  private static async secureLogout(
+    request: NextRequest,
+    result: SessionValidationResult,
+    ipInfo: any
+  ): Promise<NextResponse> {
+    const token = request.cookies.get("session-token")?.value;
+    if (token) {
+      const session = await prisma.session.findUnique({
+        where: { sessionToken: token },
       });
+      if (session) {
+        await prisma.auditLog.create({
+          data: {
+            userId: session.userId,
+            action: "SESSION_TERMINATED",
+            details: { reason: result.errorCode, source: "validator" },
+            ipAddress: ipInfo.ip,
+            userAgent: request.headers.get("user-agent") || "unknown",
+          },
+        });
+        await prisma.session.delete({ where: { id: session.id } });
+      }
+    }
+
+    const url = new URL("/signin", request.url);
+    url.searchParams.set(
+      "reason",
+      result.errorCode?.toLowerCase() || "expired"
+    );
+
+    const response = NextResponse.redirect(url);
+    ["session-token", "refresh-token", "userId"].forEach((name) =>
+      response.cookies.delete(name)
+    );
+    response.headers.set("clear-site-data", '"cookies","storage"');
+    response.headers.set("x-logout-reason", result.errorCode || "unknown");
+
+    return response;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Helpers
+  // ─────────────────────────────────────────────────────────────────────
+  private static attachUserContext(
+    request: NextRequest,
+    result: SessionValidationResult
+  ): NextResponse {
+    const response = NextResponse.next();
+    if (result.user)
+      SessionTokenValidator.attachHeaders(response, result.user, false);
+    return response;
+  }
+
+  private static attachHeaders(
+    response: NextResponse,
+    user: SessionUser,
+    refreshed: boolean
+  ) {
+    response.headers.set("x-user-id", user.id);
+    response.headers.set("x-user-role", user.role);
+    response.headers.set("x-user-email", user.email);
+    if (user.matricNumber)
+      response.headers.set("x-user-matric", user.matricNumber);
+    if (user.department)
+      response.headers.set("x-user-department", user.department);
+    response.headers.set("x-authenticated", "true");
+    if (refreshed) response.headers.set("x-session-refreshed", "true");
+  }
+
+  private static generateFingerprint(request: NextRequest): string {
+    const parts = [
+      request.headers.get("user-agent") || "",
+      request.headers.get("accept-language") || "",
+      ClientIPDetector.getClientIP(request).ip,
+    ];
+    return require("crypto")
+      .createHash("sha256")
+      .update(parts.join("|"))
+      .digest("hex")
+      .slice(0, 32);
+  }
+
+  private static checkFingerprint(stored: string | null, request: NextRequest) {
+    if (!stored) return { valid: true, level: "medium" as const };
+    const current = SessionTokenValidator.generateFingerprint(request);
+    const similarity =
+      [...stored].filter((c, i) => c === current[i]).length / stored.length;
+    return {
+      valid:
+        similarity >= SessionTokenValidator.CONFIG.DEVICE_SIMILARITY_THRESHOLD,
+      level: similarity >= 0.9 ? ("high" as const) : ("medium" as const),
+    };
+  }
+
+  private static invalid(
+    code: SessionValidationResult["errorCode"] = "TOKEN_INVALID"
+  ): SessionValidationResult {
+    return {
+      isValid: false,
+      needsRefresh: false,
+      shouldLogout: true,
+      action: "logout",
+      errorCode: code,
+      securityLevel: "high",
+    };
+  }
+
+  private static mapUser(user: any): SessionUser {
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      matricNumber:
+        user.student?.matricNumber || user.teacher?.teacherId || null,
+      department: user.student?.department || user.teacher?.department || null,
+    };
+  }
+
+  private static async enforceConcurrentLimit(userId: string) {
+    const count = await prisma.session.count({
+      where: { userId, expires: { gt: new Date() } },
+    });
+    if (count >= SessionTokenValidator.CONFIG.MAX_CONCURRENT_SESSIONS) {
+      const sessionsToDelete = await prisma.session.findMany({
+        where: { userId, expires: { gt: new Date() } },
+        orderBy: { createdAt: "asc" },
+        take: count - SessionTokenValidator.CONFIG.MAX_CONCURRENT_SESSIONS + 1,
+        select: { id: true },
+      });
+      const ids = sessionsToDelete.map((s) => s.id);
+      if (ids.length > 0) {
+        await prisma.session.deleteMany({
+          where: { id: { in: ids } },
+        });
+      }
+    }
+  }
+
+  private static async isRefreshRateLimited(userId: string): Promise<boolean> {
+    const minuteAgo = new Date(Date.now() - 60000);
+    const count = await prisma.auditLog.count({
+      where: {
+        userId,
+        action: "SESSION_REFRESHED",
+        createdAt: { gte: minuteAgo },
+      },
+    });
+    return count >= SessionTokenValidator.CONFIG.REFRESH_RATE_LIMIT_PER_MIN;
+  }
+
+  private static rateLimitedResponse(request: NextRequest): NextResponse {
+    return NextResponse.json(
+      { error: "Too many refresh attempts" },
+      { status: 429 }
+    );
+  }
+
+  private static redirectToLogin(request: NextRequest): NextResponse {
+    const url = new URL("/signin", request.url);
+    if (!request.nextUrl.pathname.startsWith("/signin")) {
+      url.searchParams.set(
+        "redirect",
+        request.nextUrl.pathname + request.nextUrl.search
+      );
+    }
+    return NextResponse.redirect(url);
+  }
+
+  // Auditing
+  private static async auditEvent(
+    request: NextRequest,
+    result: SessionValidationResult,
+    ipInfo: any,
+    duration: number
+  ) {
+    if (!result.isValid || result.action === "refresh") {
+      // Fixed: Use valid enum values for the action field
+      const action =
+        result.action === "refresh"
+          ? "SESSION_REFRESHED"
+          : result.isValid
+          ? "SESSION_INVALIDATED"
+          : "SESSION_TERMINATED";
 
       await prisma.auditLog.create({
         data: {
-          userId,
-          action: "ALL_SESSIONS_INVALIDATED",
-          details: { reason: "manual_invalidation" },
-          ipAddress: "system",
-          userAgent: "SessionTokenValidator",
+          userId: result.user?.id || null,
+          action, // Use the corrected action value
+          details: {
+            path: request.nextUrl.pathname,
+            error: result.errorCode,
+            duration_ms: duration,
+          },
+          ipAddress: ipInfo.ip,
+          userAgent: request.headers.get("user-agent") || "unknown",
         },
       });
-
-      console.log(
-        `[SESSION VALIDATOR] ✅ All sessions invalidated for user: ${userId}`
-      );
-    } catch (error) {
-      console.error(
-        "[SESSION VALIDATOR] Error invalidating user sessions:",
-        error
-      );
-      throw error;
     }
   }
 
-  static async getSessionStats(): Promise<{
-    totalActiveSessions: number;
-    expiredSessions: number;
-    oldSessions: number;
-    concurrentSessions: { [userId: string]: number };
-  }> {
-    const now = new Date();
-    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-    const [totalActive, expired, old, concurrentData] = await Promise.all([
-      prisma.session.count({
-        where: {
-          expires: { gt: now },
+  private static async auditError(
+    request: NextRequest,
+    error: any,
+    ipInfo: any
+  ) {
+    await prisma.auditLog.create({
+      data: {
+        userId: null,
+        action: "VALIDATOR_ERROR",
+        details: {
+          error: error.message || "unknown",
+          path: request.nextUrl.pathname,
         },
-      }),
-      prisma.session.count({
-        where: {
-          expires: { lte: now },
-        },
-      }),
-      prisma.session.count({
-        where: {
-          createdAt: { lte: sevenDaysAgo },
-        },
-      }),
-      prisma.session.groupBy({
-        by: ["userId"],
-        where: {
-          expires: { gt: now },
-        },
-        _count: {
-          id: true,
-        },
-        having: {
-          id: {
-            _count: {
-              gt: 1,
-            },
-          },
-        },
-      }),
-    ]);
-
-    // Add type annotation to concurrentData
-    const concurrentDataTyped = concurrentData as Array<{
-      userId: string;
-      _count: { id: number };
-    }>;
-    const concurrentSessions: { [userId: string]: number } = {};
-    concurrentDataTyped.forEach((item) => {
-      concurrentSessions[item.userId] = item._count.id;
+        ipAddress: ipInfo.ip,
+        userAgent: request.headers.get("user-agent") || "unknown",
+      },
     });
-
-    return {
-      totalActiveSessions: totalActive,
-      expiredSessions: expired,
-      oldSessions: old,
-      concurrentSessions,
-    };
   }
 
-  static async healthCheck(): Promise<{
-    status: "healthy" | "degraded" | "unhealthy";
-    issues: string[];
-    stats: any;
-  }> {
-    const issues: string[] = [];
-
-    try {
-      // Test database connection
-      await prisma.$queryRaw`SELECT 1`;
-    } catch (error) {
-      issues.push("Database connection failed");
-    }
-
-    // Check for expired sessions that need cleanup
-    const expiredCount = await prisma.session.count({
-      where: { expires: { lt: new Date() } },
+  private static async flagSuspicious(
+    userId: string,
+    reason: string,
+    request: NextRequest,
+    ipInfo: any
+  ) {
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: "SUSPICIOUS_ACTIVITY",
+        details: { reason, path: request.nextUrl.pathname },
+        ipAddress: ipInfo.ip,
+        userAgent: request.headers.get("user-agent") || "unknown",
+      },
     });
-
-    if (expiredCount > 100) {
-      issues.push(`High number of expired sessions: ${expiredCount}`);
-    }
-
-    const stats = await this.getSessionStats();
-
-    // Check for suspicious concurrent sessions
-    Object.entries(stats.concurrentSessions).forEach(([userId, count]) => {
-      if (count > this.MAX_CONCURRENT_SESSIONS) {
-        issues.push(`User ${userId} has ${count} concurrent sessions`);
-      }
-    });
-
-    return {
-      status:
-        issues.length === 0
-          ? "healthy"
-          : issues.length <= 2
-          ? "degraded"
-          : "unhealthy",
-      issues,
-      stats,
-    };
   }
 
-  // Metrics and monitoring
-  private static async recordMetric(
-    action: string,
-    success: boolean,
-    duration: number
-  ): Promise<void> {
-    try {
-      console.log(
-        `[METRIC] ${action}: ${
-          success ? "SUCCESS" : "FAILURE"
-        } in ${duration}ms`
-      );
-
-      // Store metrics in database for analytics
-      await prisma.metric
-        .create({
-          data: {
-            name: `session_validator_${action}`,
-            value: duration,
-            tags: {
-              success: success.toString(),
-              timestamp: new Date().toISOString(),
-            },
-            timestamp: new Date(),
-          },
-        })
-        .catch((error) => {
-          // Don't throw if metrics fail
-          console.error("[SESSION VALIDATOR] Failed to record metric:", error);
-        });
-    } catch (error) {
-      // Silent fail for metrics
-    }
+  private static async cleanupSession(sessionId: string, reason: string) {
+    await prisma.session.delete({ where: { id: sessionId } });
   }
 }

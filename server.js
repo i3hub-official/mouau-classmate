@@ -7,6 +7,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import os from "os";
+import { exec } from "child_process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -22,6 +23,8 @@ const config = {
   enableRequestLogging: true,
   enableCompression: false,
   turbopack: true,
+  autoOpenBrowser: true, // Auto-open browser on startup
+  preferredBrowser: null, // null = default, or "chrome", "firefox", "edge"
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -99,6 +102,72 @@ function formatBytes(bytes) {
 
 function getTimestamp() {
   return new Date().toISOString().replace("T", " ").substring(0, 19);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTO-OPEN BROWSER
+// ─────────────────────────────────────────────────────────────────────────────
+function openBrowser(url) {
+  const platform = os.platform();
+
+  let command;
+
+  // Determine the command based on OS and preferred browser
+  if (config.preferredBrowser) {
+    const browser = config.preferredBrowser.toLowerCase();
+
+    if (platform === "win32") {
+      const browsers = {
+        chrome: "start chrome",
+        firefox: "start firefox",
+        edge: "start msedge",
+        brave: "start brave",
+        opera: "start opera",
+      };
+      command = browsers[browser]
+        ? `${browsers[browser]} "${url}"`
+        : `start "" "${url}"`;
+    } else if (platform === "darwin") {
+      const browsers = {
+        chrome: "Google Chrome",
+        firefox: "Firefox",
+        safari: "Safari",
+        brave: "Brave Browser",
+        opera: "Opera",
+      };
+      command = browsers[browser]
+        ? `open -a "${browsers[browser]}" "${url}"`
+        : `open "${url}"`;
+    } else {
+      const browsers = {
+        chrome: "google-chrome",
+        firefox: "firefox",
+        brave: "brave-browser",
+        opera: "opera",
+      };
+      command = browsers[browser]
+        ? `${browsers[browser]} "${url}"`
+        : `xdg-open "${url}"`;
+    }
+  } else {
+    // Use default browser
+    if (platform === "win32") {
+      command = `start "" "${url}"`;
+    } else if (platform === "darwin") {
+      command = `open "${url}"`;
+    } else {
+      command = `xdg-open "${url}"`;
+    }
+  }
+
+  exec(command, (err) => {
+    if (err) {
+      console.log(c("yellow", `    ⚠️  Could not auto-open browser: ${err.message}`));
+      console.log(c("dim", `    Please manually open: ${url}\n`));
+    } else {
+      console.log(c("green", `    ✓ Browser opened automatically\n`));
+    }
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -225,7 +294,7 @@ function printBanner(localIPs) {
     });
   }
 
-  // QR Code hint for mobile
+  // Mobile Testing
   console.log(c("bright", "\n 📱 Mobile Testing:\n"));
   console.log(
     `    ${c("dim", "Just type the IP in your browser - HTTP auto-redirects to HTTPS")}`
@@ -260,6 +329,9 @@ function printBanner(localIPs) {
   console.log(
     `    ${c("dim", "HTTP→HTTPS:")}   ${config.enableHttpRedirect ? c("green", "Enabled") : c("gray", "Disabled")}`
   );
+  console.log(
+    `    ${c("dim", "Auto-Open:")}    ${config.autoOpenBrowser ? c("green", "Enabled") : c("gray", "Disabled")}`
+  );
 
   console.log(
     c(
@@ -267,6 +339,14 @@ function printBanner(localIPs) {
       "\n────────────────────────────────────────────────────────────────\n"
     )
   );
+
+  // Auto-open browser
+  if (config.autoOpenBrowser) {
+    const url = `https://localhost${config.port === 443 ? "" : ":" + config.port}`;
+    console.log(c("bright", " 🌍 Opening browser...\n"));
+    openBrowser(url);
+  }
+
   console.log(c("dim", " Request Log:\n"));
 }
 

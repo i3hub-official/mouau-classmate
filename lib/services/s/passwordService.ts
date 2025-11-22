@@ -5,6 +5,7 @@ import { generateVerificationToken } from "@/lib/utils";
 import { AuditAction, ResourceType } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { Student } from "@/lib/types/s/index";
+import { env } from "process";
 
 export class StudentPasswordService {
   /**
@@ -256,7 +257,7 @@ export class StudentPasswordService {
   ) {
     try {
       // Validate password strength
-      const saltRounds = 12;
+      const saltRounds = env.SALT_ROUNDS ? parseInt(env.SALT_ROUNDS) : 13;
       const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
       // Find the reset token
@@ -359,7 +360,7 @@ export class StudentPasswordService {
       }
 
       // Hash the new password
-      const saltRounds = 12;
+      const saltRounds = env.SALT_ROUNDS ? parseInt(env.SALT_ROUNDS) : 13;
       const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
       // Update the user's password
