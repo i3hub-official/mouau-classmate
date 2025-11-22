@@ -10,6 +10,7 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
 // ===========================================================
 // ENUMS (All grouped at the top for clarity)
 // ===========================================================
@@ -102,7 +103,7 @@ enum AuditAction {
   SESSION_VALIDATOR_ERROR
   MIDDLEWARE_FAILURE
   VALIDATOR_ERROR
-  }
+}
 
 enum ResourceType {
   USER
@@ -872,21 +873,21 @@ model RequestLog {
 }
 
 model DataProcessingLog {
-  id            String   @id @default(cuid())
-  requestId     String
-  userId        String?
-  timestamp     DateTime
-  method        String
-  path          String
-  ipAddress     String
-  country       String
-  jurisdiction  Json
+  id             String   @id @default(cuid())
+  requestId      String
+  userId         String?
+  timestamp      DateTime
+  method         String
+  path           String
+  ipAddress      String
+  country        String
+  jurisdiction   Json
   dataCategories String[]
-  legalBasis    String
-  consentGiven  Boolean
-  retentionDays Int
-  purpose       String
-  createdAt     DateTime @default(now())
+  legalBasis     String
+  consentGiven   Boolean
+  retentionDays  Int
+  purpose        String
+  createdAt      DateTime @default(now())
 
   @@index([timestamp])
   @@index([userId])
